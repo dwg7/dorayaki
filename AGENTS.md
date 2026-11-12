@@ -198,13 +198,24 @@ At minimum, maintain automated tests for:
 
 Once package scripts exist, keep the exact working commands in this file.
 
-Expected commands will eventually include equivalents of:
+Current working commands (Node.js 22 or later):
 
 ```sh
-npm run typecheck
-npm test
-npm run build
+npm install
+npm run typecheck   # tsc --noEmit over src/ and test/
+npm test            # tsc into build-test/, then node --test
+npm run build       # tsc src/ into dist/
+```
 
+Current repository structure:
+
+```text
+src/surfel-block.ts          naive Surfel Block encoder/decoder
+src/fixtures/plane.ts        deterministic plane fixture generator
+src/index.ts                 package entry point
+test/*.test.ts               node:test test suites
+docs/surfel-block-format.md  byte layout of the naive Surfel Block
+```
 
 Do not invent commands that are not present in package.json.
 
