@@ -10,7 +10,9 @@
  * Steps:
  * 1. local frame: east/north = plane coordinates minus the data centre,
  *    treated as east/north (grid convergence here is about 0.18°, < 3 cm
- *    over the 14 m extent); up = Z minus the lowest ground-class point;
+ *    over the 14 m extent); up = the LAS Z unchanged. Z is already
+ *    orthometric height (標高): ground points near the centre have median
+ *    7.78 m against 7.6 m from the GSI 1 m DEM there;
  * 2. one Gaussian per 0.25 m voxel (src/pointcloud/voxel-gaussians.ts),
  *    written as a reference-3DGS PLY to data/ (intermediate, not committed);
  * 3. that PLY read back through the 3DGS -> surfel path
@@ -47,7 +49,6 @@ const e0 = (las.min[0] + las.max[0]) / 2;
 const n0 = (las.min[1] + las.max[1]) / 2;
 let ground = Infinity;
 for (let i = 0; i < las.count; i++) if (las.classification[i] === 2) ground = Math.min(ground, las.z[i]!);
-if (!Number.isFinite(ground)) throw new Error("no ground-class points");
 const origin = jprcsToLatLng(ZONE, n0, e0);
 
 const xyz = new Float64Array(las.count * 3);
@@ -55,7 +56,7 @@ const rgb = new Float32Array(las.count * 3);
 for (let i = 0; i < las.count; i++) {
   xyz[i * 3] = las.x[i]! - e0;
   xyz[i * 3 + 1] = las.y[i]! - n0;
-  xyz[i * 3 + 2] = las.z[i]! - ground;
+  xyz[i * 3 + 2] = las.z[i]!; // orthometric height, as delivered
   for (let k = 0; k < 3; k++) rgb[i * 3 + k] = (las.rgb[i * 3 + k]! >> 8) / 255;
 }
 
@@ -91,7 +92,7 @@ const stats = {
   points: las.count,
   gaussians: gaussians.length,
   voxelSize: VOXEL,
-  groundZ: ground,
+  lowestGroundElevation: ground,
   flatness: { p10: quantile(flat, 0.1), p50: quantile(flat, 0.5), p90: quantile(flat, 0.9), flatShare: flat.filter((f) => f < 0.3).length / flat.length, roundShare: flat.filter((f) => f > 0.6).length / flat.length },
   anisotropy: { p50: quantile(aniso, 0.5), p90: quantile(aniso, 0.9) },
   radiusMetres: { p10: quantile(radius, 0.1), p50: quantile(radius, 0.5), p90: quantile(radius, 0.9) },
@@ -102,6 +103,7 @@ const stats = {
 const manifest = {
   name: `VIRTUAL SHIZUOKA MMS ${MESH} (Numazu), voxel Gaussians ${VOXEL} m`,
   attribution: "点群: 静岡県 VIRTUAL SHIZUOKA (CC BY) を加工して作成",
+  verticalDatum: "orthometric height (標高), metres, as in the source LAS",
   centre: [origin.lng, origin.lat],
   tiles: tiles.map((t) => t.tile),
   bounds: [tileLongitude(block.origin, 0), tileLatitude(block.origin, block.rows), tileLongitude(block.origin, block.cols), tileLatitude(block.origin, 0)],

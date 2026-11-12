@@ -209,3 +209,24 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   voxels. The station mesh 08NE3811 is a 3.24 GB zip. Evidence for the
   deferred quantization is starting to appear, but it depends on the
   voxel size chosen.
+
+## 2026-11-12 — z is orthometric height; nationwide basemap
+
+- Surfel Block v2 now defines `z` as orthometric height (標高, metres above
+  the geoid). No byte or version change; see the format document's
+  compatibility note. Synthetic fixtures' ground at z = 0 means sea level.
+- The VIRTUAL SHIZUOKA LAS heights are already orthometric. Ground points
+  near the data centre have median 7.78 m, and the GSI 1 m laser DEM gives
+  7.6 m there (an ellipsoidal height would be about 40 m higher). The
+  Numazu tiles now carry the LAS Z unchanged: z 7.53–19.89 m.
+- Changing the vertical origin moved the 0.25 m voxel boundaries:
+  6,365 → 6,266 Gaussians, 203,726 → 200,558 bytes. The toy voxel fit
+  depends on the coordinate origin, not only on the data.
+- On the flat basemap (no terrain), the Numazu data now floats at its
+  real elevation, about 7.5 m above the map plane, as seen from beside at
+  3 m eye height. Showing it on the ground would need terrain in the
+  basemap, or a display offset that the data must not carry.
+- Every tileset now uses stars' nationwide `bvmap-starlight` style
+  (123 layers, GSI optimized vector tiles). The Numazu source attribution
+  is added through MapLibre's `customAttribution`. The GSI pale-tile
+  fallback is removed.

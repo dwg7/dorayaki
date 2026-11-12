@@ -68,7 +68,7 @@ and coordinate ranges.
 | --- | --- |
 | `x` | tile-local, `0` = west edge of the tile, `1` = east edge |
 | `y` | tile-local, `0` = north edge of the tile, `1` = south edge |
-| `z` | metres, up |
+| `z` | orthometric height (標高): metres above the geoid, up |
 | `nx, ny, nz` | unit normal in the local metric frame: east, south, up |
 | `radius` | metres |
 
@@ -83,8 +83,12 @@ and coordinate ranges.
   `W = 2π · 6378137 · cos(lat_centre) / 2^zoom`. Within one tile this
   ignores the change of Mercator scale with latitude. At zoom 16 and above
   the error is under 0.01 % (see NOTES.md).
-- The vertical datum is not defined. Fixtures use `z = 0` for their own
-  ground.
+- `z` is the height above the geoid (orthometric height, 標高), not an
+  ellipsoidal height and not a height above local ground. Data that
+  already carries elevations, such as Japanese survey point clouds in
+  JGD2011 with heights referred to Tokyo Bay mean sea level, goes in
+  unchanged. Synthetic fixtures put their ground at `z = 0`, which means
+  sea level.
 
 Normals and radius are metric so that a disc's shape and size do not
 depend on the zoom level of the tile that carries it.
@@ -109,9 +113,18 @@ rejected (`UNSUPPORTED_VERSION`) rather than reinterpreted. This is an
 intentional breaking change. All fixtures and test vectors were
 regenerated.
 
+## Vertical datum: compatibility
+
+Defining `z` as orthometric height (2026-11-12) did not change the byte
+layout or `version`. Version 2 previously left the datum undefined, and no
+published data relied on a different datum. The only real-data tiles,
+the locally generated Numazu demo tiles, are regenerated with absolute
+elevations. Version 2 blocks are therefore read with this definition.
+
 ## Not yet defined
 
-- The vertical datum (what `z = 0` means geographically).
+- Which geoid model a producer uses, and its accuracy, are not recorded
+  in the block.
 
 ## Deferred (proposed, not implemented)
 

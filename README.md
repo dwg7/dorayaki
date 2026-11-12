@@ -80,9 +80,9 @@ tileset directory, so different fixtures can share a tile address. The tile
 holds a synthetic unknown frame followed by the fixture as an experimental
 surfel frame. The red dashed lines are the tile boundaries. The "depth test"
 checkbox turns depth testing off to show its effect. The basemap is the
-`bvmap-koicha-starlight` style from [hfu/stars](https://github.com/hfu/stars),
-loaded from `https://stars.optgeo.org/style/bvmap-koicha-starlight`. It
-draws MLT-encoded vector tiles derived from GSI optimized vector tiles.
+`bvmap-starlight` style from [hfu/stars](https://github.com/hfu/stars),
+loaded from `https://stars.optgeo.org/style/bvmap-starlight`. It draws
+GSI optimized vector tiles nationwide.
 The page therefore needs network access for the background map (not for
 the surfels). The surfels are drawn over the vector basemap; the tile
 outline is a GeoJSON line layer added on top.
@@ -125,8 +125,9 @@ npm run demo:numazu
 The zip is 14,113,240 bytes (SHA-256 `0af0a8ac…e1ca126d`). `npm run
 demo:numazu` writes a reference-3DGS PLY next to the LAS and the tiles to
 `demo/tiles/numazu/`. Open <http://127.0.0.1:8000/demo/?fixture=numazu>
-while `npm run demo` is running. Outside the stars basemap's coverage,
-this tileset uses GSI pale raster tiles.
+while `npm run demo` is running. Heights are the source's elevations
+(標高), so on the flat basemap the data floats at its real elevation,
+about 7.5 m above the map plane.
 
 ## License
 

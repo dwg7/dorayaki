@@ -1,7 +1,7 @@
 /**
  * Demo entry point: wires loading -> decoding -> custom layer.
  */
-import { Map as MapLibreMap, NavigationControl, type StyleSpecification } from "maplibre-gl";
+import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
 
 import { decodeSurfelTile } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
@@ -60,30 +60,10 @@ const tiles = manifest ? manifest.tiles : tilesetTiles(tileset as DemoTileset);
 const outlines = tiles.map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(t, x as number, y as number)));
 
 /**
- * Basemap: hfu/stars' bvmap-koicha-starlight style (MLT-encoded vector
- * tiles derived from GSI optimized vector tiles), served by stars.optgeo.org.
+ * Basemap: hfu/stars' bvmap-starlight style (GSI optimized vector tiles,
+ * nationwide), served by stars.optgeo.org. Used for every tileset.
  */
-const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-koicha-starlight";
-
-/**
- * The stars style covers Hokkaido and Tokyo only. Real-data tilesets
- * elsewhere use GSI pale raster tiles (地理院タイル 淡色地図) instead.
- */
-function gsiPaleStyle(dataAttribution: string): StyleSpecification {
-  return {
-    version: 8,
-    sources: {
-      pale: {
-        type: "raster",
-        tiles: ["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"],
-        tileSize: 256,
-        maxzoom: 18,
-        attribution: `<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a> | ${dataAttribution}`,
-      },
-    },
-    layers: [{ id: "pale", type: "raster", source: "pale" }],
-  };
-}
+const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-starlight";
 
 const map = new MapLibreMap({
   container: "map",
@@ -92,7 +72,9 @@ const map = new MapLibreMap({
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
-  style: manifest ? gsiPaleStyle(manifest.attribution) : BASEMAP_STYLE,
+  style: BASEMAP_STYLE,
+  // Real-data tilesets name their source next to the basemap's attribution.
+  attributionControl: manifest ? { customAttribution: manifest.attribution } : {},
 });
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
