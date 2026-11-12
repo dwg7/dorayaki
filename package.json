@@ -15,7 +15,8 @@
     "demo:tile": "esbuild scripts/generate-demo-tile.ts --bundle --platform=node --format=esm --outfile=demo/build/generate-demo-tile.mjs --log-level=warning && node demo/build/generate-demo-tile.mjs",
     "demo:build": "npm run demo:tile && esbuild demo/src/main.ts --bundle --format=esm --external:maplibre-gl --sourcemap --outdir=demo/build",
     "demo": "npm run demo:tile && esbuild demo/src/main.ts --bundle --format=esm --external:maplibre-gl --sourcemap --outdir=demo/build --servedir=. --serve=127.0.0.1:8000",
-    "demo:numazu": "esbuild scripts/build-numazu-demo.ts --bundle --platform=node --format=esm --outfile=demo/build/build-numazu-demo.mjs --log-level=warning && node demo/build/build-numazu-demo.mjs"
+    "demo:numazu": "esbuild scripts/build-numazu-demo.ts --bundle --platform=node --format=esm --outfile=demo/build/build-numazu-demo.mjs --log-level=warning && node demo/build/build-numazu-demo.mjs",
+    "measure:numazu": "esbuild scripts/measure-numazu.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-numazu.mjs --log-level=warning && node demo/build/measure-numazu.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.5",

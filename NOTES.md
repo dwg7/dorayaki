@@ -230,3 +230,20 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   (123 layers, GSI optimized vector tiles). The Numazu source attribution
   is added through MapLibre's `customAttribution`. The GSI pale-tile
   fallback is removed.
+
+## 2026-11-13 — density, zoom levels, and a COPC baseline (08NE2701)
+
+- COPC baseline (PDAL 2.10.2 `writers.copc`, same 976,195 points):
+  6,360,621 bytes with all attributes (6.52 B per point); 5,183,226 bytes
+  with GPS time, intensity and other non-geometry attributes zeroed
+  (5.31 B per point). Plain LAZ: 5,150,333 bytes.
+- Footprint 111.9 m², about 8,700 points per m².
+- One Gaussian per occupied voxel of v_z = tile width / 512 (`npm run
+  measure:numazu`): z18 7,650 · z19 30,057 · z20 99,926 · z21 259,440 ·
+  z22 512,461 · z23 783,501. Growth per zoom falls from about 3.9× to
+  1.5× as the voxels approach the point spacing.
+- At the current 32-byte record, the Gaussians beat COPC (xyz+rgb) only
+  down to z20 detail (0.62×). z21 detail is 1.60× and z22 detail 3.16×.
+  This is the first measured evidence for a more compact record.
+- Design proposal written up in `docs/progressive-maxzoom.md` (not
+  implemented).

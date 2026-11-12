@@ -209,6 +209,7 @@ npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang,boundary,toy
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
 npm run demo:numazu # build demo/tiles/numazu/ from data/ (download: README)
+npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size table
 ```
 
 Current repository structure:
@@ -238,6 +239,8 @@ demo/src/                    demo modules: load, decode, placement, GPU, layer
 NOTES.md                     observed experimental findings
 docs/surfel-block-format.md  byte layout of the naive Surfel Block
 docs/mlt-frame.md            experimental MLT frame envelope
+docs/progressive-maxzoom.md  proposal: maxzoom and progressive order (not implemented)
+scripts/measure-numazu.ts    density and size measurements on the Numazu data
 ```
 
 Do not invent commands that are not present in package.json.
