@@ -9,3 +9,4 @@ export {
   generateBridgeParts,
   type BridgeParts,
 } from "./fixtures/bridge.js";
+export * from "./mlt-frame.js";

@@ -18,3 +18,41 @@ that have actually been observed are recorded here.
 - Also observed: a decoded block has no part identity. The tests can tell
   ground, deck, underside and supports apart only by array order, normal,
   and colour. Nothing so far needs it.
+
+## 2026-11-12 — experimental MLT frame
+
+- Upstream MLT framing is `[varint size][u8 tag][body]` with `size`
+  counting the tag byte. The Surfel Block fits as a frame body unchanged;
+  no wire-format change was needed.
+- The MLT specification assigns tags 0x01 and 0x02 only and defines no
+  experimental or private-use range, so the local tag 0xD0 has no
+  protection against a future collision.
+- The specification as read does not state a maximum for `size`; the
+  uint32 / 5-byte varint limit is a Dorayaki choice.
+
+## 2026-11-12 — first browser render (MapLibre GL JS 6.16.0)
+
+Observed in Chromium (Claude desktop browser pane) with
+`npm run demo`:
+
+- The bridge renders in geographic position. Viewed top-down, the
+  projected tile corners match the ground surfel extent. Deck (light
+  grey), underside (dark), piers (brown) and ground (green) are distinct.
+  The view follows pan, scroll zoom, keyboard pitch and programmatic
+  bearing/pitch changes.
+- Depth testing works: with it off, the underside (drawn after the deck)
+  paints over the deck and the piers paint over everything.
+- Vertical scale: with z in tile-width units the deck is about 155 m
+  above ground at z16. This confirms the earlier note in practice: the
+  height depends on the tile's zoom level, not on any physical unit.
+- The deck and underside are discs with no edge faces. From a low side
+  view the deck shrinks to a line and nearly disappears. This is a
+  fixture limitation, not a format one.
+- Disc radius (half the cell diagonal) makes every surface edge scalloped
+  and overshoot its intended boundary. Ground discs extend past the tile
+  boundary, and pier discs poke above the underside and below the ground.
+- The 2D tile-outline line layer is not depth-tested, so it draws over the
+  deck where they overlap.
+- A page in a hidden browser pane did not finish loading the map
+  (the worker request stalled, no `load` event). It loaded normally once
+  the pane was visible. This is the test environment, not the demo.

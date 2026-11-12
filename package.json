@@ -9,12 +9,17 @@
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p demo/tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
-    "test": "tsc -p tsconfig.test.json && node --test \"build-test/test/**/*.test.js\""
+    "test": "tsc -p tsconfig.test.json && node --test \"build-test/test/**/*.test.js\"",
+    "demo:tile": "esbuild scripts/generate-demo-tile.ts --bundle --platform=node --format=esm --outfile=demo/build/generate-demo-tile.mjs --log-level=warning && node demo/build/generate-demo-tile.mjs",
+    "demo:build": "npm run demo:tile && esbuild demo/src/main.ts --bundle --format=esm --external:maplibre-gl --sourcemap --outdir=demo/build",
+    "demo": "npm run demo:tile && esbuild demo/src/main.ts --bundle --format=esm --external:maplibre-gl --sourcemap --outdir=demo/build --servedir=. --serve=127.0.0.1:8000"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
+    "esbuild": "0.28.2",
+    "maplibre-gl": "6.16.0",
     "typescript": "7.0.2"
   }
 }
