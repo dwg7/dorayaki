@@ -1,38 +1,39 @@
 import type { Surfel } from "../surfel-block.js";
 
 /**
- * Deterministic `bridge` fixture.
+ * Deterministic `bridge` fixture in the Surfel Block v2 frame:
+ * x, y tile-local in [0, 1] (y south), z in metres (up), radius in metres.
  *
- * Same abstract local frame as `plane`: x and y cover the unit square,
- * z is up, and z uses the same unit as x and y. Every coordinate is a
- * multiple of 1/32, so all values are float32-exact.
+ * The footprint is defined in tile-local units and spans the whole tile;
+ * heights are fixed in metres. Sampling pitch C = 1/16 of the tile, so the
+ * pitch in metres is P = tileWidthMetres / 16.
  *
- * Geometry (C = 1/16 is the sampling pitch):
- *
- * - ground:    z = 0, the full unit square, 16 × 16 surfels, normal +z.
- * - deck:      z = 5/16, x in [0, 1], y in [6/16, 10/16], normal +z.
- * - underside: z = 4/16, same footprint as the deck, normal -z.
+ * - ground:    z = 0 m, the full tile, 16 × 16 surfels, normal +z.
+ * - deck:      z = 12 m, x in [0, 1], y in [6/16, 10/16], normal +z.
+ * - underside: z = 11 m, same footprint as the deck, normal -z.
  * - supports:  two square piers with footprints
  *              x in [4/16, 6/16] and [10/16, 12/16], y in [7/16, 9/16],
- *              from z = 0 up to the underside at z = 4/16. Each pier has
- *              four vertical faces with outward normals ±x and ±y.
+ *              from z = 0 up to the underside at z = 11 m. Each pier has
+ *              four vertical faces with outward normals ±x and ±y, sampled
+ *              in max(1, ceil(11 m / P)) evenly spaced rows.
  *
- * Ground, underside, and deck surfels are sampled on the same x/y grid,
- * so within the deck footprint three surfels share each (x, y) with
- * z = 0, 4/16 and 5/16. Ground surfels inside pier footprints are kept.
+ * Ground, underside, and deck share the same x/y grid, so within the deck
+ * footprint three surfels share each (x, y) with z = 0, 11 and 12 m.
  *
- * Every surfel has radius C·√½ (half the cell diagonal).
+ * Every surfel has radius P·√½ m (half the horizontal cell diagonal).
+ * Tile-local coordinates are multiples of 1/32 and deck heights are whole
+ * metres, so they are float32-exact. Radius and pier row heights are
+ * rounded to float32 by the generator.
  */
 
 const N = 16;
 const C = 1 / N;
-const RADIUS = Math.fround(C * Math.SQRT1_2);
 
-export const BRIDGE_DECK_Z = 5 / 16;
-export const BRIDGE_UNDERSIDE_Z = 4 / 16;
+export const BRIDGE_DECK_Z = 12;
+export const BRIDGE_UNDERSIDE_Z = 11;
 /** Grid rows (j index) covered by the deck: y in [6/16, 10/16]. */
 export const BRIDGE_DECK_ROWS = [6, 7, 8, 9] as const;
-/** Pier footprints as [xMin, xMax, yMin, yMax]. */
+/** Pier footprints in tile-local units as [xMin, xMax, yMin, yMax]. */
 export const BRIDGE_PIERS = [
   [4 / 16, 6 / 16, 7 / 16, 9 / 16],
   [10 / 16, 12 / 16, 7 / 16, 9 / 16],
@@ -44,6 +45,11 @@ const DECK: Rgba = [200, 200, 200, 255];
 const UNDERSIDE: Rgba = [90, 90, 110, 255];
 const SUPPORT: Rgba = [150, 110, 80, 255];
 
+export interface BridgeOptions {
+  /** Width in metres of the tile that will carry the bridge (see tileWidthMetres). */
+  tileWidthMetres: number;
+}
+
 export interface BridgeParts {
   ground: Surfel[];
   deck: Surfel[];
@@ -51,24 +57,34 @@ export interface BridgeParts {
   supports: Surfel[];
 }
 
-function surfel(
-  x: number, y: number, z: number,
-  nx: number, ny: number, nz: number,
-  [r, g, b, a]: Rgba,
-): Surfel {
-  return { x, y, z, nx, ny, nz, radius: RADIUS, r, g, b, a };
+/** Heights in metres of the pier sample rows for a given tile width. */
+export function bridgePierRowHeights(tileWidthMetres: number): number[] {
+  const pitch = tileWidthMetres * C;
+  const rows = Math.max(1, Math.ceil(BRIDGE_UNDERSIDE_Z / pitch));
+  return Array.from({ length: rows }, (_, k) => Math.fround((BRIDGE_UNDERSIDE_Z * (k + 0.5)) / rows));
 }
 
 const centre = (k: number): number => (k + 0.5) * C;
 
-/** Sample centres in [lo, hi] at pitch C. */
+/** Sample centres in [lo, hi] at pitch C (tile-local). */
 function centres(lo: number, hi: number): number[] {
   const out: number[] = [];
   for (let v = lo + C / 2; v < hi; v += C) out.push(v);
   return out;
 }
 
-export function generateBridgeParts(): BridgeParts {
+export function generateBridgeParts(options: BridgeOptions): BridgeParts {
+  const w = options.tileWidthMetres;
+  if (!Number.isFinite(w) || w <= 0) {
+    throw new RangeError(`tileWidthMetres must be a positive finite number, got ${w}`);
+  }
+  const radius = Math.fround(w * C * Math.SQRT1_2);
+  const surfel = (
+    x: number, y: number, z: number,
+    nx: number, ny: number, nz: number,
+    [r, g, b, a]: Rgba,
+  ): Surfel => ({ x, y, z, nx, ny, nz, radius, r, g, b, a });
+
   const ground: Surfel[] = [];
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
@@ -86,7 +102,7 @@ export function generateBridgeParts(): BridgeParts {
   }
 
   const supports: Surfel[] = [];
-  const heights = centres(0, BRIDGE_UNDERSIDE_Z);
+  const heights = bridgePierRowHeights(w);
   for (const [x0, x1, y0, y1] of BRIDGE_PIERS) {
     for (const z of heights) {
       for (const y of centres(y0, y1)) {
@@ -104,7 +120,7 @@ export function generateBridgeParts(): BridgeParts {
 }
 
 /** All bridge surfels in a fixed order: ground, deck, underside, supports. */
-export function generateBridge(): Surfel[] {
-  const { ground, deck, underside, supports } = generateBridgeParts();
+export function generateBridge(options: BridgeOptions): Surfel[] {
+  const { ground, deck, underside, supports } = generateBridgeParts(options);
   return [...ground, ...deck, ...underside, ...supports];
 }

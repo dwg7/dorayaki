@@ -8,7 +8,7 @@
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MapLibreMap } from "maplibre-gl";
 
 import type { Surfel } from "../../src/surfel-block.js";
-import type { TileAddress } from "./demo-tile.js";
+import { tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 import {
   createSurfelProgram,
   deleteSurfelResources,
@@ -17,7 +17,7 @@ import {
   type SurfelBuffers,
   type SurfelProgram,
 } from "./gpu-surfels.js";
-import { multiplyMat4, tileToMercatorMatrix, type Mat4 } from "./tile-matrix.js";
+import { metricToMercatorMatrix, multiplyMat4, type Mat4 } from "./tile-matrix.js";
 
 export class SurfelLayer implements CustomLayerInterface {
   readonly id: string;
@@ -27,6 +27,7 @@ export class SurfelLayer implements CustomLayerInterface {
   depthTest = true;
 
   private readonly surfels: readonly Surfel[];
+  private readonly widthMetres: number;
   private readonly model: Mat4;
   private map: MapLibreMap | undefined;
   private gpu: { program: SurfelProgram; buffers: SurfelBuffers } | undefined;
@@ -34,7 +35,8 @@ export class SurfelLayer implements CustomLayerInterface {
   constructor(id: string, tile: TileAddress, surfels: readonly Surfel[]) {
     this.id = id;
     this.surfels = surfels;
-    this.model = tileToMercatorMatrix(tile);
+    this.widthMetres = tileWidthMetres(tile);
+    this.model = metricToMercatorMatrix(tile, this.widthMetres);
   }
 
   onAdd(map: MapLibreMap, gl: WebGL2RenderingContext): void {
@@ -45,7 +47,11 @@ export class SurfelLayer implements CustomLayerInterface {
   render(gl: WebGL2RenderingContext, options: CustomRenderMethodInput): void {
     if (!this.gpu) return;
     const matrix = Float32Array.from(multiplyMat4(options.defaultProjectionData.mainMatrix, this.model));
-    drawSurfels(gl, this.gpu.program, this.gpu.buffers, { matrix, depthTest: this.depthTest });
+    drawSurfels(gl, this.gpu.program, this.gpu.buffers, {
+      matrix,
+      tileWidthMetres: this.widthMetres,
+      depthTest: this.depthTest,
+    });
   }
 
   onRemove(_map: MapLibreMap, gl: WebGL2RenderingContext): void {

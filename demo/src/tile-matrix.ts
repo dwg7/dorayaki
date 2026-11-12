@@ -1,29 +1,31 @@
 /**
- * Geographic placement: tile-local surfel coordinates -> Web Mercator.
+ * Geographic placement for Surfel Block v2 (docs/surfel-block-format.md).
  *
- * Demo interpretation (not part of the Surfel Block format):
- * - x, y in [0, 1] span the tile z/x/y; x grows east, y grows south
- *   (the MLT / MVT tile convention);
- * - z is up, in the same unit as x and y (one tile width).
+ * The vertex shader converts each surfel to a local metric frame with its
+ * origin at the tile's north-west corner and axes east, south, up, in
+ * metres: (x · W, y · W, z), where W = tileWidthMetres(tile). This matrix
+ * maps that frame to Web Mercator [0, 1].
  *
  * MapLibre's 3D custom-layer matrix treats Mercator z as conformal with x
- * and y, so one uniform scale maps all three axes. Matrices are column-
- * major and computed in float64; only the final product is sent to the
- * GPU, so large Mercator offsets cancel before float32 rounding.
+ * and y, so one uniform scale, 1 / (W · 2^zoom) Mercator units per metre,
+ * maps all three axes. Matrices are column-major and computed in float64;
+ * only the final product is sent to the GPU, so large Mercator offsets
+ * cancel before float32 rounding.
  */
-import type { TileAddress } from "./demo-tile.js";
+import { tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 
 export type Mat4 = Float64Array;
 
-/** Column-major model matrix: tile-local -> Mercator [0, 1]. */
-export function tileToMercatorMatrix(t: TileAddress): Mat4 {
-  const s = 1 / 2 ** t.z;
+/** Column-major model matrix: local metric frame (metres) -> Mercator [0, 1]. */
+export function metricToMercatorMatrix(t: TileAddress, widthMetres: number = tileWidthMetres(t)): Mat4 {
+  const n = 2 ** t.z;
+  const s = 1 / (widthMetres * n);
   // prettier-ignore
   return Float64Array.of(
     s, 0, 0, 0,
     0, s, 0, 0,
     0, 0, s, 0,
-    t.x * s, t.y * s, 0, 1,
+    t.x / n, t.y / n, 0, 1,
   );
 }
 

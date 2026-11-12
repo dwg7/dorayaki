@@ -1,19 +1,30 @@
 /**
- * Naive Surfel Block codec (experimental, version 1).
+ * Naive Surfel Block codec (experimental, version 2).
  *
  * See docs/surfel-block-format.md for the byte layout. All multi-byte
  * values are little-endian. This module has no dependency on MapLibre,
  * MLT, or any runtime other than ECMAScript typed arrays.
  */
 
-/** One circular surfel as held in memory. */
+/**
+ * One circular surfel as held in memory.
+ *
+ * Coordinate frame (version 2, see docs/surfel-block-format.md):
+ * x, y are tile-local in [0, 1] (x east, y south); z is metres, up;
+ * the normal is a unit vector in the local metric frame (east, south, up);
+ * radius is metres.
+ */
 export interface Surfel {
+  /** Tile-local, 0 = west edge, 1 = east edge. */
   x: number;
+  /** Tile-local, 0 = north edge, 1 = south edge. */
   y: number;
+  /** Metres, up. */
   z: number;
   nx: number;
   ny: number;
   nz: number;
+  /** Metres. */
   radius: number;
   /** Colour channels, each an integer in 0..255. */
   r: number;
@@ -24,7 +35,7 @@ export interface Surfel {
 
 /** ASCII "DSRF". */
 export const SURFEL_BLOCK_MAGIC = Uint8Array.of(0x44, 0x53, 0x52, 0x46);
-export const SURFEL_BLOCK_VERSION = 1;
+export const SURFEL_BLOCK_VERSION = 2;
 export const SURFEL_BLOCK_HEADER_BYTES = 12;
 export const SURFEL_RECORD_BYTES = 32;
 

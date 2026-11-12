@@ -29,7 +29,7 @@ function rawBlock(opts: { magic?: string; version?: number; recordSize?: number;
   const bytes = new Uint8Array(SURFEL_BLOCK_HEADER_BYTES + opts.recordBytes);
   const view = new DataView(bytes.buffer);
   bytes.set(new TextEncoder().encode(opts.magic ?? "DSRF"), 0);
-  view.setUint16(4, opts.version ?? 1, true);
+  view.setUint16(4, opts.version ?? 2, true);
   view.setUint16(6, opts.recordSize ?? SURFEL_RECORD_BYTES, true);
   view.setUint32(8, opts.count, true);
   return bytes;
@@ -38,7 +38,7 @@ function rawBlock(opts: { magic?: string; version?: number; recordSize?: number;
 describe("encode/decode", () => {
   test("empty block is header only and round-trips", () => {
     const bytes = encodeSurfelBlock([]);
-    assert.equal(hex(bytes), "44535246" + "0100" + "2000" + "00000000");
+    assert.equal(hex(bytes), "44535246" + "0200" + "2000" + "00000000");
     assert.deepEqual(decodeSurfelBlock(bytes), []);
   });
 
@@ -47,7 +47,7 @@ describe("encode/decode", () => {
     assert.equal(bytes.byteLength, 12 + 32);
     assert.equal(
       hex(bytes),
-      "44535246" + "0100" + "2000" + "01000000" +
+      "44535246" + "0200" + "2000" + "01000000" +
         "0000c03f" + // x = 1.5
         "000010c0" + // y = -2.25
         "0000c842" + // z = 100
@@ -110,8 +110,10 @@ describe("decoder rejects malformed input", () => {
   });
 
   test("unsupported version", () => {
+    // Version 1 had the same bytes but no defined coordinate frame.
+    assertRejects(rawBlock({ version: 1, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
     assertRejects(rawBlock({ version: 0, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
-    assertRejects(rawBlock({ version: 2, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
+    assertRejects(rawBlock({ version: 3, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
   });
 
   test("unexpected record size", () => {

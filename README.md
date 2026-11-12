@@ -9,9 +9,10 @@ project's goals and working method.
 
 Implemented:
 
-- a naive Surfel Block codec (`src/surfel-block.ts`): a 12-byte header
-  followed by 32-byte little-endian surfel records. The byte layout is in
-  [`docs/surfel-block-format.md`](docs/surfel-block-format.md);
+- a naive Surfel Block codec (`src/surfel-block.ts`, version 2): a 12-byte
+  header followed by 32-byte little-endian surfel records, with x, y
+  tile-local and z, radius in metres. The byte layout and coordinate frame
+  are in [`docs/surfel-block-format.md`](docs/surfel-block-format.md);
 - an experimental MLT frame wrapper (`src/mlt-frame.ts`): a Surfel Block
   as the body of an MLT frame with the local, unassigned tag `0xD0`; see
   [`docs/mlt-frame.md`](docs/mlt-frame.md). It skips unknown frames by
@@ -40,7 +41,7 @@ npm install         # install dev dependencies (TypeScript, esbuild, MapLibre GL
 npm run typecheck   # type-check src/, test/, scripts/ and demo/src/ without emitting
 npm test            # compile src/ and test/ into build-test/, run node --test
 npm run build       # compile src/ into dist/ (JS, .d.ts, source maps)
-npm run demo:tile   # write demo/tiles/16/58211/25806.mlt
+npm run demo:tile   # write demo/tiles/18/232847/103226.mlt
 npm run demo:build  # demo:tile, then bundle demo/src/main.ts into demo/build/
 npm run demo        # demo:tile, then bundle and serve on http://127.0.0.1:8000
 ```
@@ -58,8 +59,8 @@ npm run demo
 Then open <http://127.0.0.1:8000/demo/> in a browser with WebGL2. Stop the
 server with Ctrl-C.
 
-The page loads one tile, `demo/tiles/16/58211/25806.mlt` (near Tokyo
-Station; 14,381 bytes), over plain HTTP. The tile holds a synthetic
+The page loads one tile, `demo/tiles/18/232847/103226.mlt` (near Tokyo
+Station, 124 m wide; 13,357 bytes), over plain HTTP. The tile holds a synthetic
 unknown frame followed by the `bridge` fixture as an experimental surfel
 frame. The red dashed line is the tile boundary. The "depth test"
 checkbox turns depth testing off to show its effect. The basemap is
@@ -82,10 +83,11 @@ Demo modules (`demo/src/`), kept separate as AGENTS.md requires:
 | `main.ts` | map setup and wiring |
 | `demo-tile.ts` | demo tile address and deterministic tile bytes |
 
-Placement rule used by the demo only (not part of the format): x and y
-in [0, 1] span the tile with y pointing south, and z points up in the same
-unit as x and y (one tile width, about 497 m for this tile). Mercator
-projection only.
+Placement follows the Surfel Block v2 coordinate frame
+(`docs/surfel-block-format.md`): x and y in [0, 1] span the tile with y
+pointing south, z and radius are metres. The demo converts x, y to metres
+with `tileWidthMetres` (`src/tile-geometry.ts`), about 124.2 m for this
+tile. Mercator projection only.
 
 ## License
 

@@ -1,11 +1,12 @@
 import { generateBridge } from "../../src/fixtures/bridge.js";
 import { concatFrames, encodeFrame, wrapSurfelBlock } from "../../src/mlt-frame.js";
 import { encodeSurfelBlock } from "../../src/surfel-block.js";
+import { tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 
-/** Tile address of the single demo tile (near Tokyo Station, ~497 m wide). */
-export const DEMO_TILE = { z: 16, x: 58211, y: 25806 } as const;
+export type { TileAddress };
 
-export type TileAddress = { readonly z: number; readonly x: number; readonly y: number };
+/** Tile address of the single demo tile (near Tokyo Station, ~124 m wide). */
+export const DEMO_TILE = { z: 18, x: 232847, y: 103226 } as const;
 
 /** URL path of a tile relative to the demo page (demo/index.html). */
 export function tileUrlPath(t: TileAddress = DEMO_TILE): string {
@@ -27,6 +28,6 @@ export const DEMO_UNKNOWN_TAG = 0x7e;
 export function buildDemoTile(): Uint8Array {
   return concatFrames([
     encodeFrame(DEMO_UNKNOWN_TAG, new TextEncoder().encode("dorayaki demo: unknown frame")),
-    wrapSurfelBlock(encodeSurfelBlock(generateBridge())),
+    wrapSurfelBlock(encodeSurfelBlock(generateBridge({ tileWidthMetres: tileWidthMetres(DEMO_TILE) }))),
   ]);
 }

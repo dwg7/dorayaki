@@ -31,7 +31,7 @@ to skip.
 offset  size     content
 0       1..5     size: unsigned LEB128 varint = 1 + block_length
 k       1        tag: 0xD0 (EXPERIMENTAL, unassigned)
-k+1     block    Surfel Block v1 bytes, unchanged (docs/surfel-block-format.md)
+k+1     block    Surfel Block bytes, unchanged (docs/surfel-block-format.md)
 ```
 
 `k` is the byte length of the size varint. The body is the Surfel Block
@@ -39,7 +39,7 @@ byte-for-byte; the frame adds no header or padding of its own.
 
 Examples:
 
-- empty Surfel Block (12 bytes): `0d d0 44535246 0100 2000 00000000`
+- empty Surfel Block (12 bytes): `0d d0 44535246 0200 2000 00000000`
 - `bridge` fixture (14,348 bytes): `8d 70 d0 ...` (size 14,349)
 
 ### Tag `0xD0`

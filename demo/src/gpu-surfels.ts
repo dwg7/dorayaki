@@ -11,12 +11,13 @@ import type { Surfel } from "../../src/surfel-block.js";
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
-uniform mat4 u_matrix;   // tile-local -> clip
-uniform vec3 u_light;    // tile-local, normalized
+uniform mat4 u_matrix;   // local metric frame (metres; east, south, up) -> clip
+uniform float u_tile_width; // metres per tile-local unit
+uniform vec3 u_light;    // local metric frame, normalized
 in vec2 a_corner;        // quad corner in [-1, 1]^2
-in vec3 a_position;
+in vec3 a_position;      // x, y tile-local; z metres
 in vec3 a_normal;
-in float a_radius;
+in float a_radius;       // metres
 in vec4 a_color;
 out vec2 v_corner;
 out vec3 v_color;
@@ -25,7 +26,8 @@ void main() {
   vec3 helper = abs(n.z) < 0.9 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
   vec3 t = normalize(cross(helper, n));
   vec3 b = cross(n, t);
-  vec3 p = a_position + a_radius * (a_corner.x * t + a_corner.y * b);
+  vec3 centre = vec3(a_position.xy * u_tile_width, a_position.z);
+  vec3 p = centre + a_radius * (a_corner.x * t + a_corner.y * b);
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
   float shade = 0.35 + 0.65 * max(dot(n, u_light), 0.0);
@@ -42,12 +44,13 @@ void main() {
   fragColor = vec4(v_color, 1.0); // opaque, so already premultiplied
 }`;
 
-/** Light direction in tile-local axes (x east, y south, z up): from the north-west, above. */
+/** Light direction in the local metric frame (east, south, up): from the north-west, above. */
 const LIGHT = normalize3(-0.4, -0.5, 0.75);
 
 export interface SurfelProgram {
   program: WebGLProgram;
   uMatrix: WebGLUniformLocation;
+  uTileWidth: WebGLUniformLocation;
   uLight: WebGLUniformLocation;
 }
 
@@ -97,9 +100,10 @@ export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
     throw new Error(`program link failed: ${gl.getProgramInfoLog(program)}`);
   }
   const uMatrix = gl.getUniformLocation(program, "u_matrix");
+  const uTileWidth = gl.getUniformLocation(program, "u_tile_width");
   const uLight = gl.getUniformLocation(program, "u_light");
-  if (!uMatrix || !uLight) throw new Error("missing uniform");
-  return { program, uMatrix, uLight };
+  if (!uMatrix || !uTileWidth || !uLight) throw new Error("missing uniform");
+  return { program, uMatrix, uTileWidth, uLight };
 }
 
 export function uploadSurfels(gl: WebGL2RenderingContext, surfels: readonly Surfel[]): SurfelBuffers {
@@ -142,8 +146,10 @@ export function uploadSurfels(gl: WebGL2RenderingContext, surfels: readonly Surf
 }
 
 export interface DrawOptions {
-  /** Tile-local -> clip, column-major. */
+  /** Local metric frame -> clip, column-major. */
   matrix: Float32Array;
+  /** Metres per tile-local unit. */
+  tileWidthMetres: number;
   depthTest: boolean;
 }
 
@@ -152,6 +158,7 @@ export function drawSurfels(
 ): void {
   gl.useProgram(p.program);
   gl.uniformMatrix4fv(p.uMatrix, false, opts.matrix);
+  gl.uniform1f(p.uTileWidth, opts.tileWidthMetres);
   gl.uniform3fv(p.uLight, LIGHT);
   if (opts.depthTest) {
     gl.enable(gl.DEPTH_TEST);

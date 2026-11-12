@@ -56,3 +56,20 @@ Observed in Chromium (Claude desktop browser pane) with
 - A page in a hidden browser pane did not finish loading the map
   (the worker request stalled, no `load` event). It loaded normally once
   the pane was visible. This is the test environment, not the demo.
+
+## 2026-11-12 — metric z and radius (Surfel Block v2)
+
+- With z and radius in metres, the fixtures need the carrying tile's
+  width (`tileWidthMetres`) to choose radius and pier sampling. A tile's
+  content is therefore no longer independent of its address. This is
+  expected for metric data.
+- Demo tile moved to z18 (124.2 m wide). The deck at 12 m now looks like a
+  bridge on the OSM basemap rather than a 155 m platform. Top-down, the
+  projected tile corners still match the ground extent.
+- With the vertical extent (11 m) small relative to the disc radius
+  (5.49 m), disc overshoot is more visible. The top pier row (centre
+  8.25 m) reaches 13.7 m and pokes through the 12 m deck, visible from
+  above as square outlines and from the side above the deck.
+- The relative change of Mercator scale across one tile is at most
+  2π / 2^zoom (0.0096 % at zoom 16), so the single per-tile width is
+  adequate at the zooms used so far.
