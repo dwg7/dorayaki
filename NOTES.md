@@ -73,3 +73,23 @@ Observed in Chromium (Claude desktop browser pane) with
 - The relative change of Mercator scale across one tile is at most
   2π / 2^zoom (0.0096 % at zoom 16), so the single per-tile width is
   adequate at the zooms used so far.
+
+## 2026-11-12 — `overhang` fixture
+
+- Surfel Block v2 represents the overhang without any format change. Under
+  the shelf, decoded columns hold ground (+z, 0 m), underside (−z, 8 m)
+  and top (+z, 16 m), in that order.
+- Viewed in the demo from beside the tile's east edge with the camera
+  3 m above ground, it reads as an overhang: the underside is visible
+  overhead, between the hanging lip and the back wall. The camera was
+  placed with `calculateCameraOptionsFromCameraLngLatAltRotation`.
+  Pitch above 90° drew nothing.
+- Disc overshoot now hides architecture, not only edges. On the 124 m
+  tile (pitch 7.76 m, radius 5.49 m), the lip's lower row (centre 10 m)
+  reaches down to 4.5 m, below the 8 m underside. From the front at eye
+  level, the 8 m opening is mostly covered, and the underside shows only
+  through the gaps between the scalloped discs. The back wall's discs
+  also reach below the ground.
+- With a fixed light from the north-west, every south-facing face (lip
+  and back wall) gets ambient light only and looks the same dark brown.
+  From the front, the two faces cannot be told apart.

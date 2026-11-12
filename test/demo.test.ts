@@ -2,21 +2,30 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { decodeSurfelTile } from "../demo/src/decode-tile.js";
-import { DEMO_TILE, DEMO_UNKNOWN_TAG, buildDemoTile, demoTilePath } from "../demo/src/demo-tile.js";
+import { DEMO_TILE, DEMO_UNKNOWN_TAG, buildDemoTile, demoTilePath, isDemoTileset } from "../demo/src/demo-tile.js";
 import { metricToMercatorMatrix, multiplyMat4, transformPoint } from "../demo/src/tile-matrix.js";
 import { generateBridge } from "../src/fixtures/bridge.js";
+import { generateOverhang } from "../src/fixtures/overhang.js";
 import { EXPERIMENTAL_SURFEL_FRAME_TAG, concatFrames, readFrames, wrapSurfelBlock } from "../src/mlt-frame.js";
 import { encodeSurfelBlock } from "../src/surfel-block.js";
 import { tileWidthMetres } from "../src/tile-geometry.js";
 
 const W = tileWidthMetres(DEMO_TILE);
 
-test("demo tile is an unknown frame followed by the bridge surfel frame", () => {
-  const tile = buildDemoTile();
-  assert.deepEqual(readFrames(tile).map((f) => f.tag), [DEMO_UNKNOWN_TAG, EXPERIMENTAL_SURFEL_FRAME_TAG]);
-  assert.deepEqual(decodeSurfelTile(tile), generateBridge({ tileWidthMetres: W }));
-  assert.deepEqual(buildDemoTile(), tile);
-  assert.equal(demoTilePath(), "demo/tiles/18/232847/103226.mlt");
+test("demo tiles are an unknown frame followed by the fixture's surfel frame", () => {
+  const cases = [
+    ["bridge", generateBridge({ tileWidthMetres: W })],
+    ["overhang", generateOverhang({ tileWidthMetres: W })],
+  ] as const;
+  for (const [tileset, surfels] of cases) {
+    const tile = buildDemoTile(tileset);
+    assert.deepEqual(readFrames(tile).map((f) => f.tag), [DEMO_UNKNOWN_TAG, EXPERIMENTAL_SURFEL_FRAME_TAG]);
+    assert.deepEqual(decodeSurfelTile(tile), surfels);
+    assert.deepEqual(buildDemoTile(tileset), tile);
+    assert.equal(demoTilePath(tileset), `demo/tiles/${tileset}/18/232847/103226.mlt`);
+  }
+  assert.ok(isDemoTileset("overhang"));
+  assert.ok(!isDemoTileset("../etc"));
 });
 
 test("decodeSurfelTile requires exactly one surfel frame", () => {

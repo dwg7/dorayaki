@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Dorayaki bridge demo</title>
+    <title>Dorayaki surfel demo</title>
     <link rel="stylesheet" href="/node_modules/maplibre-gl/dist/maplibre-gl.css" />
     <script type="importmap">
       { "imports": { "maplibre-gl": "/node_modules/maplibre-gl/dist/maplibre-gl.mjs" } }
@@ -20,7 +20,8 @@
   <body>
     <div id="map"></div>
     <div id="panel">
-      <strong>Dorayaki</strong>: experimental surfel frame, <code>bridge</code> fixture<br />
+      <strong>Dorayaki</strong>: experimental surfel frame<br />
+      fixture: <span id="fixture"></span><br />
       <span id="status">loading…</span><br />
       <label><input type="checkbox" id="depth" checked /> depth test</label><br />
       <small>Red dashed line: tile boundary. Ctrl/right-drag to rotate and pitch.</small>

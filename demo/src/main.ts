@@ -5,13 +5,26 @@ import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
 
 import { decodeSurfelTile } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
-import { DEMO_TILE, tileUrlPath } from "./demo-tile.js";
+import { DEMO_TILE, DEMO_TILESETS, isDemoTileset, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTileBytes } from "./load-tile.js";
 import { SurfelLayer } from "./surfel-layer.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
   return [tileLongitude(t, x), tileLatitude(t, y)];
 }
+
+/** Tileset from `?fixture=`, defaulting to the bridge. */
+const requested = new URLSearchParams(location.search).get("fixture") ?? "bridge";
+const tileset: DemoTileset = isDemoTileset(requested) ? requested : "bridge";
+
+const fixtureEl = document.getElementById("fixture") as HTMLElement;
+fixtureEl.replaceChildren(
+  ...DEMO_TILESETS.flatMap((name, i) => {
+    const node = name === tileset ? Object.assign(document.createElement("strong"), { textContent: name })
+      : Object.assign(document.createElement("a"), { textContent: name, href: `?fixture=${name}` });
+    return i === 0 ? [node] : [document.createTextNode(" | "), node];
+  }),
+);
 
 const statusEl = document.getElementById("status") as HTMLElement;
 const depthEl = document.getElementById("depth") as HTMLInputElement;
@@ -56,7 +69,7 @@ const map = new MapLibreMap({
 });
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
-const url = tileUrlPath(DEMO_TILE);
+const url = tileUrlPath(tileset, DEMO_TILE);
 const tilePromise = fetchTileBytes(url).then((bytes) => ({ bytes, surfels: decodeSurfelTile(bytes) }));
 
 map.on("load", () => {
