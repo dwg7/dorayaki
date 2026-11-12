@@ -7,15 +7,14 @@ import {
   BRIDGE_DECK_Z,
   BRIDGE_PIERS,
   BRIDGE_UNDERSIDE_Z,
-  bridgePierRowHeights,
   generateBridge as generateBridgeAt,
   generateBridgeParts as generateBridgePartsAt,
 } from "../src/fixtures/bridge.js";
 import { decodeSurfelBlock, encodeSurfelBlock, surfelBlockByteLength, type Surfel } from "../src/surfel-block.js";
 
 /**
- * Tests use a 128 m tile: sampling pitch 8 m, so the piers get
- * ceil(11 / 8) = 2 rows at 2.75 m and 8.25 m.
+ * Tests use a 128 m tile: maximum pitch 8 m. Each 16 m × 11 m pier face is
+ * sampled in 3 columns × 2 rows (cells 5.33 m × 5.5 m), rows at 2.75 and 8.25 m.
  */
 const WIDTH = 128;
 const generateBridge = () => generateBridgeAt({ tileWidthMetres: WIDTH });
@@ -25,7 +24,7 @@ const generateBridgeParts = () => generateBridgePartsAt({ tileWidthMetres: WIDTH
  * SHA-256 of encodeSurfelBlock(generateBridge()) on a 128 m tile. If this changes, the
  * fixture or the wire format changed; update it deliberately.
  */
-const BRIDGE_SHA256 = "f48eccc17b95fe964f5901dbd407817a332a9ff0d39a54e038f9c677c6a24429";
+const BRIDGE_SHA256 = "57492310fe7eab1fe370158f48b97c10003506cbdf800cd184a3b97424ad69fc";
 
 const C = 1 / 16;
 const centre = (k: number): number => (k + 0.5) * C;
@@ -53,8 +52,8 @@ test("bridge has ground, deck, underside, and supports", () => {
   assert.equal(parts.ground.length, 256);
   assert.equal(parts.deck.length, 64);
   assert.equal(parts.underside.length, 64);
-  assert.equal(parts.supports.length, 32); // 2 piers × 4 faces × 2 positions × 2 rows
-  assert.equal(generateBridge().length, 416);
+  assert.equal(parts.supports.length, 48); // 2 piers × 4 faces × 3 columns × 2 rows
+  assert.equal(generateBridge().length, 432);
 
   for (const s of parts.ground) assert.deepEqual([s.z, s.nx, s.ny, s.nz], [0, 0, 0, 1]);
   for (const s of parts.deck) assert.deepEqual([s.z, s.nx, s.ny, s.nz], [BRIDGE_DECK_Z, 0, 0, 1]);
@@ -62,7 +61,10 @@ test("bridge has ground, deck, underside, and supports", () => {
   assert.ok(BRIDGE_UNDERSIDE_Z < BRIDGE_DECK_Z);
   // Heights are metres; radius is metric (half the diagonal of an 8 m cell).
   assert.deepEqual([BRIDGE_UNDERSIDE_Z, BRIDGE_DECK_Z], [11, 12]);
-  for (const s of generateBridge()) assert.equal(s.radius, Math.fround(8 * Math.SQRT1_2));
+  for (const s of [...parts.ground, ...parts.deck, ...parts.underside]) {
+    assert.equal(s.radius, Math.fround(Math.hypot(8, 8) / 2));
+  }
+  for (const s of parts.supports) assert.equal(s.radius, Math.fround(Math.hypot(16 / 3, 5.5) / 2));
 });
 
 test("supports are vertical faces between ground and underside", () => {
@@ -83,7 +85,7 @@ test("supports are vertical faces between ground and underside", () => {
 
 test("bridge survives an encode/decode round trip, in order", () => {
   const { original, decoded } = roundTrip();
-  assert.equal(encodeSurfelBlock(original).byteLength, surfelBlockByteLength(416));
+  assert.equal(encodeSurfelBlock(original).byteLength, surfelBlockByteLength(432));
   assert.deepEqual(decoded, original);
 });
 
@@ -117,8 +119,8 @@ test("decoded block keeps three layers at every x/y under the deck", () => {
 test("decoded block keeps stacked support surfels at each pier face position", () => {
   const { decoded } = roundTrip();
   const cols = columns(decoded.filter((s) => s.nz === 0));
-  // 2 piers × 4 faces × 2 positions per face, each with 2 heights.
-  assert.equal(cols.size, 16);
+  // 2 piers × 4 faces × 3 positions per face, each with 2 heights.
+  assert.equal(cols.size, 24);
   for (const stack of cols.values()) {
     assert.deepEqual(stack.map((s) => s.z), [2.75, 8.25]);
   }
@@ -136,9 +138,18 @@ test("outside the deck and piers the bridge is a single ground layer", () => {
 });
 
 test("pier rows follow the tile width so vertical sampling matches horizontal", () => {
-  assert.deepEqual(bridgePierRowHeights(128), [2.75, 8.25]); // pitch 8 m
-  assert.deepEqual(bridgePierRowHeights(1000), [5.5]); // pitch 62.5 m: one row
-  assert.equal(bridgePierRowHeights(16).length, 11); // pitch 1 m
+  const rows = (w: number) => [...new Set(generateBridgePartsAt({ tileWidthMetres: w }).supports.map((s) => s.z))];
+  assert.deepEqual(rows(128), [2.75, 8.25]); // pitch 8 m
+  assert.deepEqual(rows(1000), [5.5]); // pitch 62.5 m: one row
+  assert.equal(rows(16).length, 11); // pitch 1 m
+});
+
+test("pier discs stay within (√5 - 1)/4 of the pitch of their faces", () => {
+  const bound = ((Math.sqrt(5) - 1) / 4) * 8;
+  for (const s of generateBridgeParts().supports) {
+    assert.ok(s.z + s.radius <= BRIDGE_UNDERSIDE_Z + bound, `top ${s.z + s.radius}`);
+    assert.ok(s.z - s.radius >= -bound, `bottom ${s.z - s.radius}`);
+  }
 });
 
 test("bridge heights do not depend on the tile width", () => {

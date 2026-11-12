@@ -1,4 +1,5 @@
 import type { Surfel } from "../surfel-block.js";
+import { samplePatch, type PatchAxis } from "./sampling.js";
 
 /**
  * Deterministic `overhang` fixture in the Surfel Block v2 frame:
@@ -27,11 +28,11 @@ import type { Surfel } from "../surfel-block.js";
  * Under the overhang (y in [6/16, 10/16]) three surfels share each x/y:
  * ground (+z), underside (-z) and top (+z).
  *
- * Sampling pitch C = 1/16 of the tile horizontally, P = tileWidthMetres / 16
- * in metres. Vertical faces use max(1, ceil(8 m / P)) evenly spaced rows.
- * Every surfel has radius P·√½ m. Tile-local coordinates are multiples of
- * 1/32 and the heights are whole metres, so they are float32-exact. Radius
- * and face row heights are rounded to float32 by the generator.
+ * Maximum sampling pitch P = tileWidthMetres / 16. Every surface is sampled
+ * per patch with samplePatch (src/fixtures/sampling.ts): its own grid,
+ * spacing <= P, radius = half its cell diagonal. Horizontal surfaces get
+ * the same 1/16-of-tile grid (float32-exact multiples of 1/32), so they
+ * share x/y; the 8 m faces are subdivided to fit their height.
  */
 
 const N = 16;
@@ -65,52 +66,38 @@ export interface OverhangParts {
   ground: Surfel[];
 }
 
-/** Row heights in metres for a vertical face spanning [z0, z0 + 8 m]. */
-export function overhangFaceRowHeights(tileWidthMetres: number, z0: number): number[] {
-  const height = OVERHANG_TOP_Z - OVERHANG_UNDERSIDE_Z; // both faces are 8 m tall
-  const rows = Math.max(1, Math.ceil(height / (tileWidthMetres * C)));
-  return Array.from({ length: rows }, (_, k) => Math.fround(z0 + (height * (k + 0.5)) / rows));
-}
-
-const centre = (k: number): number => (k + 0.5) * C;
-
 export function generateOverhangParts(options: OverhangOptions): OverhangParts {
   const w = options.tileWidthMetres;
   if (!Number.isFinite(w) || w <= 0) {
     throw new RangeError(`tileWidthMetres must be a positive finite number, got ${w}`);
   }
-  const radius = Math.fround(w * C * Math.SQRT1_2);
+  const pitch = w * C;
+  const X = (lo: number, hi: number): PatchAxis => ({ lo, hi, metresPerUnit: w });
+  const Z = (lo: number, hi: number): PatchAxis => ({ lo, hi, metresPerUnit: 1 });
   const surfel = (
     x: number, y: number, z: number,
     nx: number, ny: number, nz: number,
+    radius: number,
     [r, g, b, a]: Rgba,
   ): Surfel => ({ x, y, z, nx, ny, nz, radius, r, g, b, a });
 
-  const top: Surfel[] = [];
-  const underside: Surfel[] = [];
-  const ground: Surfel[] = [];
-  for (let j = 0; j < N; j++) {
-    const y = centre(j);
-    for (let i = 0; i < N; i++) {
-      const x = centre(i);
-      if (y < OVERHANG_LIP_Y) top.push(surfel(x, y, OVERHANG_TOP_Z, 0, 0, 1, TOP));
-      if (y > OVERHANG_WALL_Y && y < OVERHANG_LIP_Y) {
-        underside.push(surfel(x, y, OVERHANG_UNDERSIDE_Z, 0, 0, -1, UNDERSIDE));
-      }
-      if (y > OVERHANG_WALL_Y) ground.push(surfel(x, y, 0, 0, 0, 1, GROUND));
-    }
-  }
+  const horizontal = (y: PatchAxis, z: number, nz: number, rgba: Rgba): Surfel[] => {
+    const p = samplePatch(X(0, 1), y, pitch);
+    return p.v.flatMap((yy) => p.u.map((xx) => surfel(xx, yy, z, 0, 0, nz, p.radius, rgba)));
+  };
+  /** Vertical face at tile-local y, spanning x in [0, 1] and z in [z0, z1], normal +y. */
+  const southFace = (y: number, z0: number, z1: number): Surfel[] => {
+    const p = samplePatch(X(0, 1), Z(z0, z1), pitch);
+    return p.v.flatMap((z) => p.u.map((x) => surfel(x, y, z, 0, 1, 0, p.radius, FACE)));
+  };
 
-  const lip: Surfel[] = [];
-  const wall: Surfel[] = [];
-  for (const z of overhangFaceRowHeights(w, OVERHANG_UNDERSIDE_Z)) {
-    for (let i = 0; i < N; i++) lip.push(surfel(centre(i), OVERHANG_LIP_Y, z, 0, 1, 0, FACE));
-  }
-  for (const z of overhangFaceRowHeights(w, 0)) {
-    for (let i = 0; i < N; i++) wall.push(surfel(centre(i), OVERHANG_WALL_Y, z, 0, 1, 0, FACE));
-  }
-
-  return { top, lip, underside, wall, ground };
+  return {
+    top: horizontal(X(0, OVERHANG_LIP_Y), OVERHANG_TOP_Z, 1, TOP),
+    lip: southFace(OVERHANG_LIP_Y, OVERHANG_UNDERSIDE_Z, OVERHANG_TOP_Z),
+    underside: horizontal(X(OVERHANG_WALL_Y, OVERHANG_LIP_Y), OVERHANG_UNDERSIDE_Z, -1, UNDERSIDE),
+    wall: southFace(OVERHANG_WALL_Y, 0, OVERHANG_UNDERSIDE_Z),
+    ground: horizontal(X(OVERHANG_WALL_Y, 1), 0, 1, GROUND),
+  };
 }
 
 /** All overhang surfels in a fixed order: top, lip, underside, wall, ground. */

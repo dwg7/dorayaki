@@ -219,6 +219,7 @@ src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/fixtures/overhang.ts     deterministic overhang fixture generator
+src/fixtures/sampling.ts     per-patch sampling rule shared by fixtures
 src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
 scripts/generate-demo-tile.ts  writes one demo tile per tileset

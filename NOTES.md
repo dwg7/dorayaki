@@ -93,3 +93,30 @@ Observed in Chromium (Claude desktop browser pane) with
 - With a fixed light from the north-west, every south-facing face (lip
   and back wall) gets ambient light only and looks the same dark brown.
   From the front, the two faces cannot be told apart.
+
+## 2026-11-12 — per-patch sampling (fixture change, no format change)
+
+- Change: each fixture surface is sampled on its own grid
+  (`src/fixtures/sampling.ts`). The spacing is at most P (1/16 of the tile)
+  and fits both sides of the patch, and the radius is half the cell
+  diagonal. Before, vertical faces used the horizontal pitch for their
+  radius. Horizontal grids are unchanged, so layers still share x/y.
+- On the 124 m demo tile:
+
+  | | before | after |
+  | --- | --- | --- |
+  | overhang lip bottom (underside at 8 m) | 4.51 m | 7.21 m |
+  | overhang back wall top (underside at 8 m) | 11.49 m | 8.79 m |
+  | bridge pier top (deck at 12 m) | 13.74 m | 12.03 m |
+  | surfels: bridge / overhang | 416 / 448 | 432 / 512 |
+
+- In the demo, the overhang's underside now shows from the front at eye
+  level as a continuous band under the lip, with the back wall behind it.
+  The pier outlines no longer show through the deck from above.
+- Residual: circular discs still overshoot a patch edge by r − cell/2.
+  That is at most (√5 − 1)/4 ≈ 0.31 of the spacing, or 0.21 for square
+  cells (tested). The bridge pier tops still end 3 cm above the deck, and
+  the ground, deck and top edges stay scalloped by about 1.6 m. Removing
+  the overshoot entirely would need a different surfel shape (for
+  example elliptical or clipped discs). That is a format change, not
+  pursued here.

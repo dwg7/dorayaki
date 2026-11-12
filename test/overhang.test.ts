@@ -10,7 +10,6 @@ import {
   OVERHANG_WALL_Y,
   generateOverhang as generateOverhangAt,
   generateOverhangParts as generateOverhangPartsAt,
-  overhangFaceRowHeights,
 } from "../src/fixtures/overhang.js";
 import { decodeSurfelBlock, encodeSurfelBlock, surfelBlockByteLength, type Surfel } from "../src/surfel-block.js";
 
@@ -105,13 +104,26 @@ test("behind the wall only the top remains; in front of the lip only the ground"
 });
 
 test("face rows follow the tile width; heights do not", () => {
-  assert.deepEqual(overhangFaceRowHeights(128, 8), [12]); // pitch 8 m: one row
-  assert.deepEqual(overhangFaceRowHeights(64, 8), [10, 14]); // pitch 4 m: two rows
-  assert.deepEqual(overhangFaceRowHeights(64, 0), [2, 6]);
+  const rows = (w: number, part: "lip" | "wall") =>
+    [...new Set(generateOverhangPartsAt({ tileWidthMetres: w })[part].map((s) => s.z))];
+  assert.deepEqual(rows(128, "lip"), [12]); // pitch 8 m: one row
+  assert.deepEqual(rows(64, "lip"), [10, 14]); // pitch 4 m: two rows
+  assert.deepEqual(rows(64, "wall"), [2, 6]);
+  assert.deepEqual(rows(124.17563859464565, "lip"), [10, 14]); // 8 m face fits 2 rows of 4 m
   for (const w of [64, 124.17563859464565, 1000]) {
     const p = generateOverhangPartsAt({ tileWidthMetres: w });
     assert.ok(p.top.every((s) => s.z === 16));
     assert.ok(p.underside.every((s) => s.z === 8));
   }
   assert.throws(() => generateOverhangAt({ tileWidthMetres: 0 }), RangeError);
+});
+
+test("on the demo tile, the lip no longer hangs far below the underside", () => {
+  const w = 124.17563859464565;
+  const { lip, wall } = generateOverhangPartsAt({ tileWidthMetres: w });
+  const lipBottom = Math.min(...lip.map((s) => s.z - s.radius));
+  const wallTop = Math.max(...wall.map((s) => s.z + s.radius));
+  // Old rule (radius P·√½ = 5.49 m): lip bottom 4.51 m, wall top 11.49 m.
+  assert.ok(lipBottom > 7, `lip bottom ${lipBottom}`);
+  assert.ok(wallTop < 9, `wall top ${wallTop}`);
 });

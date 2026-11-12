@@ -19,7 +19,7 @@ export {
   OVERHANG_WALL_Y,
   generateOverhang,
   generateOverhangParts,
-  overhangFaceRowHeights,
   type OverhangOptions,
   type OverhangParts,
 } from "./fixtures/overhang.js";
+export { patchOvershoot, samplePatch, type PatchAxis, type PatchSamples } from "./fixtures/sampling.js";
