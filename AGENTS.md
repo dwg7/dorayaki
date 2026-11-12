@@ -211,12 +211,14 @@ Current repository structure:
 
 ```text
 src/surfel-block.ts          naive Surfel Block encoder/decoder
+src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
 NOTES.md                     observed experimental findings
 docs/surfel-block-format.md  byte layout of the naive Surfel Block
+docs/mlt-frame.md            experimental MLT frame envelope
 ```
 
 Do not invent commands that are not present in package.json.

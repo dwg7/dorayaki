@@ -18,3 +18,14 @@ that have actually been observed are recorded here.
 - Also observed: a decoded block has no part identity. The tests can tell
   ground, deck, underside and supports apart only by array order, normal,
   and colour. Nothing so far needs it.
+
+## 2026-11-12 — experimental MLT frame
+
+- Upstream MLT framing is `[varint size][u8 tag][body]` with `size`
+  counting the tag byte. The Surfel Block fits as a frame body unchanged;
+  no wire-format change was needed.
+- The MLT specification assigns tags 0x01 and 0x02 only and defines no
+  experimental or private-use range, so the local tag 0xD0 has no
+  protection against a future collision.
+- The specification as read does not state a maximum for `size`; the
+  uint32 / 5-byte varint limit is a Dorayaki choice.
