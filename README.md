@@ -12,12 +12,15 @@ Implemented:
 - a naive Surfel Block codec (`src/surfel-block.ts`): a 12-byte header
   followed by 32-byte little-endian surfel records. The byte layout is in
   [`docs/surfel-block-format.md`](docs/surfel-block-format.md);
-- a deterministic `plane` fixture generator (`src/fixtures/plane.ts`);
+- deterministic fixture generators: `plane` (`src/fixtures/plane.ts`) and
+  `bridge` (`src/fixtures/bridge.ts`: ground, deck, underside, and vertical
+  piers, with several surfels at the same x/y and different z);
 - automated tests for round trips and malformed input (`test/`).
 
 Not yet implemented: MapLibre Tile (MLT) embedding, browser decoding,
-MapLibre GL JS rendering, PMTiles, the other fixtures listed in
-`AGENTS.md`, and any compression or quantization.
+MapLibre GL JS rendering, PMTiles, the remaining fixtures listed in
+`AGENTS.md` (`fold`, `overhang`, `floating`, `boundary`), and any
+compression or quantization.
 
 ## Requirements
 
