@@ -118,7 +118,7 @@ test("face rows follow the tile width; heights do not", () => {
   assert.throws(() => generateOverhangAt({ tileWidthMetres: 0 }), RangeError);
 });
 
-test("on the demo tile, the lip no longer hangs far below the underside", () => {
+test("on a 124 m tile, the lip no longer hangs far below the underside", () => {
   const w = 124.17563859464565;
   const { lip, wall } = generateOverhangPartsAt({ tileWidthMetres: w });
   const lipBottom = Math.min(...lip.map((s) => s.z - s.radius));

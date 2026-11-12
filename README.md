@@ -43,7 +43,7 @@ npm install         # install dev dependencies (TypeScript, esbuild, MapLibre GL
 npm run typecheck   # type-check src/, test/, scripts/ and demo/src/ without emitting
 npm test            # compile src/ and test/ into build-test/, run node --test
 npm run build       # compile src/ into dist/ (JS, .d.ts, source maps)
-npm run demo:tile   # write demo/tiles/{bridge,overhang}/18/232847/103226.mlt
+npm run demo:tile   # write demo/tiles/{bridge,overhang}/18/234000/96256.mlt
 npm run demo:build  # demo:tile, then bundle demo/src/main.ts into demo/build/
 npm run demo        # demo:tile, then bundle and serve on http://127.0.0.1:8000
 ```
@@ -62,14 +62,18 @@ Then open <http://127.0.0.1:8000/demo/> in a browser with WebGL2, or
 <http://127.0.0.1:8000/demo/?fixture=overhang> for the overhang. Stop the
 server with Ctrl-C.
 
-The page loads one tile, `demo/tiles/{fixture}/18/232847/103226.mlt`
-(near Tokyo Station, 124 m wide), over plain HTTP. Each fixture is its own
+The page loads one tile, `demo/tiles/{fixture}/18/234000/96256.mlt`
+(at Sapporo Station, 111.7 m wide), over plain HTTP. Each fixture is its own
 tileset directory, so different fixtures can share a tile address. The tile
 holds a synthetic unknown frame followed by the fixture as an experimental
 surfel frame. The red dashed line is the tile boundary. The "depth test"
-checkbox turns depth testing off to show its effect. The basemap is
-OpenStreetMap raster tiles from `tile.openstreetmap.org`, so the page
-needs network access for the background map (not for the surfels).
+checkbox turns depth testing off to show its effect. The basemap is the
+`bvmap-koicha-starlight` style from [hfu/stars](https://github.com/hfu/stars),
+loaded from `https://stars.optgeo.org/style/bvmap-koicha-starlight`. It
+draws MLT-encoded vector tiles derived from GSI optimized vector tiles.
+The page therefore needs network access for the background map (not for
+the surfels). The surfels are drawn over the vector basemap; the tile
+outline is a GeoJSON line layer added on top.
 
 The server is esbuild's dev server with the repository root as its
 document root, so the page can load MapLibre GL JS from `node_modules/`
@@ -90,7 +94,7 @@ Demo modules (`demo/src/`), kept separate as AGENTS.md requires:
 Placement follows the Surfel Block v2 coordinate frame
 (`docs/surfel-block-format.md`): x and y in [0, 1] span the tile with y
 pointing south, z and radius are metres. The demo converts x, y to metres
-with `tileWidthMetres` (`src/tile-geometry.ts`), about 124.2 m for this
+with `tileWidthMetres` (`src/tile-geometry.ts`), about 111.7 m for this
 tile. Mercator projection only.
 
 ## License

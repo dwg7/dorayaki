@@ -205,7 +205,7 @@ npm install
 npm run typecheck   # tsc --noEmit over src/, test/, scripts/, demo/src/
 npm test            # tsc into build-test/, then node --test
 npm run build       # tsc src/ into dist/
-npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang}/18/232847/103226.mlt)
+npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang}/18/234000/96256.mlt)
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
 ```

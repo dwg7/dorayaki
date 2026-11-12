@@ -120,3 +120,17 @@ Observed in Chromium (Claude desktop browser pane) with
   the overshoot entirely would need a different surfel shape (for
   example elliptical or clipped discs). That is a format change, not
   pursued here.
+
+## 2026-11-12 — vector basemap at Sapporo Station
+
+- The demo basemap is now `bvmap-koicha-starlight` from hfu/stars
+  (`https://stars.optgeo.org/style/bvmap-koicha-starlight`, 125 layers,
+  MLT-encoded vector tiles, z3–16). The demo tile moved to Sapporo Station,
+  z18/234000/96256 (111.7 m wide), inside the `bvmap-koicha-hokkaido`
+  bounds. Rendering over the vector basemap needed no change to the
+  surfel layer. Top-down, the tile outline still matches the ground
+  extent, and the console showed no errors.
+- The surfel layer is added after every style layer, including the
+  basemap's labels, so labels inside the tile are hidden by the surfels.
+  Inserting it below the label layers would need a rule for which style
+  layer to insert before. Not changed.

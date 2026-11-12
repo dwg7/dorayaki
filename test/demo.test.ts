@@ -22,7 +22,7 @@ test("demo tiles are an unknown frame followed by the fixture's surfel frame", (
     assert.deepEqual(readFrames(tile).map((f) => f.tag), [DEMO_UNKNOWN_TAG, EXPERIMENTAL_SURFEL_FRAME_TAG]);
     assert.deepEqual(decodeSurfelTile(tile), surfels);
     assert.deepEqual(buildDemoTile(tileset), tile);
-    assert.equal(demoTilePath(tileset), `demo/tiles/${tileset}/18/232847/103226.mlt`);
+    assert.equal(demoTilePath(tileset), `demo/tiles/${tileset}/18/234000/96256.mlt`);
   }
   assert.ok(isDemoTileset("overhang"));
   assert.ok(!isDemoTileset("../etc"));

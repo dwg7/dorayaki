@@ -6,8 +6,8 @@ import { tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 
 export type { TileAddress };
 
-/** Tile address of the single demo tile (near Tokyo Station, ~124 m wide). */
-export const DEMO_TILE = { z: 18, x: 232847, y: 103226 } as const;
+/** Tile address of the single demo tile (at Sapporo Station, ~111.7 m wide). */
+export const DEMO_TILE = { z: 18, x: 234000, y: 96256 } as const;
 
 /**
  * Demo tilesets. Each is a directory of z/x/y tiles holding one fixture;

@@ -34,6 +34,12 @@ const setStatus = (text: string): void => {
 
 const corners = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(DEMO_TILE, x as number, y as number));
 
+/**
+ * Basemap: hfu/stars' bvmap-koicha-starlight style (MLT-encoded vector
+ * tiles derived from GSI optimized vector tiles), served by stars.optgeo.org.
+ */
+const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-koicha-starlight";
+
 const map = new MapLibreMap({
   container: "map",
   center: tileToLngLat(DEMO_TILE, 0.5, 0.5),
@@ -41,31 +47,7 @@ const map = new MapLibreMap({
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
-  style: {
-    version: 8,
-    sources: {
-      osm: {
-        type: "raster",
-        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-        tileSize: 256,
-        maxzoom: 19,
-        attribution: "© OpenStreetMap contributors",
-      },
-      "tile-outline": {
-        type: "geojson",
-        data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: corners } },
-      },
-    },
-    layers: [
-      { id: "osm", type: "raster", source: "osm", paint: { "raster-saturation": -0.6 } },
-      {
-        id: "tile-outline",
-        type: "line",
-        source: "tile-outline",
-        paint: { "line-color": "#d03030", "line-width": 2, "line-dasharray": [2, 2] },
-      },
-    ],
-  },
+  style: BASEMAP_STYLE,
 });
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
@@ -73,6 +55,17 @@ const url = tileUrlPath(tileset, DEMO_TILE);
 const tilePromise = fetchTileBytes(url).then((bytes) => ({ bytes, surfels: decodeSurfelTile(bytes) }));
 
 map.on("load", () => {
+  // Debug overlay on top of the basemap: the demo tile's boundary.
+  map.addSource("tile-outline", {
+    type: "geojson",
+    data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: corners } },
+  });
+  map.addLayer({
+    id: "tile-outline",
+    type: "line",
+    source: "tile-outline",
+    paint: { "line-color": "#d03030", "line-width": 2, "line-dasharray": [2, 2] },
+  });
   tilePromise.then(
     ({ bytes, surfels }) => {
       const layer = new SurfelLayer("surfels", DEMO_TILE, surfels);
