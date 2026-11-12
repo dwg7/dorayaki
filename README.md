@@ -68,7 +68,9 @@ npm install
 npm run demo
 ```
 
-Then open <http://127.0.0.1:8000/demo/> in a browser with WebGL2, or
+Then open <http://127.0.0.1:8000/demo/> in a browser with WebGL2. The
+camera is kept in the URL fragment (`#map=zoom/lat/lng/bearing/pitch`), so
+a view can be shared or reloaded. Other fixtures: the same URL with
 `?fixture=overhang`, `?fixture=boundary` or `?fixture=toy-gs` appended. Stop the server with
 Ctrl-C.
 

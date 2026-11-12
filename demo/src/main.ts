@@ -72,6 +72,9 @@ const map = new MapLibreMap({
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
+  // Camera in the URL fragment as #map=zoom/lat/lng/bearing/pitch; it
+  // overrides the initial view above and survives reloads.
+  hash: "map",
   style: BASEMAP_STYLE,
   // Real-data tilesets name their source next to the basemap's attribution.
   attributionControl: manifest ? { customAttribution: manifest.attribution } : {},
