@@ -13,7 +13,7 @@
  *    over the 14 m extent); up = the LAS Z unchanged. Z is already
  *    orthometric height (標高): ground points near the centre have median
  *    7.78 m against 7.6 m from the GSI 1 m DEM there;
- * 2. a tile pyramid (docs/progressive-maxzoom.md): for z18 and z19, one
+ * 2. a tile pyramid (documents/progressive-maxzoom.md): for z18 and z19, one
  *    aggregated Gaussian per voxel of tile width / 512; for maxzoom z20,
  *    the finest Gaussians (voxel = z20 tile width / 2048, i.e. z22 detail)
  *    in nested refinement order with a 3-level table (src/progressive.ts).
@@ -40,7 +40,7 @@ const MESH = "08NE2701";
 const DIR = `data/virtual-shizuoka/2019-mms-${MESH}`;
 const LAS_PATH = `${DIR}/${MESH}.las`;
 const ZONE = 8;
-/** Aggregated tiles below maxzoom (docs/progressive-maxzoom.md). */
+/** Aggregated tiles below maxzoom (documents/progressive-maxzoom.md). */
 const AGGREGATED_ZOOMS = [18, 19];
 /** Maxzoom: the finest Gaussians, in nested refinement order. */
 const MAXZOOM = 20;

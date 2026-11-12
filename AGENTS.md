@@ -209,6 +209,7 @@ npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang,boundary,toy
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
 npm run demo:numazu # build demo/tiles/numazu/ from data/ (download: README)
+npm run site        # rebuild the GitHub Pages site in docs/ (commit the output)
 npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size table
 ```
 
@@ -238,9 +239,11 @@ scripts/generate-demo-tile.ts  writes one demo tile per tileset
 demo/index.html              demo page (MapLibre GL JS via import map)
 demo/src/                    demo modules: load, decode, tile selection, placement, GPU, layer
 NOTES.md                     observed experimental findings
-docs/surfel-block-format.md  byte layout of the naive Surfel Block
-docs/mlt-frame.md            experimental MLT frame envelope
-docs/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
+docs/                        built GitHub Pages site only (npm run site; do not edit by hand)
+scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline), worker, synthetic tiles
+documents/surfel-block-format.md  byte layout of the naive Surfel Block
+documents/mlt-frame.md            experimental MLT frame envelope
+documents/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
 scripts/measure-numazu.ts    density and size measurements on the Numazu data
 ```
 

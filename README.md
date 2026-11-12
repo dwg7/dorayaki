@@ -13,10 +13,10 @@ Implemented:
   header and a level table, followed by 32-byte little-endian surfel
   records, with x, y tile-local, z as orthometric height and radius in
   metres. The byte layout and coordinate frame
-  are in [`docs/surfel-block-format.md`](docs/surfel-block-format.md);
+  are in [`documents/surfel-block-format.md`](documents/surfel-block-format.md);
 - an experimental MLT frame wrapper (`src/mlt-frame.ts`): a Surfel Block
   as the body of an MLT frame with the local, unassigned tag `0xD0`; see
-  [`docs/mlt-frame.md`](docs/mlt-frame.md). It skips unknown frames by
+  [`documents/mlt-frame.md`](documents/mlt-frame.md). It skips unknown frames by
   their declared size and rejects malformed sizes;
 - deterministic fixture generators: `plane` (`src/fixtures/plane.ts`),
   `bridge` (`src/fixtures/bridge.ts`: ground, deck, underside, and vertical
@@ -107,10 +107,32 @@ Demo modules (`demo/src/`), kept separate as AGENTS.md requires:
 | `demo-tile.ts` | demo tile address and deterministic tile bytes |
 
 Placement follows the Surfel Block v2 coordinate frame
-(`docs/surfel-block-format.md`): x and y in [0, 1] span the tile with y
+(`documents/surfel-block-format.md`): x and y in [0, 1] span the tile with y
 pointing south, z and radius are metres. The demo converts x, y to metres
 with `tileWidthMetres` (`src/tile-geometry.ts`), about 111.7 m for this
 tile. Mercator projection only.
+
+## Demo site (GitHub Pages)
+
+The demo with the synthetic fixtures is published from `main:docs/` (dwg7
+convention) at <https://dwg7.unopengis.org/dorayaki/>. `docs/` holds only
+the built site; the design documents live in `documents/`.
+
+```sh
+npm run site    # rebuild docs/ (wiped and rewritten)
+```
+
+Commit the result. GitHub Pages does not build anything. The page is a
+single file: `docs/index.html` carries all JavaScript (the demo and MapLibre
+GL JS, bundled by esbuild) and all CSS inline. File names carry no
+content hashes. Besides the page, only MapLibre's Web Worker
+(`docs/maplibre-gl-worker.mjs`, which cannot be inlined), the tiles and
+`.nojekyll` are separate files. MapLibre derives its worker URL from its own
+`import.meta.url`, which bundling turns into the page URL. The build
+therefore defines the worker's page-relative path and the demo passes it
+to `setWorkerUrl`, so it resolves under `/dorayaki/`. The build fails if the
+worker is not self-contained. The Numazu point-cloud tileset (about
+17.6 MB of derived tiles) is not published.
 
 ## Numazu point cloud
 
@@ -129,7 +151,7 @@ The zip is 14,113,240 bytes (SHA-256 `0af0a8ac…e1ca126d`). `npm run
 demo:numazu` writes the finest Gaussians as a reference-3DGS PLY next to
 the LAS, and a tile pyramid to `demo/tiles/numazu/`. The pyramid holds
 aggregated z18 and z19 tiles and z20 maxzoom tiles in a 3-level
-progressive order (`docs/progressive-maxzoom.md`). The demo draws the
+progressive order (`documents/progressive-maxzoom.md`). The demo draws the
 tiles and levels that match the map zoom. Open <http://127.0.0.1:8000/demo/?fixture=numazu>
 while `npm run demo` is running. Heights are the source's elevations
 (標高), so on the flat basemap the data floats at its real elevation,

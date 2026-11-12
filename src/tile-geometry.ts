@@ -2,7 +2,7 @@
  * Tile geometry on the spherical Web Mercator Earth.
  *
  * Used to relate tile-local x, y to the metric z and radius of Surfel
- * Block version 2 (docs/surfel-block-format.md). No MapLibre dependency.
+ * Block version 2 (documents/surfel-block-format.md). No MapLibre dependency.
  */
 
 /** Spherical Web Mercator Earth radius (EPSG:3857), metres. */

@@ -15,7 +15,7 @@
  * import or depend on the Surfel Block codec, and it does not parse MLT
  * v1/v2 layers.
  *
- * See docs/mlt-frame.md.
+ * See documents/mlt-frame.md.
  */
 
 /**

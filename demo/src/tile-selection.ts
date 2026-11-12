@@ -2,7 +2,7 @@
  * Tile selection: which loaded tiles to draw at a display zoom, and how
  * much of a progressive (multi-level) tile. No DOM, network or WebGL here.
  *
- * Rule (docs/progressive-maxzoom.md):
+ * Rule (documents/progressive-maxzoom.md):
  * - draw the tiles of the deepest loaded zoom z with z <= floor(display
  *   zoom), or of the shallowest loaded zoom when zoomed out further;
  * - for a tile with a level table, draw levels 0..(floor(display zoom) - z),

@@ -245,7 +245,7 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
 - At the current 32-byte record, the Gaussians beat COPC (xyz+rgb) only
   down to z20 detail (0.62×). z21 detail is 1.60× and z22 detail 3.16×.
   This is the first measured evidence for a more compact record.
-- Design proposal written up in `docs/progressive-maxzoom.md` (not
+- Design proposal written up in `documents/progressive-maxzoom.md` (not
   implemented).
 
 ## 2026-11-13 — v3: level table and a progressive maxzoom tile (Numazu)
@@ -270,3 +270,28 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   normals are arbitrary, and from above, edge-on discs leave the canopy
   gappy. This is evidence for camera-facing rendering of round Gaussians
   and for dropping the normal from round records in a compact v4.
+
+## 2026-11-13 — GitHub Pages site from main:docs/
+
+- Design documents moved from `docs/` to `documents/` (hfu offered either
+  that or a miso instance; cafebabe noted that miso means authoring an
+  instance, not moving files). `docs/` now holds only the built site
+  (`npm run site`).
+- First build: MapLibre unbundled, `maplibre-gl.mjs` and its worker side by
+  side under `docs/vendor/`, relative import map. At `/dorayaki/` (local
+  Python http.server, symlinked root) the worker returned 200 and all four
+  synthetic fixtures rendered.
+- Switched to the dwg7-recommended single-file page (pointed out by hfu):
+  `docs/index.html` with all JS (demo + MapLibre GL JS 6.16.0, minified,
+  about 1.09 MB) and all CSS inline; no hashed file names. Only
+  `docs/maplibre-gl-worker.mjs` (519 KB, self-contained in 6.16.0), the
+  tiles and `.nojekyll` are separate. Bundled, MapLibre's `import.meta.url`
+  is the page, so the build defines the worker path and the demo calls
+  `setWorkerUrl`. At `/dorayaki/` the worker was fetched from
+  `/dorayaki/maplibre-gl-worker.mjs` (200), and the bridge fixture and the
+  vector basemap rendered with no console errors. The other three
+  fixtures' tiles were fetched (200/304), but their rendering was not
+  observed: the browser pane was hidden, so the map never fired `load`.
+- Not yet verified on GitHub Pages itself: the live URL and the
+  Content-Type served for `.mlt` (read as an ArrayBuffer, so it should not
+  matter).

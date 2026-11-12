@@ -1,7 +1,7 @@
 /**
  * Demo entry point: wires loading -> decoding -> custom layer.
  */
-import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
+import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from "maplibre-gl";
 
 import { decodeSurfelTileWithLevels } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
@@ -17,10 +17,24 @@ function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
  * Real-data tilesets built offline (e.g. `npm run demo:numazu`). Their
  * tiles and placement come from tiles/<name>/manifest.json, not from code.
  */
-const EXTERNAL_TILESETS = ["numazu"] as const;
-type ExternalTileset = (typeof EXTERNAL_TILESETS)[number];
+declare const __DORAYAKI_EXTERNAL_TILESETS__: readonly string[] | undefined;
+declare const __DORAYAKI_WORKER_URL__: string | undefined;
+
+/**
+ * The single-file site build bundles MapLibre into index.html, so
+ * MapLibre's own import.meta.url no longer points next to its worker. That
+ * build defines the worker's path relative to the page; the dev page
+ * (unbundled MapLibre via an import map) leaves it undefined.
+ */
+if (typeof __DORAYAKI_WORKER_URL__ !== "undefined") {
+  setWorkerUrl(new URL(__DORAYAKI_WORKER_URL__, document.baseURI).href);
+}
+/** The static site build (scripts/build-site.ts) defines this as [] because it does not publish them. */
+const EXTERNAL_TILESETS: readonly string[] =
+  typeof __DORAYAKI_EXTERNAL_TILESETS__ !== "undefined" ? __DORAYAKI_EXTERNAL_TILESETS__ : ["numazu"];
+type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
-const isExternal = (name: string): name is ExternalTileset => (EXTERNAL_TILESETS as readonly string[]).includes(name);
+const isExternal = (name: string): name is ExternalTileset => EXTERNAL_TILESETS.includes(name);
 
 interface Manifest {
   name: string;
