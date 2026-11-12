@@ -10,7 +10,8 @@
  * One circular surfel as held in memory.
  *
  * Coordinate frame (version 2, see docs/surfel-block-format.md):
- * x, y are tile-local in [0, 1] (x east, y south); z is metres, up;
+ * x, y are tile-local in [0, 1] (x east, y south); z is orthometric
+ * height (標高, metres above the geoid);
  * the normal is a unit vector in the local metric frame (east, south, up);
  * radius is metres.
  */
@@ -19,7 +20,7 @@ export interface Surfel {
   x: number;
   /** Tile-local, 0 = north edge, 1 = south edge. */
   y: number;
-  /** Metres, up. */
+  /** Orthometric height (標高): metres above the geoid. */
   z: number;
   nx: number;
   ny: number;

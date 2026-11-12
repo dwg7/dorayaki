@@ -173,8 +173,11 @@ export function drawSurfels(
   gl.bindVertexArray(null);
 }
 
-export function deleteSurfelResources(gl: WebGL2RenderingContext, p: SurfelProgram, b: SurfelBuffers): void {
+export function deleteSurfelBuffers(gl: WebGL2RenderingContext, b: SurfelBuffers): void {
   for (const buffer of b.buffers) gl.deleteBuffer(buffer);
   gl.deleteVertexArray(b.vao);
+}
+
+export function deleteSurfelProgram(gl: WebGL2RenderingContext, p: SurfelProgram): void {
   gl.deleteProgram(p.program);
 }

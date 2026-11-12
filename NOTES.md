@@ -134,3 +134,99 @@ Observed in Chromium (Claude desktop browser pane) with
   basemap's labels, so labels inside the tile are hidden by the surfels.
   Inserting it below the label layers would need a rule for which style
   layer to insert before. Not changed.
+
+## 2026-11-12 — `boundary` fixture and a 2 × 2 tile block
+
+- Ownership rule tried: each surfel goes to the tile containing its
+  centre (half-open `[0, 1)`); discs may cross into neighbours; nothing is
+  duplicated or clipped. The geometry is sampled once on a grid continuous
+  across seams, then split (`src/tiling.ts`). No format change: v2
+  already allows the disc extent to leave the tile.
+- Demo: a 20 m building centred on the corner of four z18 tiles at
+  Sapporo Station. The demo loads the four tiles separately, each with its
+  own placement matrix and tile width. Top-down and oblique, the roof,
+  walls and ground show no gap, overlap or step at the seams. The tile
+  outlines (drawn on top) are the only sign of them.
+- The half-open rule makes tile sizes uneven when a sample row lies
+  exactly on a seam. On the 111.7 m tile, a wall column falls on x = 1.0
+  and goes to the east tile: 9005 / 9101 / 9101 / 9197 bytes for NW / NE
+  / SW / SE. This is expected, not a defect.
+- The four tiles' widths differ by about 2π / 2^18 · sin(43°) relative
+  (≈ 1.6 × 10⁻⁵, under 2 mm at 111.7 m). The fixture uses the north-west
+  tile's width for sampling; at this zoom no seam artefact was visible.
+
+## 2026-11-12 — toy 3DGS → surfel mapping
+
+- Added a minimal 3DGS PLY reader (binary little-endian, scalar vertex
+  properties, reference 3DGS conventions) and a deliberately lossy mapping
+  to v2 surfels. The normal is the shortest axis, the radius is
+  2·√(product of the other two scales), the colour is the SH DC term, and
+  alpha is sigmoid(opacity). Tested on a deterministic toy PLY (flat
+  ground, a wall rotated 30°, an isotropic "tree" blob) placed at Sapporo
+  Station. No format change.
+- Flat Gaussians (ground, wall) map naturally. The ground's in-plane
+  anisotropy (1.5:1) is lost to the circular disc.
+- Isotropic Gaussians have no shortest axis. The blob's discs all took
+  the first axis (east) as their normal, and in the demo the tree renders
+  as three thin vertical slabs: a volume collapsed into planes. The disc
+  record has no way to say "this Gaussian is not flat". The mapping
+  records this as `flatness` (≈ 1 for the blob), but the record drops it.
+- Alpha is stored (sigmoid(opacity) · 255) but the renderer draws
+  opaquely, so the blob's 0.6 opacity is not visible.
+
+## 2026-11-12 — first real data: VIRTUAL SHIZUOKA MMS point cloud (Numazu)
+
+Source: Shizuoka Prefecture VIRTUAL SHIZUOKA, 2019 MMS, mesh 08NE2701
+(CC BY; zip 14,113,240 bytes, LAS 1.2 point format 3, 976,195 points,
+plane rectangular zone VIII, about 14 m × 14 m × 12 m). Classes:
+ground 254,441, low vegetation 406,061, medium vegetation 246,434, high
+vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
+`data/`.
+
+- Pipeline: LAS → one Gaussian per 0.25 m voxel (mean, covariance, mean
+  colour) → reference-3DGS PLY → existing PLY → surfel mapping → z18 tile
+  by centre ownership. 6,365 Gaussians in one tile (z18/232154/103715),
+  203,726 bytes. The run took 0.17 s.
+- Placement: Gauss–Krüger inverse checked against GSI xy2bl to 1e-8°
+  (≈ 1 mm). In the demo the data sits at 35.13419° N, 138.81596° E on GSI
+  pale tiles. The stars basemap has no coverage here.
+- Not a height field: from beside, the tree canopy overhangs the ground,
+  and the trimmed hedges show vertical faces.
+- Gaussian shape statistics (after fitting): flatness median 0.24, 57 %
+  flat (< 0.3), 17 % round (> 0.6); in-plane anisotropy median 1.4,
+  90th percentile 5.0. The circular disc drops the anisotropy, and round
+  vegetation Gaussians collapse into arbitrarily oriented discs, as the
+  toy fixture predicted.
+- Coverage: disc radius (2σ) has median 0.13 m against the 0.25 m voxel
+  spacing, so surfaces show the voxel lattice as dotted grids with gaps.
+  This comes from the toy fitting and RADIUS_SIGMAS, not from the format.
+- Colours are dark in the source itself (mean RGB about 41–55 / 255;
+  medium vegetation about 20), so the render is dark. Not adjusted.
+- Vertical datum: the LAS heights are absolute (lowest ground point
+  7.526 m). The demo sets z = 0 at that point to sit on the flat
+  basemap. Real data makes the open "vertical datum" question concrete.
+- Size: 32 bytes per surfel; this 14 m patch alone fills 204 KB at 0.25 m
+  voxels. The station mesh 08NE3811 is a 3.24 GB zip. Evidence for the
+  deferred quantization is starting to appear, but it depends on the
+  voxel size chosen.
+
+## 2026-11-12 — z is orthometric height; nationwide basemap
+
+- Surfel Block v2 now defines `z` as orthometric height (標高, metres above
+  the geoid). No byte or version change; see the format document's
+  compatibility note. Synthetic fixtures' ground at z = 0 means sea level.
+- The VIRTUAL SHIZUOKA LAS heights are already orthometric. Ground points
+  near the data centre have median 7.78 m, and the GSI 1 m laser DEM gives
+  7.6 m there (an ellipsoidal height would be about 40 m higher). The
+  Numazu tiles now carry the LAS Z unchanged: z 7.53–19.89 m.
+- Changing the vertical origin moved the 0.25 m voxel boundaries:
+  6,365 → 6,266 Gaussians, 203,726 → 200,558 bytes. The toy voxel fit
+  depends on the coordinate origin, not only on the data.
+- On the flat basemap (no terrain), the Numazu data now floats at its
+  real elevation, about 7.5 m above the map plane, as seen from beside at
+  3 m eye height. Showing it on the ground would need terrain in the
+  basemap, or a display offset that the data must not carry.
+- Every tileset now uses stars' nationwide `bvmap-starlight` style
+  (123 layers, GSI optimized vector tiles). The Numazu source attribution
+  is added through MapLibre's `customAttribution`. The GSI pale-tile
+  fallback is removed.

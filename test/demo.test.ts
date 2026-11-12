@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { decodeSurfelTile } from "../demo/src/decode-tile.js";
-import { DEMO_TILE, DEMO_UNKNOWN_TAG, buildDemoTile, demoTilePath, isDemoTileset } from "../demo/src/demo-tile.js";
+import { DEMO_TILE, DEMO_UNKNOWN_TAG, buildDemoTiles, demoTilePath, demoTileSurfels, isDemoTileset, tilesetTiles } from "../demo/src/demo-tile.js";
 import { metricToMercatorMatrix, multiplyMat4, transformPoint } from "../demo/src/tile-matrix.js";
 import { generateBridge } from "../src/fixtures/bridge.js";
 import { generateOverhang } from "../src/fixtures/overhang.js";
@@ -18,14 +18,39 @@ test("demo tiles are an unknown frame followed by the fixture's surfel frame", (
     ["overhang", generateOverhang({ tileWidthMetres: W })],
   ] as const;
   for (const [tileset, surfels] of cases) {
-    const tile = buildDemoTile(tileset);
+    const [only, ...rest] = buildDemoTiles(tileset);
+    assert.equal(rest.length, 0);
+    const tile = (only as { bytes: Uint8Array }).bytes;
     assert.deepEqual(readFrames(tile).map((f) => f.tag), [DEMO_UNKNOWN_TAG, EXPERIMENTAL_SURFEL_FRAME_TAG]);
     assert.deepEqual(decodeSurfelTile(tile), surfels);
-    assert.deepEqual(buildDemoTile(tileset), tile);
-    assert.equal(demoTilePath(tileset), `demo/tiles/${tileset}/18/234000/96256.mlt`);
+    assert.deepEqual(buildDemoTiles(tileset)[0]?.bytes, tile);
+    assert.equal(demoTilePath(tileset, DEMO_TILE), `demo/tiles/${tileset}/18/234000/96256.mlt`);
   }
   assert.ok(isDemoTileset("overhang"));
   assert.ok(!isDemoTileset("../etc"));
+});
+
+test("the boundary tileset is a 2 × 2 block whose tiles decode to the split fixture", () => {
+  const tiles = tilesetTiles("boundary");
+  assert.deepEqual(tiles, [
+    { z: 18, x: 234000, y: 96256 },
+    { z: 18, x: 234001, y: 96256 },
+    { z: 18, x: 234000, y: 96257 },
+    { z: 18, x: 234001, y: 96257 },
+  ]);
+  const expected = demoTileSurfels("boundary");
+  const built = buildDemoTiles("boundary");
+  assert.deepEqual(built.map((b) => b.tile), tiles);
+  built.forEach((b, n) => assert.deepEqual(decodeSurfelTile(b.bytes), expected[n]?.surfels));
+  assert.ok(expected.every((t) => t.surfels.length > 0));
+});
+
+test("the toy-gs tileset covers the tiles its Gaussians fall in", () => {
+  const tiles = tilesetTiles("toy-gs");
+  assert.ok(tiles.length >= 1);
+  const built = buildDemoTiles("toy-gs");
+  const total = built.reduce((n, b) => n + decodeSurfelTile(b.bytes).length, 0);
+  assert.equal(total, 400 + 50 + 27);
 });
 
 test("decodeSurfelTile requires exactly one surfel frame", () => {
