@@ -11,3 +11,15 @@ export {
 } from "./fixtures/bridge.js";
 export * from "./mlt-frame.js";
 export * from "./tile-geometry.js";
+export {
+  OVERHANG_LIP_Y,
+  OVERHANG_ROWS,
+  OVERHANG_TOP_Z,
+  OVERHANG_UNDERSIDE_Z,
+  OVERHANG_WALL_Y,
+  generateOverhang,
+  generateOverhangParts,
+  type OverhangOptions,
+  type OverhangParts,
+} from "./fixtures/overhang.js";
+export { patchOvershoot, samplePatch, type PatchAxis, type PatchSamples } from "./fixtures/sampling.js";

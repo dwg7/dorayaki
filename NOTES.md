@@ -73,3 +73,64 @@ Observed in Chromium (Claude desktop browser pane) with
 - The relative change of Mercator scale across one tile is at most
   2π / 2^zoom (0.0096 % at zoom 16), so the single per-tile width is
   adequate at the zooms used so far.
+
+## 2026-11-12 — `overhang` fixture
+
+- Surfel Block v2 represents the overhang without any format change. Under
+  the shelf, decoded columns hold ground (+z, 0 m), underside (−z, 8 m)
+  and top (+z, 16 m), in that order.
+- Viewed in the demo from beside the tile's east edge with the camera
+  3 m above ground, it reads as an overhang: the underside is visible
+  overhead, between the hanging lip and the back wall. The camera was
+  placed with `calculateCameraOptionsFromCameraLngLatAltRotation`.
+  Pitch above 90° drew nothing.
+- Disc overshoot now hides architecture, not only edges. On the 124 m
+  tile (pitch 7.76 m, radius 5.49 m), the lip's lower row (centre 10 m)
+  reaches down to 4.5 m, below the 8 m underside. From the front at eye
+  level, the 8 m opening is mostly covered, and the underside shows only
+  through the gaps between the scalloped discs. The back wall's discs
+  also reach below the ground.
+- With a fixed light from the north-west, every south-facing face (lip
+  and back wall) gets ambient light only and looks the same dark brown.
+  From the front, the two faces cannot be told apart.
+
+## 2026-11-12 — per-patch sampling (fixture change, no format change)
+
+- Change: each fixture surface is sampled on its own grid
+  (`src/fixtures/sampling.ts`). The spacing is at most P (1/16 of the tile)
+  and fits both sides of the patch, and the radius is half the cell
+  diagonal. Before, vertical faces used the horizontal pitch for their
+  radius. Horizontal grids are unchanged, so layers still share x/y.
+- On the 124 m demo tile:
+
+  | | before | after |
+  | --- | --- | --- |
+  | overhang lip bottom (underside at 8 m) | 4.51 m | 7.21 m |
+  | overhang back wall top (underside at 8 m) | 11.49 m | 8.79 m |
+  | bridge pier top (deck at 12 m) | 13.74 m | 12.03 m |
+  | surfels: bridge / overhang | 416 / 448 | 432 / 512 |
+
+- In the demo, the overhang's underside now shows from the front at eye
+  level as a continuous band under the lip, with the back wall behind it.
+  The pier outlines no longer show through the deck from above.
+- Residual: circular discs still overshoot a patch edge by r − cell/2.
+  That is at most (√5 − 1)/4 ≈ 0.31 of the spacing, or 0.21 for square
+  cells (tested). The bridge pier tops still end 3 cm above the deck, and
+  the ground, deck and top edges stay scalloped by about 1.6 m. Removing
+  the overshoot entirely would need a different surfel shape (for
+  example elliptical or clipped discs). That is a format change, not
+  pursued here.
+
+## 2026-11-12 — vector basemap at Sapporo Station
+
+- The demo basemap is now `bvmap-koicha-starlight` from hfu/stars
+  (`https://stars.optgeo.org/style/bvmap-koicha-starlight`, 125 layers,
+  MLT-encoded vector tiles, z3–16). The demo tile moved to Sapporo Station,
+  z18/234000/96256 (111.7 m wide), inside the `bvmap-koicha-hokkaido`
+  bounds. Rendering over the vector basemap needed no change to the
+  surfel layer. Top-down, the tile outline still matches the ground
+  extent, and the console showed no errors.
+- The surfel layer is added after every style layer, including the
+  basemap's labels, so labels inside the tile are hidden by the surfels.
+  Inserting it below the label layers would need a rule for which style
+  layer to insert before. Not changed.
