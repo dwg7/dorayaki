@@ -19,11 +19,15 @@ Implemented:
 - deterministic fixture generators: `plane` (`src/fixtures/plane.ts`) and
   `bridge` (`src/fixtures/bridge.ts`: ground, deck, underside, and vertical
   piers, with several surfels at the same x/y and different z);
-- automated tests for round trips and malformed input (`test/`).
+- automated tests for round trips and malformed input (`test/`);
+- a browser demo (`demo/`) that loads one pre-generated bridge tile over
+  HTTP, decodes it, and draws the surfels as instanced discs in a MapLibre
+  GL JS custom layer (`renderingMode: "3d"`). See [Demo](#demo).
 
-Not yet implemented: browser decoding, MapLibre GL JS rendering, PMTiles,
-the remaining fixtures listed in `AGENTS.md` (`fold`, `overhang`,
-`floating`, `boundary`), and any compression or quantization.
+Not yet implemented: PMTiles, more than one tile, tile lifecycle
+integration with MapLibre sources, globe or terrain support, the remaining
+fixtures listed in `AGENTS.md` (`fold`, `overhang`, `floating`,
+`boundary`), and any compression or quantization.
 
 ## Requirements
 
@@ -32,13 +36,56 @@ Node.js 22 or later.
 ## Commands
 
 ```sh
-npm install         # install TypeScript and Node type definitions
-npm run typecheck   # type-check src/ and test/ without emitting
+npm install         # install dev dependencies (TypeScript, esbuild, MapLibre GL JS)
+npm run typecheck   # type-check src/, test/, scripts/ and demo/src/ without emitting
 npm test            # compile src/ and test/ into build-test/, run node --test
 npm run build       # compile src/ into dist/ (JS, .d.ts, source maps)
+npm run demo:tile   # write demo/tiles/16/58211/25806.mlt
+npm run demo:build  # demo:tile, then bundle demo/src/main.ts into demo/build/
+npm run demo        # demo:tile, then bundle and serve on http://127.0.0.1:8000
 ```
 
-`dist/` and `build-test/` are generated and ignored by git.
+`dist/`, `build-test/`, `demo/build/` and `demo/tiles/` are generated and
+ignored by git.
+
+## Demo
+
+```sh
+npm install
+npm run demo
+```
+
+Then open <http://127.0.0.1:8000/demo/> in a browser with WebGL2. Stop the
+server with Ctrl-C.
+
+The page loads one tile, `demo/tiles/16/58211/25806.mlt` (near Tokyo
+Station; 14,381 bytes), over plain HTTP. The tile holds a synthetic
+unknown frame followed by the `bridge` fixture as an experimental surfel
+frame. The red dashed line is the tile boundary. The "depth test"
+checkbox turns depth testing off to show its effect. The basemap is
+OpenStreetMap raster tiles from `tile.openstreetmap.org`, so the page
+needs network access for the background map (not for the surfels).
+
+The server is esbuild's dev server with the repository root as its
+document root, so the page can load MapLibre GL JS from `node_modules/`
+through an import map. It listens on 127.0.0.1 only.
+
+Demo modules (`demo/src/`), kept separate as AGENTS.md requires:
+
+| module | responsibility |
+| --- | --- |
+| `load-tile.ts` | fetch tile bytes over HTTP |
+| `decode-tile.ts` | MLT frame extraction + Surfel Block decoding |
+| `tile-matrix.ts` | tile-local to Web Mercator placement (float64) |
+| `gpu-surfels.ts` | shaders, buffer upload, instanced draw |
+| `surfel-layer.ts` | MapLibre `CustomLayerInterface` lifecycle |
+| `main.ts` | map setup and wiring |
+| `demo-tile.ts` | demo tile address and deterministic tile bytes |
+
+Placement rule used by the demo only (not part of the format): x and y
+in [0, 1] span the tile with y pointing south, and z points up in the same
+unit as x and y (one tile width, about 497 m for this tile). Mercator
+projection only.
 
 ## License
 
