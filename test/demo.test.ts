@@ -45,6 +45,14 @@ test("the boundary tileset is a 2 × 2 block whose tiles decode to the split fix
   assert.ok(expected.every((t) => t.surfels.length > 0));
 });
 
+test("the toy-gs tileset covers the tiles its Gaussians fall in", () => {
+  const tiles = tilesetTiles("toy-gs");
+  assert.ok(tiles.length >= 1);
+  const built = buildDemoTiles("toy-gs");
+  const total = built.reduce((n, b) => n + decodeSurfelTile(b.bytes).length, 0);
+  assert.equal(total, 400 + 50 + 27);
+});
+
 test("decodeSurfelTile requires exactly one surfel frame", () => {
   const block = wrapSurfelBlock(encodeSurfelBlock([]));
   assert.throws(() => decodeSurfelTile(new Uint8Array()), /found 0/);

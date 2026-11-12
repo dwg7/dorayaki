@@ -26,6 +26,9 @@ Implemented:
 - a `boundary` fixture (`src/fixtures/boundary.ts`): a building centred on
   the corner where four tiles meet, split into a 2 × 2 tile block by the
   centre-ownership rule in `src/tiling.ts`;
+- a toy 3DGS path (`src/gaussian/`): a minimal PLY reader and a deliberately
+  lossy mapping from 3D Gaussians to v2 surfels, exercised on a
+  deterministic toy PLY (`src/fixtures/toy-gaussians.ts`);
 - automated tests for round trips and malformed input (`test/`);
 - a browser demo (`demo/`) that loads one pre-generated bridge tile over
   HTTP, decodes it, and draws the surfels as instanced discs in a MapLibre
@@ -46,7 +49,7 @@ npm install         # install dev dependencies (TypeScript, esbuild, MapLibre GL
 npm run typecheck   # type-check src/, test/, scripts/ and demo/src/ without emitting
 npm test            # compile src/ and test/ into build-test/, run node --test
 npm run build       # compile src/ into dist/ (JS, .d.ts, source maps)
-npm run demo:tile   # write demo/tiles/{bridge,overhang,boundary}/18/…/….mlt
+npm run demo:tile   # write demo/tiles/{bridge,overhang,boundary,toy-gs}/18/…/….mlt
 npm run demo:build  # demo:tile, then bundle demo/src/main.ts into demo/build/
 npm run demo        # demo:tile, then bundle and serve on http://127.0.0.1:8000
 ```
@@ -62,7 +65,7 @@ npm run demo
 ```
 
 Then open <http://127.0.0.1:8000/demo/> in a browser with WebGL2, or
-`?fixture=overhang` or `?fixture=boundary` appended. Stop the server with
+`?fixture=overhang`, `?fixture=boundary` or `?fixture=toy-gs` appended. Stop the server with
 Ctrl-C.
 
 The page loads the fixture's tiles over plain HTTP:

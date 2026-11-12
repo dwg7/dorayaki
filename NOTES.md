@@ -154,3 +154,22 @@ Observed in Chromium (Claude desktop browser pane) with
 - The four tiles' widths differ by about 2π / 2^18 · sin(43°) relative
   (≈ 1.6 × 10⁻⁵, under 2 mm at 111.7 m). The fixture uses the north-west
   tile's width for sampling; at this zoom no seam artefact was visible.
+
+## 2026-11-12 — toy 3DGS → surfel mapping
+
+- Added a minimal 3DGS PLY reader (binary little-endian, scalar vertex
+  properties, reference 3DGS conventions) and a deliberately lossy mapping
+  to v2 surfels. The normal is the shortest axis, the radius is
+  2·√(product of the other two scales), the colour is the SH DC term, and
+  alpha is sigmoid(opacity). Tested on a deterministic toy PLY (flat
+  ground, a wall rotated 30°, an isotropic "tree" blob) placed at Sapporo
+  Station. No format change.
+- Flat Gaussians (ground, wall) map naturally. The ground's in-plane
+  anisotropy (1.5:1) is lost to the circular disc.
+- Isotropic Gaussians have no shortest axis. The blob's discs all took
+  the first axis (east) as their normal, and in the demo the tree renders
+  as three thin vertical slabs: a volume collapsed into planes. The disc
+  record has no way to say "this Gaussian is not flat". The mapping
+  records this as `flatness` (≈ 1 for the blob), but the record drops it.
+- Alpha is stored (sigmoid(opacity) · 255) but the renderer draws
+  opaquely, so the blob's 0.6 opacity is not visible.
