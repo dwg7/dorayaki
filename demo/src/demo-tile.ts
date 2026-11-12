@@ -74,11 +74,11 @@ export function demoTileSurfels(tileset: DemoTileset): TileSurfels[] {
   return splitByTile(surfels, block);
 }
 
-/** Bytes of one tile: a synthetic unknown frame, then the surfel frame. */
-export function encodeDemoTile(surfels: readonly Surfel[]): Uint8Array {
+/** Bytes of one tile: a synthetic unknown frame, then the surfel frame (with an optional level table). */
+export function encodeDemoTile(surfels: readonly Surfel[], levels?: readonly number[]): Uint8Array {
   return concatFrames([
     encodeFrame(DEMO_UNKNOWN_TAG, new TextEncoder().encode("dorayaki demo: unknown frame")),
-    wrapSurfelBlock(encodeSurfelBlock(surfels)),
+    wrapSurfelBlock(encodeSurfelBlock(surfels, levels)),
   ]);
 }
 

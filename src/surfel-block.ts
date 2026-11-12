@@ -1,5 +1,5 @@
 /**
- * Naive Surfel Block codec (experimental, version 2).
+ * Naive Surfel Block codec (experimental, version 3).
  *
  * See docs/surfel-block-format.md for the byte layout. All multi-byte
  * values are little-endian. This module has no dependency on MapLibre,
@@ -36,9 +36,12 @@ export interface Surfel {
 
 /** ASCII "DSRF". */
 export const SURFEL_BLOCK_MAGIC = Uint8Array.of(0x44, 0x53, 0x52, 0x46);
-export const SURFEL_BLOCK_VERSION = 2;
-export const SURFEL_BLOCK_HEADER_BYTES = 12;
+export const SURFEL_BLOCK_VERSION = 3;
+/** Fixed part of the header; the level table (4 bytes per level) follows it. */
+export const SURFEL_BLOCK_HEADER_BYTES = 16;
 export const SURFEL_RECORD_BYTES = 32;
+/** Upper bound on the level table size (a sanity limit, not a format need). */
+export const MAX_LEVELS = 64;
 
 const LITTLE_ENDIAN = true;
 const MAX_COUNT = 0xffffffff;
@@ -51,7 +54,8 @@ export type SurfelBlockErrorCode =
   | "TRUNCATED_RECORDS"
   | "TRAILING_BYTES"
   | "INVALID_VALUE"
-  | "TOO_MANY_SURFELS";
+  | "TOO_MANY_SURFELS"
+  | "BAD_LEVELS";
 
 export class SurfelBlockError extends Error {
   readonly code: SurfelBlockErrorCode;
@@ -66,9 +70,32 @@ export class SurfelBlockError extends Error {
 const FLOAT_FIELDS = ["x", "y", "z", "nx", "ny", "nz", "radius"] as const;
 const COLOR_FIELDS = ["r", "g", "b", "a"] as const;
 
-/** Byte length of an encoded block holding `count` surfels. */
-export function surfelBlockByteLength(count: number): number {
-  return SURFEL_BLOCK_HEADER_BYTES + SURFEL_RECORD_BYTES * count;
+/** Byte length of an encoded block holding `count` surfels in `levelCount` levels. */
+export function surfelBlockByteLength(count: number, levelCount = 1): number {
+  return SURFEL_BLOCK_HEADER_BYTES + 4 * levelCount + SURFEL_RECORD_BYTES * count;
+}
+
+/** A decoded block: surfels in stored order and the level table. */
+export interface SurfelBlock {
+  surfels: Surfel[];
+  /**
+   * Surfel count per level, in stored order; they sum to surfels.length.
+   * Levels are consecutive runs of records: level 0 first. A reader may
+   * draw any prefix of whole levels, or ignore the table and draw all.
+   */
+  levels: number[];
+}
+
+function checkLevels(levels: readonly number[], count: number): void {
+  if (levels.length < 1 || levels.length > MAX_LEVELS) {
+    throw new SurfelBlockError("BAD_LEVELS", `level count ${levels.length} not in 1..${MAX_LEVELS}`);
+  }
+  let sum = 0;
+  for (const n of levels) {
+    if (!Number.isInteger(n) || n < 0 || n > MAX_COUNT) throw new SurfelBlockError("BAD_LEVELS", `invalid level size ${n}`);
+    sum += n;
+  }
+  if (sum !== count) throw new SurfelBlockError("BAD_LEVELS", `level sizes sum to ${sum}, count is ${count}`);
 }
 
 function validateSurfel(s: Surfel, index: number): void {
@@ -92,25 +119,31 @@ function validateSurfel(s: Surfel, index: number): void {
 /**
  * Encode surfels into a naive Surfel Block.
  *
+ * `levels` is the level table (surfel count per level, in order). It
+ * defaults to a single level holding every surfel.
+ *
  * Float fields are stored as float32, so values that are not exactly
  * representable in float32 are rounded (as by Math.fround).
  */
-export function encodeSurfelBlock(surfels: readonly Surfel[]): Uint8Array {
+export function encodeSurfelBlock(surfels: readonly Surfel[], levels: readonly number[] = [surfels.length]): Uint8Array {
   const count = surfels.length;
   if (count > MAX_COUNT) {
     throw new SurfelBlockError("TOO_MANY_SURFELS", `count ${count} exceeds uint32`);
   }
+  checkLevels(levels, count);
   surfels.forEach(validateSurfel);
 
-  const bytes = new Uint8Array(surfelBlockByteLength(count));
+  const bytes = new Uint8Array(surfelBlockByteLength(count, levels.length));
   const view = new DataView(bytes.buffer);
 
   bytes.set(SURFEL_BLOCK_MAGIC, 0);
   view.setUint16(4, SURFEL_BLOCK_VERSION, LITTLE_ENDIAN);
   view.setUint16(6, SURFEL_RECORD_BYTES, LITTLE_ENDIAN);
   view.setUint32(8, count, LITTLE_ENDIAN);
+  view.setUint32(12, levels.length, LITTLE_ENDIAN);
+  levels.forEach((n, k) => view.setUint32(SURFEL_BLOCK_HEADER_BYTES + 4 * k, n, LITTLE_ENDIAN));
 
-  let o = SURFEL_BLOCK_HEADER_BYTES;
+  let o = SURFEL_BLOCK_HEADER_BYTES + 4 * levels.length;
   for (const s of surfels) {
     view.setFloat32(o + 0, s.x, LITTLE_ENDIAN);
     view.setFloat32(o + 4, s.y, LITTLE_ENDIAN);
@@ -128,14 +161,19 @@ export function encodeSurfelBlock(surfels: readonly Surfel[]): Uint8Array {
   return bytes;
 }
 
-/**
- * Decode a naive Surfel Block.
- *
- * The input must contain exactly one block: header plus `count` records,
- * with no trailing bytes. Any violation throws SurfelBlockError; the
- * decoder never reads outside `bytes`.
- */
+/** Decode a naive Surfel Block, ignoring its level table. */
 export function decodeSurfelBlock(bytes: Uint8Array): Surfel[] {
+  return decodeSurfelBlockWithLevels(bytes).surfels;
+}
+
+/**
+ * Decode a naive Surfel Block with its level table.
+ *
+ * The input must contain exactly one block: header, level table, and
+ * `count` records, with no trailing bytes. Any violation throws
+ * SurfelBlockError; the decoder never reads outside `bytes`.
+ */
+export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
   if (bytes.byteLength < SURFEL_BLOCK_HEADER_BYTES) {
     throw new SurfelBlockError(
       "TRUNCATED_HEADER",
@@ -158,7 +196,16 @@ export function decodeSurfelBlock(bytes: Uint8Array): Surfel[] {
     throw new SurfelBlockError("BAD_RECORD_SIZE", `record size ${recordBytes}, expected ${SURFEL_RECORD_BYTES}`);
   }
   const count = view.getUint32(8, LITTLE_ENDIAN);
-  const expected = surfelBlockByteLength(count);
+  const levelCount = view.getUint32(12, LITTLE_ENDIAN);
+  if (levelCount < 1 || levelCount > MAX_LEVELS) {
+    throw new SurfelBlockError("BAD_LEVELS", `level count ${levelCount} not in 1..${MAX_LEVELS}`);
+  }
+  const tableEnd = SURFEL_BLOCK_HEADER_BYTES + 4 * levelCount;
+  if (bytes.byteLength < tableEnd) {
+    throw new SurfelBlockError("TRUNCATED_HEADER", `level table needs ${tableEnd} bytes, got ${bytes.byteLength}`);
+  }
+  const levels = Array.from({ length: levelCount }, (_, k) => view.getUint32(SURFEL_BLOCK_HEADER_BYTES + 4 * k, LITTLE_ENDIAN));
+  const expected = surfelBlockByteLength(count, levelCount);
   if (bytes.byteLength < expected) {
     throw new SurfelBlockError(
       "TRUNCATED_RECORDS",
@@ -172,8 +219,10 @@ export function decodeSurfelBlock(bytes: Uint8Array): Surfel[] {
     );
   }
 
+  checkLevels(levels, count);
+
   const surfels: Surfel[] = new Array(count);
-  let o = SURFEL_BLOCK_HEADER_BYTES;
+  let o = tableEnd;
   for (let i = 0; i < count; i++) {
     const s: Surfel = {
       x: view.getFloat32(o + 0, LITTLE_ENDIAN),
@@ -192,5 +241,5 @@ export function decodeSurfelBlock(bytes: Uint8Array): Surfel[] {
     surfels[i] = s;
     o += SURFEL_RECORD_BYTES;
   }
-  return surfels;
+  return { surfels, levels };
 }

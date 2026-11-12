@@ -70,16 +70,16 @@ describe("frame envelope", () => {
   test("empty Surfel Block frame has the exact byte layout", () => {
     const block = encodeSurfelBlock([]);
     const frame = wrapSurfelBlock(block);
-    // size = 1 (tag) + 12 (block) = 13 = 0x0d
-    assert.equal(hex(frame), "0d" + "d0" + hex(block));
+    // size = 1 (tag) + 20 (v3 block: 16-byte header + 1-level table) = 21 = 0x15
+    assert.equal(hex(frame), "15" + "d0" + hex(block));
   });
 
   test("bridge frame uses a two-byte size varint", () => {
     const block = encodeSurfelBlock(generateBridge());
-    assert.equal(block.byteLength, 13836); // 12 + 32 × 432
+    assert.equal(block.byteLength, 13844); // 16 + 4 + 32 × 432
     const frame = wrapSurfelBlock(block);
-    assert.equal(hex(frame.subarray(0, 3)), "8d6c" + "d0"); // size 13837
-    assert.equal(frame.byteLength, 2 + 1 + 13836);
+    assert.equal(hex(frame.subarray(0, 3)), "956c" + "d0"); // size 13845
+    assert.equal(frame.byteLength, 2 + 1 + 13844);
   });
 
   test("experimental tag is not an assigned MLT tag", () => {
@@ -109,7 +109,7 @@ describe("finding and extracting", () => {
 
     const frames = readFrames(tile);
     assert.deepEqual(frames.map((f) => f.tag), [UNKNOWN_TAG, EXPERIMENTAL_SURFEL_FRAME_TAG, UNKNOWN_TAG]);
-    assert.deepEqual(frames.map((f) => f.offset), [0, 6, 6 + 2 + 1 + 13836]);
+    assert.deepEqual(frames.map((f) => f.offset), [0, 6, 6 + 2 + 1 + 13844]);
 
     const found = extractSurfelBlocks(tile);
     assert.equal(found.length, 1);

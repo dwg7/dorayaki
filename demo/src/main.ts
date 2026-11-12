@@ -3,7 +3,7 @@
  */
 import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
 
-import { decodeSurfelTile } from "./decode-tile.js";
+import { decodeSurfelTileWithLevels } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
@@ -56,8 +56,9 @@ const manifest: Manifest | undefined = isExternal(tileset)
   : undefined;
 
 const tiles = manifest ? manifest.tiles : tilesetTiles(tileset as DemoTileset);
-/** One closed outline per tile of the tileset. */
-const outlines = tiles.map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(t, x as number, y as number)));
+/** Outlines of the deepest zoom's tiles only, to keep the overlay readable. */
+const deepest = Math.max(...tiles.map((t) => t.z));
+const outlines = tiles.filter((t) => t.z === deepest).map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(t, x as number, y as number)));
 
 /**
  * Basemap: hfu/stars' bvmap-starlight style (GSI optimized vector tiles,
@@ -72,6 +73,9 @@ const map = new MapLibreMap({
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
+  // Camera in the URL fragment as #map=zoom/lat/lng/bearing/pitch; it
+  // overrides the initial view above and survives reloads.
+  hash: "map",
   style: BASEMAP_STYLE,
   // Real-data tilesets name their source next to the basemap's attribution.
   attributionControl: manifest ? { customAttribution: manifest.attribution } : {},
@@ -82,7 +86,7 @@ const urls = tiles.map((t) =>
   manifest ? `tiles/${tileset}/${t.z}/${t.x}/${t.y}.mlt` : tileUrlPath(tileset as DemoTileset, t),
 );
 const tilesPromise = fetchTilesBytes(urls).then((all) =>
-  all.map((bytes, n) => ({ tile: tiles[n] as TileAddress, bytes, surfels: decodeSurfelTile(bytes) })),
+  all.map((bytes, n) => ({ tile: tiles[n] as TileAddress, bytes, ...decodeSurfelTileWithLevels(bytes) })),
 );
 
 map.on("load", () => {
@@ -104,7 +108,16 @@ map.on("load", () => {
       depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
       const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.surfels.length, 0);
-      setStatus(`${loaded.length} tile(s) of ${tileset}: ${bytes} bytes, ${count} surfels`);
+      const loadedSummary = `${loaded.length} tile(s) of ${tileset}: ${bytes} bytes, ${count} surfels`;
+      setStatus(loadedSummary);
+      // After each frame, show what the zoom-based selection drew.
+      map.on("render", () => {
+        const d = layer.lastDraw;
+        if (!d) return;
+        const progressive = d.levelsDrawn > 1 || loaded.some((t) => t.tile.z === d.zoom && t.levels.length > 1);
+        setStatus(`${loadedSummary}. Drawing z${d.zoom}: ${d.tiles} tile(s), ${d.surfels} surfels` +
+          (progressive ? `, levels ${d.levelsDrawn}, min radius ${(d.minRadius * 100).toFixed(1)} cm` : ""));
+      });
       (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded };
     },
     (err: unknown) => {

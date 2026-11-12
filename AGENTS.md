@@ -209,6 +209,7 @@ npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang,boundary,toy
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
 npm run demo:numazu # build demo/tiles/numazu/ from data/ (download: README)
+npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size table
 ```
 
 Current repository structure:
@@ -218,6 +219,7 @@ src/surfel-block.ts          naive Surfel Block encoder/decoder
 src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/tiling.ts                centre-ownership split of a tile block into tiles
+src/progressive.ts           nested refinement order for maxzoom tiles (v3 level table)
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/fixtures/overhang.ts     deterministic overhang fixture generator
@@ -234,10 +236,12 @@ src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
 scripts/generate-demo-tile.ts  writes one demo tile per tileset
 demo/index.html              demo page (MapLibre GL JS via import map)
-demo/src/                    demo modules: load, decode, placement, GPU, layer
+demo/src/                    demo modules: load, decode, tile selection, placement, GPU, layer
 NOTES.md                     observed experimental findings
 docs/surfel-block-format.md  byte layout of the naive Surfel Block
 docs/mlt-frame.md            experimental MLT frame envelope
+docs/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
+scripts/measure-numazu.ts    density and size measurements on the Numazu data
 ```
 
 Do not invent commands that are not present in package.json.
