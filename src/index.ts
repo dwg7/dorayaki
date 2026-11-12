@@ -23,3 +23,14 @@ export {
   type OverhangParts,
 } from "./fixtures/overhang.js";
 export { patchOvershoot, samplePatch, type PatchAxis, type PatchSamples } from "./fixtures/sampling.js";
+export { blockTiles, splitByTile, type TileBlock, type TileSurfels } from "./tiling.js";
+export {
+  BOUNDARY_COLS,
+  BOUNDARY_FOOTPRINT,
+  BOUNDARY_ROOF_Z,
+  BOUNDARY_ROWS,
+  generateBoundary,
+  generateBoundaryParts,
+  type BoundaryOptions,
+  type BoundaryParts,
+} from "./fixtures/boundary.js";

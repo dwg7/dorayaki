@@ -89,6 +89,18 @@ and coordinate ranges.
 Normals and radius are metric so that a disc's shape and size do not
 depend on the zoom level of the tile that carries it.
 
+## Tile ownership (producer convention)
+
+Dorayaki producers (`src/tiling.ts`) assign each surfel to the one tile
+that contains its centre, using half-open intervals: tile-local x and y
+in `[0, 1)`. A centre exactly on a seam therefore goes to the east or
+south tile. Discs may extend into neighbouring tiles. Surfels are neither
+duplicated nor clipped at tile edges. Geometry spanning several tiles is
+sampled once on a grid that is continuous across seams, then split.
+
+The decoder does not enforce this convention. Version 2 still accepts
+x, y outside `[0, 1]`, so this is not a format change.
+
 ## Compatibility
 
 Version 2 has the same byte layout as version 1. It only defines the

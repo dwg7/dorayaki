@@ -5,8 +5,8 @@ import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
 
 import { decodeSurfelTile } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
-import { DEMO_TILE, DEMO_TILESETS, isDemoTileset, tileUrlPath, type DemoTileset } from "./demo-tile.js";
-import { fetchTileBytes } from "./load-tile.js";
+import { DEMO_TILE, DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
+import { fetchTilesBytes } from "./load-tile.js";
 import { SurfelLayer } from "./surfel-layer.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
@@ -32,7 +32,9 @@ const setStatus = (text: string): void => {
   statusEl.textContent = text;
 };
 
-const corners = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(DEMO_TILE, x as number, y as number));
+const tiles = tilesetTiles(tileset);
+/** One closed outline per tile of the tileset. */
+const outlines = tiles.map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(t, x as number, y as number)));
 
 /**
  * Basemap: hfu/stars' bvmap-koicha-starlight style (MLT-encoded vector
@@ -51,14 +53,16 @@ const map = new MapLibreMap({
 });
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
-const url = tileUrlPath(tileset, DEMO_TILE);
-const tilePromise = fetchTileBytes(url).then((bytes) => ({ bytes, surfels: decodeSurfelTile(bytes) }));
+const urls = tiles.map((t) => tileUrlPath(tileset, t));
+const tilesPromise = fetchTilesBytes(urls).then((all) =>
+  all.map((bytes, n) => ({ tile: tiles[n] as TileAddress, bytes, surfels: decodeSurfelTile(bytes) })),
+);
 
 map.on("load", () => {
   // Debug overlay on top of the basemap: the demo tile's boundary.
   map.addSource("tile-outline", {
     type: "geojson",
-    data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: corners } },
+    data: { type: "Feature", properties: {}, geometry: { type: "MultiLineString", coordinates: outlines } },
   });
   map.addLayer({
     id: "tile-outline",
@@ -66,13 +70,15 @@ map.on("load", () => {
     source: "tile-outline",
     paint: { "line-color": "#d03030", "line-width": 2, "line-dasharray": [2, 2] },
   });
-  tilePromise.then(
-    ({ bytes, surfels }) => {
-      const layer = new SurfelLayer("surfels", DEMO_TILE, surfels);
-      map.addLayer(layer, "tile-outline"); // keep the 2D tile outline visible on top
+  tilesPromise.then(
+    (loaded) => {
+      const layer = new SurfelLayer("surfels", loaded);
+      map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
       depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
-      setStatus(`${url}: ${bytes.byteLength} bytes, ${surfels.length} surfels`);
-      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, surfels };
+      const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);
+      const count = loaded.reduce((n, t) => n + t.surfels.length, 0);
+      setStatus(`${loaded.length} tile(s) of ${tileset}: ${bytes} bytes, ${count} surfels`);
+      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded };
     },
     (err: unknown) => {
       setStatus(`failed: ${err instanceof Error ? err.message : String(err)}`);

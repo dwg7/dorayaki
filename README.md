@@ -23,14 +23,17 @@ Implemented:
   downward-facing underside, recessed back wall, and ground). Both
   `bridge` and `overhang` hold several surfels at the same x/y with
   different z;
+- a `boundary` fixture (`src/fixtures/boundary.ts`): a building centred on
+  the corner where four tiles meet, split into a 2 × 2 tile block by the
+  centre-ownership rule in `src/tiling.ts`;
 - automated tests for round trips and malformed input (`test/`);
 - a browser demo (`demo/`) that loads one pre-generated bridge tile over
   HTTP, decodes it, and draws the surfels as instanced discs in a MapLibre
   GL JS custom layer (`renderingMode: "3d"`). See [Demo](#demo).
 
-Not yet implemented: PMTiles, more than one tile, tile lifecycle
+Not yet implemented: PMTiles, tile selection by viewport, tile lifecycle
 integration with MapLibre sources, globe or terrain support, the remaining
-fixtures listed in `AGENTS.md` (`fold`, `floating`, `boundary`), and any compression or quantization.
+fixtures listed in `AGENTS.md` (`fold`, `floating`), and any compression or quantization.
 
 ## Requirements
 
@@ -43,7 +46,7 @@ npm install         # install dev dependencies (TypeScript, esbuild, MapLibre GL
 npm run typecheck   # type-check src/, test/, scripts/ and demo/src/ without emitting
 npm test            # compile src/ and test/ into build-test/, run node --test
 npm run build       # compile src/ into dist/ (JS, .d.ts, source maps)
-npm run demo:tile   # write demo/tiles/{bridge,overhang}/18/234000/96256.mlt
+npm run demo:tile   # write demo/tiles/{bridge,overhang,boundary}/18/…/….mlt
 npm run demo:build  # demo:tile, then bundle demo/src/main.ts into demo/build/
 npm run demo        # demo:tile, then bundle and serve on http://127.0.0.1:8000
 ```
@@ -59,14 +62,16 @@ npm run demo
 ```
 
 Then open <http://127.0.0.1:8000/demo/> in a browser with WebGL2, or
-<http://127.0.0.1:8000/demo/?fixture=overhang> for the overhang. Stop the
-server with Ctrl-C.
+`?fixture=overhang` or `?fixture=boundary` appended. Stop the server with
+Ctrl-C.
 
-The page loads one tile, `demo/tiles/{fixture}/18/234000/96256.mlt`
-(at Sapporo Station, 111.7 m wide), over plain HTTP. Each fixture is its own
+The page loads the fixture's tiles over plain HTTP:
+`demo/tiles/{fixture}/18/234000/96256.mlt` (at Sapporo Station, 111.7 m
+wide) for `bridge` and `overhang`, and that tile plus its east, south and
+south-east neighbours for `boundary`. Each fixture is its own
 tileset directory, so different fixtures can share a tile address. The tile
 holds a synthetic unknown frame followed by the fixture as an experimental
-surfel frame. The red dashed line is the tile boundary. The "depth test"
+surfel frame. The red dashed lines are the tile boundaries. The "depth test"
 checkbox turns depth testing off to show its effect. The basemap is the
 `bvmap-koicha-starlight` style from [hfu/stars](https://github.com/hfu/stars),
 loaded from `https://stars.optgeo.org/style/bvmap-koicha-starlight`. It

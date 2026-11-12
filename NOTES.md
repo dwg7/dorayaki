@@ -134,3 +134,23 @@ Observed in Chromium (Claude desktop browser pane) with
   basemap's labels, so labels inside the tile are hidden by the surfels.
   Inserting it below the label layers would need a rule for which style
   layer to insert before. Not changed.
+
+## 2026-11-12 — `boundary` fixture and a 2 × 2 tile block
+
+- Ownership rule tried: each surfel goes to the tile containing its
+  centre (half-open `[0, 1)`); discs may cross into neighbours; nothing is
+  duplicated or clipped. The geometry is sampled once on a grid continuous
+  across seams, then split (`src/tiling.ts`). No format change: v2
+  already allows the disc extent to leave the tile.
+- Demo: a 20 m building centred on the corner of four z18 tiles at
+  Sapporo Station. The demo loads the four tiles separately, each with its
+  own placement matrix and tile width. Top-down and oblique, the roof,
+  walls and ground show no gap, overlap or step at the seams. The tile
+  outlines (drawn on top) are the only sign of them.
+- The half-open rule makes tile sizes uneven when a sample row lies
+  exactly on a seam. On the 111.7 m tile, a wall column falls on x = 1.0
+  and goes to the east tile: 9005 / 9101 / 9101 / 9197 bytes for NW / NE
+  / SW / SE. This is expected, not a defect.
+- The four tiles' widths differ by about 2π / 2^18 · sin(43°) relative
+  (≈ 1.6 × 10⁻⁵, under 2 mm at 111.7 m). The fixture uses the north-west
+  tile's width for sampling; at this zoom no seam artefact was visible.

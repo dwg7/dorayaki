@@ -205,7 +205,7 @@ npm install
 npm run typecheck   # tsc --noEmit over src/, test/, scripts/, demo/src/
 npm test            # tsc into build-test/, then node --test
 npm run build       # tsc src/ into dist/
-npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang}/18/234000/96256.mlt)
+npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang,boundary}/18/x/y.mlt)
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
 ```
@@ -216,10 +216,12 @@ Current repository structure:
 src/surfel-block.ts          naive Surfel Block encoder/decoder
 src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
+src/tiling.ts                centre-ownership split of a tile block into tiles
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/fixtures/overhang.ts     deterministic overhang fixture generator
 src/fixtures/sampling.ts     per-patch sampling rule shared by fixtures
+src/fixtures/boundary.ts     deterministic boundary fixture (2 x 2 tiles)
 src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
 scripts/generate-demo-tile.ts  writes one demo tile per tileset
