@@ -1,11 +1,11 @@
 /**
  * Demo entry point: wires loading -> decoding -> custom layer.
  */
-import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
+import { Map as MapLibreMap, NavigationControl, type StyleSpecification } from "maplibre-gl";
 
 import { decodeSurfelTile } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
-import { DEMO_TILE, DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
+import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
 import { SurfelLayer } from "./surfel-layer.js";
 
@@ -13,13 +13,29 @@ function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
   return [tileLongitude(t, x), tileLatitude(t, y)];
 }
 
+/**
+ * Real-data tilesets built offline (e.g. `npm run demo:numazu`). Their
+ * tiles and placement come from tiles/<name>/manifest.json, not from code.
+ */
+const EXTERNAL_TILESETS = ["numazu"] as const;
+type ExternalTileset = (typeof EXTERNAL_TILESETS)[number];
+type Tileset = DemoTileset | ExternalTileset;
+const isExternal = (name: string): name is ExternalTileset => (EXTERNAL_TILESETS as readonly string[]).includes(name);
+
+interface Manifest {
+  name: string;
+  attribution: string;
+  centre: [number, number];
+  tiles: TileAddress[];
+}
+
 /** Tileset from `?fixture=`, defaulting to the bridge. */
 const requested = new URLSearchParams(location.search).get("fixture") ?? "bridge";
-const tileset: DemoTileset = isDemoTileset(requested) ? requested : "bridge";
+const tileset: Tileset = isDemoTileset(requested) || isExternal(requested) ? requested : "bridge";
 
 const fixtureEl = document.getElementById("fixture") as HTMLElement;
 fixtureEl.replaceChildren(
-  ...DEMO_TILESETS.flatMap((name, i) => {
+  ...[...DEMO_TILESETS, ...EXTERNAL_TILESETS].flatMap((name, i) => {
     const node = name === tileset ? Object.assign(document.createElement("strong"), { textContent: name })
       : Object.assign(document.createElement("a"), { textContent: name, href: `?fixture=${name}` });
     return i === 0 ? [node] : [document.createTextNode(" | "), node];
@@ -32,7 +48,14 @@ const setStatus = (text: string): void => {
   statusEl.textContent = text;
 };
 
-const tiles = tilesetTiles(tileset);
+const manifest: Manifest | undefined = isExternal(tileset)
+  ? await fetch(`tiles/${tileset}/manifest.json`).then((r) => {
+      if (!r.ok) throw new Error(`tiles/${tileset}/manifest.json: ${r.status} (run npm run demo:${tileset})`);
+      return r.json() as Promise<Manifest>;
+    })
+  : undefined;
+
+const tiles = manifest ? manifest.tiles : tilesetTiles(tileset as DemoTileset);
 /** One closed outline per tile of the tileset. */
 const outlines = tiles.map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(t, x as number, y as number)));
 
@@ -42,18 +65,40 @@ const outlines = tiles.map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map((
  */
 const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-koicha-starlight";
 
+/**
+ * The stars style covers Hokkaido and Tokyo only. Real-data tilesets
+ * elsewhere use GSI pale raster tiles (地理院タイル 淡色地図) instead.
+ */
+function gsiPaleStyle(dataAttribution: string): StyleSpecification {
+  return {
+    version: 8,
+    sources: {
+      pale: {
+        type: "raster",
+        tiles: ["https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"],
+        tileSize: 256,
+        maxzoom: 18,
+        attribution: `<a href="https://maps.gsi.go.jp/development/ichiran.html">地理院タイル</a> | ${dataAttribution}`,
+      },
+    },
+    layers: [{ id: "pale", type: "raster", source: "pale" }],
+  };
+}
+
 const map = new MapLibreMap({
   container: "map",
-  center: tileToLngLat(DEMO_TILE, 0.5, 0.5),
-  zoom: 18.3,
+  center: manifest ? manifest.centre : tileToLngLat(tiles[0] as TileAddress, 0.5, 0.5),
+  zoom: manifest ? 20.5 : 18.3,
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
-  style: BASEMAP_STYLE,
+  style: manifest ? gsiPaleStyle(manifest.attribution) : BASEMAP_STYLE,
 });
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
-const urls = tiles.map((t) => tileUrlPath(tileset, t));
+const urls = tiles.map((t) =>
+  manifest ? `tiles/${tileset}/${t.z}/${t.x}/${t.y}.mlt` : tileUrlPath(tileset as DemoTileset, t),
+);
 const tilesPromise = fetchTilesBytes(urls).then((all) =>
   all.map((bytes, n) => ({ tile: tiles[n] as TileAddress, bytes, surfels: decodeSurfelTile(bytes) })),
 );

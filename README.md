@@ -29,6 +29,10 @@ Implemented:
 - a toy 3DGS path (`src/gaussian/`): a minimal PLY reader and a deliberately
   lossy mapping from 3D Gaussians to v2 surfels, exercised on a
   deterministic toy PLY (`src/fixtures/toy-gaussians.ts`);
+- a real-data path for point clouds (`src/pointcloud/`, `src/geodesy/`):
+  a minimal LAS reader, the JGD2011 plane rectangular inverse, and one
+  Gaussian per voxel. It is shown in the demo with a VIRTUAL SHIZUOKA MMS
+  point cloud at Numazu (see [Numazu point cloud](#numazu-point-cloud));
 - automated tests for round trips and malformed input (`test/`);
 - a browser demo (`demo/`) that loads one pre-generated bridge tile over
   HTTP, decodes it, and draws the surfels as instanced discs in a MapLibre
@@ -104,6 +108,25 @@ Placement follows the Surfel Block v2 coordinate frame
 pointing south, z and radius are metres. The demo converts x, y to metres
 with `tileWidthMetres` (`src/tile-geometry.ts`), about 111.7 m for this
 tile. Mercator projection only.
+
+## Numazu point cloud
+
+A real-data demo tileset built from Shizuoka Prefecture's VIRTUAL SHIZUOKA
+MMS point cloud (2019, mesh `08NE2701`, CC BY). The data is not in this
+repository. To rebuild it:
+
+```sh
+mkdir -p data/virtual-shizuoka/2019-mms-08NE2701
+curl -o data/virtual-shizuoka/2019-mms-08NE2701/08NE2701.zip https://virtual-shizuoka.s3.ap-northeast-1.amazonaws.com/2019/MMS/Ground/08/NE/27/08NE2701.zip
+unzip data/virtual-shizuoka/2019-mms-08NE2701/08NE2701.zip -d data/virtual-shizuoka/2019-mms-08NE2701
+npm run demo:numazu
+```
+
+The zip is 14,113,240 bytes (SHA-256 `0af0a8ac…e1ca126d`). `npm run
+demo:numazu` writes a reference-3DGS PLY next to the LAS and the tiles to
+`demo/tiles/numazu/`. Open <http://127.0.0.1:8000/demo/?fixture=numazu>
+while `npm run demo` is running. Outside the stars basemap's coverage,
+this tileset uses GSI pale raster tiles.
 
 ## License
 
