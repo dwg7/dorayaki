@@ -7,16 +7,25 @@ import {
   BRIDGE_DECK_Z,
   BRIDGE_PIERS,
   BRIDGE_UNDERSIDE_Z,
-  generateBridge,
-  generateBridgeParts,
+  bridgePierRowHeights,
+  generateBridge as generateBridgeAt,
+  generateBridgeParts as generateBridgePartsAt,
 } from "../src/fixtures/bridge.js";
 import { decodeSurfelBlock, encodeSurfelBlock, surfelBlockByteLength, type Surfel } from "../src/surfel-block.js";
 
 /**
- * SHA-256 of encodeSurfelBlock(generateBridge()). If this changes, the
+ * Tests use a 128 m tile: sampling pitch 8 m, so the piers get
+ * ceil(11 / 8) = 2 rows at 2.75 m and 8.25 m.
+ */
+const WIDTH = 128;
+const generateBridge = () => generateBridgeAt({ tileWidthMetres: WIDTH });
+const generateBridgeParts = () => generateBridgePartsAt({ tileWidthMetres: WIDTH });
+
+/**
+ * SHA-256 of encodeSurfelBlock(generateBridge()) on a 128 m tile. If this changes, the
  * fixture or the wire format changed; update it deliberately.
  */
-const BRIDGE_SHA256 = "56dd3cec51e9558a52c83e583ef6a1a60d13ab36b9a752486181f96739c6612c";
+const BRIDGE_SHA256 = "f48eccc17b95fe964f5901dbd407817a332a9ff0d39a54e038f9c677c6a24429";
 
 const C = 1 / 16;
 const centre = (k: number): number => (k + 0.5) * C;
@@ -44,13 +53,16 @@ test("bridge has ground, deck, underside, and supports", () => {
   assert.equal(parts.ground.length, 256);
   assert.equal(parts.deck.length, 64);
   assert.equal(parts.underside.length, 64);
-  assert.equal(parts.supports.length, 64);
-  assert.equal(generateBridge().length, 448);
+  assert.equal(parts.supports.length, 32); // 2 piers × 4 faces × 2 positions × 2 rows
+  assert.equal(generateBridge().length, 416);
 
   for (const s of parts.ground) assert.deepEqual([s.z, s.nx, s.ny, s.nz], [0, 0, 0, 1]);
   for (const s of parts.deck) assert.deepEqual([s.z, s.nx, s.ny, s.nz], [BRIDGE_DECK_Z, 0, 0, 1]);
   for (const s of parts.underside) assert.deepEqual([s.z, s.nx, s.ny, s.nz], [BRIDGE_UNDERSIDE_Z, 0, 0, -1]);
   assert.ok(BRIDGE_UNDERSIDE_Z < BRIDGE_DECK_Z);
+  // Heights are metres; radius is metric (half the diagonal of an 8 m cell).
+  assert.deepEqual([BRIDGE_UNDERSIDE_Z, BRIDGE_DECK_Z], [11, 12]);
+  for (const s of generateBridge()) assert.equal(s.radius, Math.fround(8 * Math.SQRT1_2));
 });
 
 test("supports are vertical faces between ground and underside", () => {
@@ -71,7 +83,7 @@ test("supports are vertical faces between ground and underside", () => {
 
 test("bridge survives an encode/decode round trip, in order", () => {
   const { original, decoded } = roundTrip();
-  assert.equal(encodeSurfelBlock(original).byteLength, surfelBlockByteLength(448));
+  assert.equal(encodeSurfelBlock(original).byteLength, surfelBlockByteLength(416));
   assert.deepEqual(decoded, original);
 });
 
@@ -105,10 +117,10 @@ test("decoded block keeps three layers at every x/y under the deck", () => {
 test("decoded block keeps stacked support surfels at each pier face position", () => {
   const { decoded } = roundTrip();
   const cols = columns(decoded.filter((s) => s.nz === 0));
-  // 2 piers × 4 faces × 2 positions per face, each with 4 heights.
+  // 2 piers × 4 faces × 2 positions per face, each with 2 heights.
   assert.equal(cols.size, 16);
   for (const stack of cols.values()) {
-    assert.deepEqual(stack.map((s) => s.z), [1, 3, 5, 7].map((k) => k / 32));
+    assert.deepEqual(stack.map((s) => s.z), [2.75, 8.25]);
   }
 });
 
@@ -121,4 +133,19 @@ test("outside the deck and piers the bridge is a single ground layer", () => {
       assert.deepEqual(cols.get(`${centre(i)},${centre(j)}`)?.map((s) => s.z), [0]);
     }
   }
+});
+
+test("pier rows follow the tile width so vertical sampling matches horizontal", () => {
+  assert.deepEqual(bridgePierRowHeights(128), [2.75, 8.25]); // pitch 8 m
+  assert.deepEqual(bridgePierRowHeights(1000), [5.5]); // pitch 62.5 m: one row
+  assert.equal(bridgePierRowHeights(16).length, 11); // pitch 1 m
+});
+
+test("bridge heights do not depend on the tile width", () => {
+  for (const w of [64, 128, 1000]) {
+    const { deck, underside } = generateBridgePartsAt({ tileWidthMetres: w });
+    assert.ok(deck.every((s) => s.z === 12));
+    assert.ok(underside.every((s) => s.z === 11));
+  }
+  assert.throws(() => generateBridgeAt({ tileWidthMetres: -1 }), RangeError);
 });

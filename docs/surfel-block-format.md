@@ -1,4 +1,4 @@
-# Naive Surfel Block format (experimental, version 1)
+# Naive Surfel Block format (experimental, version 2)
 
 Status: implemented in `src/surfel-block.ts`. This is an experimental
 layout for the Dorayaki proof of concept, not a specification. It may
@@ -26,11 +26,11 @@ rejected as truncated; longer input is rejected as having trailing bytes.
 | offset | size | type      | field         | value                           |
 | -----: | ---: | --------- | ------------- | ------------------------------- |
 |      0 |    4 | uint8[4]  | magic         | ASCII `DSRF` (`44 53 52 46`)    |
-|      4 |    2 | uint16 LE | version       | `1`                             |
+|      4 |    2 | uint16 LE | version       | `2`                             |
 |      6 |    2 | uint16 LE | record_bytes  | `32`                            |
 |      8 |    4 | uint32 LE | count         | number of surfel records        |
 
-`record_bytes` is redundant with `version` in version 1; the decoder
+`record_bytes` is redundant with `version` in version 2; the decoder
 requires it to equal 32. It exists so a reader can report a record-size
 mismatch distinctly from an unknown version.
 
@@ -62,10 +62,66 @@ Offsets are relative to the start of the record. Because the header is
 Not validated: normal length (unit length is expected but not enforced)
 and coordinate ranges.
 
+## Coordinate frame (version 2)
+
+| field | unit and meaning |
+| --- | --- |
+| `x` | tile-local, `0` = west edge of the tile, `1` = east edge |
+| `y` | tile-local, `0` = north edge of the tile, `1` = south edge |
+| `z` | metres, up |
+| `nx, ny, nz` | unit normal in the local metric frame: east, south, up |
+| `radius` | metres |
+
+- `x` and `y` follow the MLT / MVT tile convention (x right, y down).
+  Values outside `[0, 1]` are allowed. They describe geometry that
+  crosses the tile edge.
+- The tile address (`z/x/y`) is not stored in the block. As in MLT, it is
+  known from outside the tile.
+- The local metric frame converts tile-local `x, y` to metres with the
+  tile's width in metres, `W`. Dorayaki computes `W` at the tile's centre
+  latitude on the spherical Web Mercator Earth (radius 6,378,137 m):
+  `W = 2π · 6378137 · cos(lat_centre) / 2^zoom`. Within one tile this
+  ignores the change of Mercator scale with latitude. At zoom 16 and above
+  the error is under 0.01 % (see NOTES.md).
+- The vertical datum is not defined. Fixtures use `z = 0` for their own
+  ground.
+
+Normals and radius are metric so that a disc's shape and size do not
+depend on the zoom level of the tile that carries it.
+
+## Compatibility
+
+Version 2 has the same byte layout as version 1. It only defines the
+units above, which version 1 left undefined. Version 1 blocks are
+rejected (`UNSUPPORTED_VERSION`) rather than reinterpreted. This is an
+intentional breaking change. All fixtures and test vectors were
+regenerated.
+
 ## Not yet defined
 
-- The coordinate frame and units of `x, y, z` and `radius`. The codec
-  does not interpret them. The `plane` fixture uses an abstract unit
-  square (see `src/fixtures/plane.ts`); the mapping to tile and
-  geographic coordinates is deferred to the rendering step.
-- Embedding in a MapLibre Tile frame.
+- The vertical datum (what `z = 0` means geographically).
+
+## Deferred (proposed, not implemented)
+
+Quantized encoding of the record. Raised by the repository owner on
+2026-11-12. It is deferred because no fixture or dataset has shown a
+size or bandwidth problem yet (see AGENTS.md on optimization). The
+rationale is that surfels are a coarse approximation, so carrying their
+positions at float32 precision is out of proportion.
+
+Directions considered, to revisit when evidence calls for it:
+
+- `z` as integer millimetres, possibly relative to a per-block offset.
+  float32 metres already resolves under 1 mm up to about 8 km, so the
+  gain would be bytes and uniform precision, not accuracy.
+- `x, y` as integers on a per-block tile grid, as MLT uses `extent`.
+  At zoom 18 a tile is about 150 m wide at most, so 1 mm needs about
+  18 bits per axis, whereas float32 near 1.0 resolves about 0.01 mm.
+- `radius` with relative rather than absolute precision (for example
+  float16 or a logarithmic code). A radius is bounded by the tile size in
+  practice, and a fraction-of-a-percent error is invisible in a splat.
+- Normal as an octahedral 2 × 16-bit code instead of 3 × float32.
+- Spare low bits carrying rendering intent, as in the `gint` project
+  (github.com/kenjiyoshidahome2026-bit/gint). It packs Morton-ordered
+  integer coordinates and a 6-bit visibility rank into 64 bits. This
+  would interact with the "no second LOD mechanism" rule in AGENTS.md.

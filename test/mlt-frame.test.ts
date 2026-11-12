@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
-import { generateBridge } from "../src/fixtures/bridge.js";
+import { generateBridge as generateBridgeFixture } from "../src/fixtures/bridge.js";
 import {
   EXPERIMENTAL_SURFEL_FRAME_TAG,
   MltFrameError,
@@ -15,6 +15,9 @@ import {
   type MltFrameErrorCode,
 } from "../src/mlt-frame.js";
 import { decodeSurfelBlock, encodeSurfelBlock } from "../src/surfel-block.js";
+
+/** Bridge at an arbitrary but fixed tile width; the wrapper treats bodies as opaque. */
+const generateBridge = () => generateBridgeFixture({ tileWidthMetres: 128 });
 
 const hex = (b: Uint8Array): string => Buffer.from(b).toString("hex");
 const bytes = (h: string): Uint8Array => Uint8Array.from(Buffer.from(h.replace(/\s+/g, ""), "hex"));
@@ -34,7 +37,7 @@ describe("varint", () => {
     [127, "7f"],
     [128, "8001"],
     [300, "ac02"],
-    [14349, "8d70"],
+    [13325, "8d68"],
     [0xffffffff, "ffffffff0f"],
   ];
   for (const [value, encoded] of cases) {
@@ -73,10 +76,10 @@ describe("frame envelope", () => {
 
   test("bridge frame uses a two-byte size varint", () => {
     const block = encodeSurfelBlock(generateBridge());
-    assert.equal(block.byteLength, 14348);
+    assert.equal(block.byteLength, 13324); // 12 + 32 × 416
     const frame = wrapSurfelBlock(block);
-    assert.equal(hex(frame.subarray(0, 3)), "8d70" + "d0"); // size 14349
-    assert.equal(frame.byteLength, 2 + 1 + 14348);
+    assert.equal(hex(frame.subarray(0, 3)), "8d68" + "d0"); // size 13325
+    assert.equal(frame.byteLength, 2 + 1 + 13324);
   });
 
   test("experimental tag is not an assigned MLT tag", () => {
@@ -106,7 +109,7 @@ describe("finding and extracting", () => {
 
     const frames = readFrames(tile);
     assert.deepEqual(frames.map((f) => f.tag), [UNKNOWN_TAG, EXPERIMENTAL_SURFEL_FRAME_TAG, UNKNOWN_TAG]);
-    assert.deepEqual(frames.map((f) => f.offset), [0, 6, 6 + 2 + 1 + 14348]);
+    assert.deepEqual(frames.map((f) => f.offset), [0, 6, 6 + 2 + 1 + 13324]);
 
     const found = extractSurfelBlocks(tile);
     assert.equal(found.length, 1);

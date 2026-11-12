@@ -10,3 +10,4 @@ export {
   type BridgeParts,
 } from "./fixtures/bridge.js";
 export * from "./mlt-frame.js";
+export * from "./tile-geometry.js";

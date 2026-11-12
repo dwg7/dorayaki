@@ -4,15 +4,13 @@
 import { Map as MapLibreMap, NavigationControl } from "maplibre-gl";
 
 import { decodeSurfelTile } from "./decode-tile.js";
-import { DEMO_TILE, tileUrlPath, type TileAddress } from "./demo-tile.js";
+import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
+import { DEMO_TILE, tileUrlPath } from "./demo-tile.js";
 import { fetchTileBytes } from "./load-tile.js";
 import { SurfelLayer } from "./surfel-layer.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
-  const n = 2 ** t.z;
-  const lng = ((t.x + x) / n) * 360 - 180;
-  const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (t.y + y)) / n))) * 180) / Math.PI;
-  return [lng, lat];
+  return [tileLongitude(t, x), tileLatitude(t, y)];
 }
 
 const statusEl = document.getElementById("status") as HTMLElement;
@@ -26,7 +24,7 @@ const corners = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToL
 const map = new MapLibreMap({
   container: "map",
   center: tileToLngLat(DEMO_TILE, 0.5, 0.5),
-  zoom: 16.3,
+  zoom: 18.3,
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
