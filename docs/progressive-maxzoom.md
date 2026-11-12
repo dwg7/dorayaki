@@ -1,8 +1,12 @@
 # Proposal: maxzoom and progressive ordering inside maxzoom tiles
 
-Status: **proposed, not implemented.** The measurements below are observed
-(`npm run measure:numazu`, PDAL for COPC). The design is a proposal for the
-next format versions.
+Status: **partly implemented.** Surfel Block v3 carries the level table
+(`docs/surfel-block-format.md`). `src/progressive.ts` produces the nested
+refinement order, and the Numazu demo builds z18/z19 aggregated tiles plus
+a 3-level z20 maxzoom tile, drawn by prefix. Not implemented: compact
+records (v4/v5), HTTP Range prefix fetch, and distance-based selection (see
+"Findings from v3"). The measurements are observed (`npm run
+measure:numazu`, PDAL for COPC).
 
 ## Problem
 
@@ -130,3 +134,31 @@ Each step is a separate version, measured against the table above:
 Anisotropic shapes (scales and rotation) are a separate open question
 (NOTES.md). They add bytes, so any such change will be measured against
 the same COPC baseline.
+
+## Findings from v3 (Numazu, 2026-11-13)
+
+Built with `npm run demo:numazu`. The patch straddles two z20 tiles.
+
+| tiles | Gaussians | bytes | × COPC (xyz+rgb, 5,183,226 B) |
+| --- | ---: | ---: | ---: |
+| z18 aggregated (1 tile) | 7,639 | 244,502 | 0.05 |
+| z19 aggregated (1 tile) | 29,989 | 959,702 | 0.19 |
+| z20 levels 0 | 99,660 | 3,189,176 | 0.62 |
+| z20 levels 0–1 | 257,308 | 8,233,912 | 1.59 |
+| z20 levels 0–2 (all, z22 detail) | 512,401 | 16,396,888 | 3.16 |
+
+- Prefix sizes follow the measured "added" column. Level 0 of the
+  maxzoom tile is the size of an aggregated z20 tile, as designed.
+- **Selecting by map zoom fails for 3D close-ups.** MapLibre's zoom
+  depends on camera altitude and pitch, not on the distance to data above
+  the ground. Moving the camera from 60 m to 10 m in front of the trees at
+  14 m eye height kept zoom 19.58, so the coarse z19 tile was drawn close
+  up. Selection should use per-tile screen-space error from the camera
+  distance, as in 3D Tiles.
+- **Finest Gaussians have no shape.** At 1.5 cm voxels there are about 1.9
+  points per Gaussian, and none of them is flat. Their normals are
+  arbitrary (the first eigen-axis), and from above many discs are seen
+  edge-on, so canopy coverage shows gaps even with inflated radii. Two
+  consequences: round Gaussians should be drawn camera-facing, and a
+  compact record (v4) can mark "no orientation" instead of storing a
+  normal.

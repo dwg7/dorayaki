@@ -34,3 +34,4 @@ export {
   type BoundaryOptions,
   type BoundaryParts,
 } from "./fixtures/boundary.js";
+export { BASE_CELLS, orderByRefinement, prefixCount, type RefinementOrder } from "./progressive.js";

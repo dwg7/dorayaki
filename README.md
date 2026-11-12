@@ -9,9 +9,10 @@ project's goals and working method.
 
 Implemented:
 
-- a naive Surfel Block codec (`src/surfel-block.ts`, version 2): a 12-byte
-  header followed by 32-byte little-endian surfel records, with x, y
-  tile-local and z, radius in metres. The byte layout and coordinate frame
+- a naive Surfel Block codec (`src/surfel-block.ts`, version 3): a 16-byte
+  header and a level table, followed by 32-byte little-endian surfel
+  records, with x, y tile-local, z as orthometric height and radius in
+  metres. The byte layout and coordinate frame
   are in [`docs/surfel-block-format.md`](docs/surfel-block-format.md);
 - an experimental MLT frame wrapper (`src/mlt-frame.ts`): a Surfel Block
   as the body of an MLT frame with the local, unassigned tag `0xD0`; see
@@ -125,8 +126,11 @@ npm run demo:numazu
 ```
 
 The zip is 14,113,240 bytes (SHA-256 `0af0a8ac…e1ca126d`). `npm run
-demo:numazu` writes a reference-3DGS PLY next to the LAS and the tiles to
-`demo/tiles/numazu/`. Open <http://127.0.0.1:8000/demo/?fixture=numazu>
+demo:numazu` writes the finest Gaussians as a reference-3DGS PLY next to
+the LAS, and a tile pyramid to `demo/tiles/numazu/`. The pyramid holds
+aggregated z18 and z19 tiles and z20 maxzoom tiles in a 3-level
+progressive order (`docs/progressive-maxzoom.md`). The demo draws the
+tiles and levels that match the map zoom. Open <http://127.0.0.1:8000/demo/?fixture=numazu>
 while `npm run demo` is running. Heights are the source's elevations
 (標高), so on the flat basemap the data floats at its real elevation,
 about 7.5 m above the map plane.

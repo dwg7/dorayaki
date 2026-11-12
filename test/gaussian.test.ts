@@ -120,3 +120,10 @@ test("the toy GS PLY converts, tiles, and survives encode/decode", () => {
   assert.equal(tiles.reduce((n, t) => n + t.surfels.length, 0), ply.count);
   for (const t of tiles) assert.deepEqual(decodeSurfelBlock(encodeSurfelBlock(t.surfels)), t.surfels);
 });
+
+test("placement handles hundreds of thousands of discs", () => {
+  const base = gaussianToDisc(gaussian([1, 1, 0.02]));
+  const discs = Array.from({ length: 600_000 }, (_, i) => ({ ...base, position: [(i % 1000) * 0.01, Math.floor(i / 1000) * 0.01, 0] as [number, number, number] }));
+  const { surfels } = placeDiscs(discs, SAPPORO, 20);
+  assert.equal(surfels.length, 600_000);
+});

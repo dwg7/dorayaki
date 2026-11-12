@@ -133,12 +133,19 @@ export function placeDiscs(discs: readonly Disc[], origin: GeoOrigin, zoom: numb
 
   const tx = discs.map((d) => u0 + d.position[0] * tilesPerMetre);
   const ty = discs.map((d) => v0 - d.position[1] * tilesPerMetre);
-  const x0 = Math.floor(Math.min(...tx));
-  const y0 = Math.floor(Math.min(...ty));
+  // Loops, not Math.min(...array): spreading hundreds of thousands of
+  // arguments overflows the call stack.
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < tx.length; i++) {
+    minX = Math.min(minX, tx[i]!); maxX = Math.max(maxX, tx[i]!);
+    minY = Math.min(minY, ty[i]!); maxY = Math.max(maxY, ty[i]!);
+  }
+  const x0 = Math.floor(minX);
+  const y0 = Math.floor(minY);
   const block: TileBlock = {
     origin: { z: zoom, x: x0, y: y0 },
-    cols: Math.floor(Math.max(...tx)) - x0 + 1,
-    rows: Math.floor(Math.max(...ty)) - y0 + 1,
+    cols: Math.floor(maxX) - x0 + 1,
+    rows: Math.floor(maxY) - y0 + 1,
   };
   const byte = (v: number): number => Math.round(clamp01(v) * 255);
   const surfels = discs.map((d, i): Surfel => ({

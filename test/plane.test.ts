@@ -10,7 +10,7 @@ import { decodeSurfelBlock, encodeSurfelBlock, surfelBlockByteLength } from "../
  * on a 128 m tile. If this changes, the fixture or the wire format changed; update it
  * deliberately and say so in the commit.
  */
-const PLANE_16_SHA256 = "cedfa260f34934598058352f4334b7b982edca602d754df3f33f01999c031467";
+const PLANE_16_SHA256 = "e7fe148dfa6c19383f822c5ed3a8558b3b89ac9761be185a73ba3c088f55f369";
 const OPTS = { tileWidthMetres: 128 };
 
 test("plane fixture has the expected shape", () => {

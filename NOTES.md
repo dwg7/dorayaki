@@ -247,3 +247,26 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   This is the first measured evidence for a more compact record.
 - Design proposal written up in `docs/progressive-maxzoom.md` (not
   implemented).
+
+## 2026-11-13 — v3: level table and a progressive maxzoom tile (Numazu)
+
+- Surfel Block v3: a 16-byte header with `level_count` and a level table
+  (uint32 per level) before the unchanged 32-byte records. v1/v2 are
+  rejected. Fixture hashes and test vectors regenerated.
+- Numazu pyramid (`npm run demo:numazu`, 3.6 s): z18 aggregated 7,639
+  Gaussians (244,502 B), z19 aggregated 29,989 (959,702 B), and z20 as two
+  maxzoom tiles with 512,401 finest Gaussians (1.53 cm voxels) in 3
+  levels. The z20 prefixes are 3.19 MB (level 0), 8.23 MB (0–1) and
+  16.4 MB (all), that is 0.62×, 1.59× and 3.16× COPC (xyz+rgb).
+- Bug found by real data: `placeDiscs` used `Math.min(...array)`, which
+  overflows the call stack above about 500 k elements. Now uses loops,
+  with a 600 k test.
+- In the demo, zoom-based selection works top-down: z18 → z19 → z20 levels
+  1, 2, 3 at zooms 18.5, 19.5, 20.3, 21.3, 22.3. In pitched close-ups it
+  does not: the map zoom stayed 19.58 from 60 m to 10 m in front of the
+  trees, so coarse tiles were drawn close up. Selection needs camera
+  distance (screen-space error), not map zoom.
+- None of the finest Gaussians is flat (about 1.9 points each). Their
+  normals are arbitrary, and from above, edge-on discs leave the canopy
+  gappy. This is evidence for camera-facing rendering of round Gaussians
+  and for dropping the normal from round records in a compact v4.

@@ -13,6 +13,7 @@ const VERTEX_SHADER = `#version 300 es
 precision highp float;
 uniform mat4 u_matrix;   // local metric frame (metres; east, south, up) -> clip
 uniform float u_tile_width; // metres per tile-local unit
+uniform float u_min_radius; // metres; radius floor when drawing a progressive prefix
 uniform vec3 u_light;    // local metric frame, normalized
 in vec2 a_corner;        // quad corner in [-1, 1]^2
 in vec3 a_position;      // x, y tile-local; z metres
@@ -27,7 +28,8 @@ void main() {
   vec3 t = normalize(cross(helper, n));
   vec3 b = cross(n, t);
   vec3 centre = vec3(a_position.xy * u_tile_width, a_position.z);
-  vec3 p = centre + a_radius * (a_corner.x * t + a_corner.y * b);
+  float radius = max(a_radius, u_min_radius);
+  vec3 p = centre + radius * (a_corner.x * t + a_corner.y * b);
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
   float shade = 0.35 + 0.65 * max(dot(n, u_light), 0.0);
@@ -51,6 +53,7 @@ export interface SurfelProgram {
   program: WebGLProgram;
   uMatrix: WebGLUniformLocation;
   uTileWidth: WebGLUniformLocation;
+  uMinRadius: WebGLUniformLocation;
   uLight: WebGLUniformLocation;
 }
 
@@ -101,9 +104,10 @@ export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
   }
   const uMatrix = gl.getUniformLocation(program, "u_matrix");
   const uTileWidth = gl.getUniformLocation(program, "u_tile_width");
+  const uMinRadius = gl.getUniformLocation(program, "u_min_radius");
   const uLight = gl.getUniformLocation(program, "u_light");
-  if (!uMatrix || !uTileWidth || !uLight) throw new Error("missing uniform");
-  return { program, uMatrix, uTileWidth, uLight };
+  if (!uMatrix || !uTileWidth || !uMinRadius || !uLight) throw new Error("missing uniform");
+  return { program, uMatrix, uTileWidth, uMinRadius, uLight };
 }
 
 export function uploadSurfels(gl: WebGL2RenderingContext, surfels: readonly Surfel[]): SurfelBuffers {
@@ -150,6 +154,10 @@ export interface DrawOptions {
   matrix: Float32Array;
   /** Metres per tile-local unit. */
   tileWidthMetres: number;
+  /** Draw only the first `count` instances (default: all). */
+  count?: number;
+  /** Radius floor in metres (default 0). */
+  minRadius?: number;
   depthTest: boolean;
 }
 
@@ -159,6 +167,7 @@ export function drawSurfels(
   gl.useProgram(p.program);
   gl.uniformMatrix4fv(p.uMatrix, false, opts.matrix);
   gl.uniform1f(p.uTileWidth, opts.tileWidthMetres);
+  gl.uniform1f(p.uMinRadius, opts.minRadius ?? 0);
   gl.uniform3fv(p.uLight, LIGHT);
   if (opts.depthTest) {
     gl.enable(gl.DEPTH_TEST);
@@ -169,7 +178,7 @@ export function drawSurfels(
   }
   gl.disable(gl.CULL_FACE); // discs are two-sided
   gl.bindVertexArray(b.vao);
-  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, b.count);
+  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.min(b.count, opts.count ?? b.count));
   gl.bindVertexArray(null);
 }
 

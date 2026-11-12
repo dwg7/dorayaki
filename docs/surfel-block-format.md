@@ -1,4 +1,4 @@
-# Naive Surfel Block format (experimental, version 2)
+# Naive Surfel Block format (experimental, version 3)
 
 Status: implemented in `src/surfel-block.ts`. This is an experimental
 layout for the Dorayaki proof of concept, not a specification. It may
@@ -13,31 +13,53 @@ binary32 (float32).
 ## Overall layout
 
 ```
-offset  size          content
-0       12            header
-12      32 * count    surfel records, Array of Structures
+offset      size          content
+0           16            header
+16          4 * L         level table (L = level_count)
+16 + 4L     32 * count    surfel records, Array of Structures
 ```
 
-The total byte length must be exactly `12 + 32 * count`. Shorter input is
-rejected as truncated; longer input is rejected as having trailing bytes.
+The total byte length must be exactly `16 + 4·L + 32·count`. Shorter input
+is rejected as truncated; longer input is rejected as having trailing
+bytes.
 
-## Header (12 bytes)
+## Header (16 bytes)
 
 | offset | size | type      | field         | value                           |
 | -----: | ---: | --------- | ------------- | ------------------------------- |
 |      0 |    4 | uint8[4]  | magic         | ASCII `DSRF` (`44 53 52 46`)    |
-|      4 |    2 | uint16 LE | version       | `2`                             |
+|      4 |    2 | uint16 LE | version       | `3`                             |
 |      6 |    2 | uint16 LE | record_bytes  | `32`                            |
 |      8 |    4 | uint32 LE | count         | number of surfel records        |
+|     12 |    4 | uint32 LE | level_count   | L, in `1..64`                   |
 
-`record_bytes` is redundant with `version` in version 2; the decoder
+`record_bytes` is redundant with `version` in version 3; the decoder
 requires it to equal 32. It exists so a reader can report a record-size
 mismatch distinctly from an unknown version.
 
+## Level table (4 · L bytes)
+
+L `uint32 LE` values: the number of records in each level, in stored
+order. They must sum to `count`; levels may be empty. Records of level 0
+come first, then level 1, and so on.
+
+- A block with one level (`L = 1`, the value equal to `count`) is an
+  ordinary block. All synthetic fixtures and tiles below maxzoom use it.
+- In maxzoom tiles, producers may store the finest surfels in nested
+  refinement order (`src/progressive.ts`, `docs/progressive-maxzoom.md`).
+  Then each prefix of whole levels covers every occupied cell of its
+  finest level.
+- Using the table is optional. A reader may ignore it and draw every
+  record. That is correct, only slower.
+
+`L` is capped at 64 so that a reader never allocates a large table from
+untrusted input. This is a local limit, not a structural need.
+
 ## Surfel record (32 bytes)
 
-Offsets are relative to the start of the record. Because the header is
-12 bytes, every record and every float32 field is 4-byte aligned.
+Offsets are relative to the start of the record. The header and level
+table are multiples of 4 bytes, so every record and every float32 field
+is 4-byte aligned.
 
 | offset | size | type       | field  |
 | -----: | ---: | ---------- | ------ |
@@ -62,7 +84,7 @@ Offsets are relative to the start of the record. Because the header is
 Not validated: normal length (unit length is expected but not enforced)
 and coordinate ranges.
 
-## Coordinate frame (version 2)
+## Coordinate frame (since version 2)
 
 | field | unit and meaning |
 | --- | --- |
@@ -106,6 +128,13 @@ The decoder does not enforce this convention. Version 2 still accepts
 x, y outside `[0, 1]`, so this is not a format change.
 
 ## Compatibility
+
+**Version 3** (2026-11-13) adds `level_count` and the level table. The
+record is unchanged. Version 1 and 2 blocks are rejected
+(`UNSUPPORTED_VERSION`). This is an intentional breaking change, and all
+fixtures and test vectors were regenerated.
+
+**Version 2** (earlier):
 
 Version 2 has the same byte layout as version 1. It only defines the
 units above, which version 1 left undefined. Version 1 blocks are

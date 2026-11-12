@@ -3,6 +3,7 @@ import { describe, test } from "node:test";
 
 import {
   SURFEL_BLOCK_HEADER_BYTES,
+  decodeSurfelBlockWithLevels,
   SURFEL_RECORD_BYTES,
   SurfelBlockError,
   decodeSurfelBlock,
@@ -24,30 +25,36 @@ function assertRejects(bytes: Uint8Array, code: SurfelBlockErrorCode): void {
   );
 }
 
-/** Header with arbitrary fields, followed by `recordBytes` zero bytes. */
-function rawBlock(opts: { magic?: string; version?: number; recordSize?: number; count: number; recordBytes: number }): Uint8Array {
-  const bytes = new Uint8Array(SURFEL_BLOCK_HEADER_BYTES + opts.recordBytes);
+/** First record offset of a block with a one-level table. */
+const RECORDS_AT = SURFEL_BLOCK_HEADER_BYTES + 4;
+
+/** Header with arbitrary fields and a level table, followed by `recordBytes` zero bytes. */
+function rawBlock(opts: { magic?: string; version?: number; recordSize?: number; count: number; recordBytes: number; levels?: number[]; levelCount?: number }): Uint8Array {
+  const levels = opts.levels ?? [opts.count];
+  const bytes = new Uint8Array(SURFEL_BLOCK_HEADER_BYTES + 4 * levels.length + opts.recordBytes);
   const view = new DataView(bytes.buffer);
   bytes.set(new TextEncoder().encode(opts.magic ?? "DSRF"), 0);
-  view.setUint16(4, opts.version ?? 2, true);
+  view.setUint16(4, opts.version ?? 3, true);
   view.setUint16(6, opts.recordSize ?? SURFEL_RECORD_BYTES, true);
   view.setUint32(8, opts.count, true);
+  view.setUint32(12, opts.levelCount ?? levels.length, true);
+  levels.forEach((n, k) => view.setUint32(SURFEL_BLOCK_HEADER_BYTES + 4 * k, n, true));
   return bytes;
 }
 
 describe("encode/decode", () => {
   test("empty block is header only and round-trips", () => {
     const bytes = encodeSurfelBlock([]);
-    assert.equal(hex(bytes), "44535246" + "0200" + "2000" + "00000000");
+    assert.equal(hex(bytes), "44535246" + "0300" + "2000" + "00000000" + "01000000" + "00000000");
     assert.deepEqual(decodeSurfelBlock(bytes), []);
   });
 
   test("one surfel has the exact little-endian layout and round-trips", () => {
     const bytes = encodeSurfelBlock([ONE]);
-    assert.equal(bytes.byteLength, 12 + 32);
+    assert.equal(bytes.byteLength, 16 + 4 + 32);
     assert.equal(
       hex(bytes),
-      "44535246" + "0200" + "2000" + "01000000" +
+      "44535246" + "0300" + "2000" + "01000000" + "01000000" + "01000000" +
         "0000c03f" + // x = 1.5
         "000010c0" + // y = -2.25
         "0000c842" + // z = 100
@@ -110,26 +117,27 @@ describe("decoder rejects malformed input", () => {
   });
 
   test("unsupported version", () => {
-    // Version 1 had the same bytes but no defined coordinate frame.
+    // Version 1 and 2 used a 12-byte header without a level table.
     assertRejects(rawBlock({ version: 1, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
+    assertRejects(rawBlock({ version: 2, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
     assertRejects(rawBlock({ version: 0, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
-    assertRejects(rawBlock({ version: 3, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
+    assertRejects(rawBlock({ version: 4, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
   });
 
   test("unexpected record size", () => {
     assertRejects(rawBlock({ recordSize: 28, count: 0, recordBytes: 0 }), "BAD_RECORD_SIZE");
   });
 
-  test("truncated header at every length 0..11", () => {
+  test("truncated header at every length 0..19 (fixed part and level table)", () => {
     const full = encodeSurfelBlock([]);
-    for (let len = 0; len < SURFEL_BLOCK_HEADER_BYTES; len++) {
+    for (let len = 0; len < RECORDS_AT; len++) {
       assertRejects(full.subarray(0, len), "TRUNCATED_HEADER");
     }
   });
 
   test("truncated record data at every cut point", () => {
     const full = encodeSurfelBlock([ONE, ONE]);
-    for (let len = SURFEL_BLOCK_HEADER_BYTES; len < full.byteLength; len++) {
+    for (let len = RECORDS_AT; len < full.byteLength; len++) {
       assertRejects(full.subarray(0, len), "TRUNCATED_RECORDS");
     }
   });
@@ -144,20 +152,52 @@ describe("decoder rejects malformed input", () => {
 
   test("declared count smaller than data (trailing bytes)", () => {
     assertRejects(rawBlock({ count: 1, recordBytes: 2 * SURFEL_RECORD_BYTES }), "TRAILING_BYTES");
-    const withExtraByte = new Uint8Array(SURFEL_BLOCK_HEADER_BYTES + SURFEL_RECORD_BYTES + 1);
+    const withExtraByte = new Uint8Array(RECORDS_AT + SURFEL_RECORD_BYTES + 1);
     withExtraByte.set(encodeSurfelBlock([ONE]));
     assertRejects(withExtraByte, "TRAILING_BYTES");
   });
 
   test("non-finite float in a record", () => {
     const bytes = encodeSurfelBlock([ONE]);
-    new DataView(bytes.buffer).setFloat32(SURFEL_BLOCK_HEADER_BYTES + 8, Number.NaN, true);
+    new DataView(bytes.buffer).setFloat32(RECORDS_AT + 8, Number.NaN, true);
     assertRejects(bytes, "INVALID_VALUE");
   });
 
   test("negative radius in a record", () => {
     const bytes = encodeSurfelBlock([ONE]);
-    new DataView(bytes.buffer).setFloat32(SURFEL_BLOCK_HEADER_BYTES + 24, -0.5, true);
+    new DataView(bytes.buffer).setFloat32(RECORDS_AT + 24, -0.5, true);
     assertRejects(bytes, "INVALID_VALUE");
+  });
+});
+
+describe("level table", () => {
+  test("levels round-trip and default to one level", () => {
+    const three = [ONE, { ...ONE, z: 1 }, { ...ONE, z: 2 }];
+    assert.deepEqual(decodeSurfelBlockWithLevels(encodeSurfelBlock(three)).levels, [3]);
+    const block = decodeSurfelBlockWithLevels(encodeSurfelBlock(three, [1, 0, 2]));
+    assert.deepEqual(block.levels, [1, 0, 2]);
+    assert.deepEqual(block.surfels, three);
+    assert.equal(encodeSurfelBlock(three, [1, 0, 2]).byteLength, 16 + 3 * 4 + 3 * 32);
+  });
+
+  test("encoder rejects inconsistent level tables", () => {
+    assert.throws(() => encodeSurfelBlock([ONE], [2]), (e: unknown) => e instanceof SurfelBlockError && e.code === "BAD_LEVELS");
+    assert.throws(() => encodeSurfelBlock([ONE], []), (e: unknown) => e instanceof SurfelBlockError && e.code === "BAD_LEVELS");
+    assert.throws(() => encodeSurfelBlock([ONE], [0.5, 0.5]), (e: unknown) => e instanceof SurfelBlockError && e.code === "BAD_LEVELS");
+  });
+
+  test("decoder rejects level tables that disagree with the count", () => {
+    assertRejects(rawBlock({ count: 1, recordBytes: SURFEL_RECORD_BYTES, levels: [2] }), "BAD_LEVELS");
+    assertRejects(rawBlock({ count: 2, recordBytes: 2 * SURFEL_RECORD_BYTES, levels: [1, 0] }), "BAD_LEVELS");
+  });
+
+  test("decoder rejects zero or huge level counts before reading the table", () => {
+    assertRejects(rawBlock({ count: 0, recordBytes: 0, levels: [], levelCount: 0 }), "BAD_LEVELS");
+    assertRejects(rawBlock({ count: 0, recordBytes: 0, levels: [0], levelCount: 0xffffffff }), "BAD_LEVELS");
+  });
+
+  test("a level table cut short is a truncated header", () => {
+    const full = encodeSurfelBlock([ONE, ONE], [1, 1]);
+    assertRejects(full.subarray(0, SURFEL_BLOCK_HEADER_BYTES + 4), "TRUNCATED_HEADER");
   });
 });

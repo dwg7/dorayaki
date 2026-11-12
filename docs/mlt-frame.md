@@ -39,8 +39,8 @@ byte-for-byte; the frame adds no header or padding of its own.
 
 Examples:
 
-- empty Surfel Block (12 bytes): `0d d0 44535246 0200 2000 00000000`
-- `bridge` fixture (14,348 bytes): `8d 70 d0 ...` (size 14,349)
+- empty Surfel Block (v3, 20 bytes): `15 d0 44535246 0300 2000 00000000 01000000 00000000`
+- `bridge` fixture on a 128 m tile (v3, 13,844 bytes): `95 6c d0 ...` (size 13,845)
 
 ### Tag `0xD0`
 
