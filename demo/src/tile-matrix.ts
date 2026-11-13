@@ -1,5 +1,5 @@
 /**
- * Geographic placement for Surfel Block v2 (docs/surfel-block-format.md).
+ * Geographic placement for Surfel Block v2 (documents/surfel-block-format.md).
  *
  * The vertex shader converts each surfel to a local metric frame with its
  * origin at the tile's north-west corner and axes east, south, up, in

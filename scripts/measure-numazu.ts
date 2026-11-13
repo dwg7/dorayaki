@@ -1,6 +1,6 @@
 /**
  * Measurements for the maxzoom / progressive-ordering design
- * (docs/progressive-maxzoom.md), on the VIRTUAL SHIZUOKA MMS mesh 08NE2701.
+ * (documents/progressive-maxzoom.md), on the VIRTUAL SHIZUOKA MMS mesh 08NE2701.
  *
  * For each zoom z = 18..23 it takes the voxel size v_z = tile width / 512
  * (about one CSS pixel at that zoom, for 512 px tiles) and reports:

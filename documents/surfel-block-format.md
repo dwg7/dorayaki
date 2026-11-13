@@ -46,7 +46,7 @@ come first, then level 1, and so on.
 - A block with one level (`L = 1`, the value equal to `count`) is an
   ordinary block. All synthetic fixtures and tiles below maxzoom use it.
 - In maxzoom tiles, producers may store the finest surfels in nested
-  refinement order (`src/progressive.ts`, `docs/progressive-maxzoom.md`).
+  refinement order (`src/progressive.ts`, `documents/progressive-maxzoom.md`).
   Then each prefix of whole levels covers every occupied cell of its
   finest level.
 - Using the table is optional. A reader may ignore it and draw every

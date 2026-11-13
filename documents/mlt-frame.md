@@ -31,7 +31,7 @@ to skip.
 offset  size     content
 0       1..5     size: unsigned LEB128 varint = 1 + block_length
 k       1        tag: 0xD0 (EXPERIMENTAL, unassigned)
-k+1     block    Surfel Block bytes, unchanged (docs/surfel-block-format.md)
+k+1     block    Surfel Block bytes, unchanged (documents/surfel-block-format.md)
 ```
 
 `k` is the byte length of the size varint. The body is the Surfel Block

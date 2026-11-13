@@ -1,7 +1,7 @@
 /**
  * Naive Surfel Block codec (experimental, version 3).
  *
- * See docs/surfel-block-format.md for the byte layout. All multi-byte
+ * See documents/surfel-block-format.md for the byte layout. All multi-byte
  * values are little-endian. This module has no dependency on MapLibre,
  * MLT, or any runtime other than ECMAScript typed arrays.
  */
@@ -9,7 +9,7 @@
 /**
  * One circular surfel as held in memory.
  *
- * Coordinate frame (version 2, see docs/surfel-block-format.md):
+ * Coordinate frame (version 2, see documents/surfel-block-format.md):
  * x, y are tile-local in [0, 1] (x east, y south); z is orthometric
  * height (標高, metres above the geoid);
  * the normal is a unit vector in the local metric frame (east, south, up);

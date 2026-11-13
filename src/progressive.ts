@@ -1,5 +1,5 @@
 /**
- * Nested refinement order for maxzoom tiles (docs/progressive-maxzoom.md).
+ * Nested refinement order for maxzoom tiles (documents/progressive-maxzoom.md).
  *
  * Given the finest surfels of one tile (tile-local x, y; z in metres), it
  * reorders them into levels:

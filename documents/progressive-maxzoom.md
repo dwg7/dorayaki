@@ -1,7 +1,7 @@
 # Proposal: maxzoom and progressive ordering inside maxzoom tiles
 
 Status: **partly implemented.** Surfel Block v3 carries the level table
-(`docs/surfel-block-format.md`). `src/progressive.ts` produces the nested
+(`documents/surfel-block-format.md`). `src/progressive.ts` produces the nested
 refinement order, and the Numazu demo builds z18/z19 aggregated tiles plus
 a 3-level z20 maxzoom tile, drawn by prefix. Not implemented: compact
 records (v4/v5), HTTP Range prefix fetch, and distance-based selection (see
