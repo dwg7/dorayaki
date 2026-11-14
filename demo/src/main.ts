@@ -38,6 +38,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "numazu-medium": "tiles/numazu-medium/tilejson.json",
         "numazu-fine": "tiles/numazu-fine/tilejson.json",
         kawazu: "tiles/kawazu/tilejson.json",
+        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu",
         "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
         "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
         "kawazu-ad-t20-c20": "tiles/kawazu-ad-t20-c20/tilejson.json",

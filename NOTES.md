@@ -613,3 +613,22 @@ reloading, `load` fired at 447 ms, and fetch 132 ms, decode 90 ms, upload
 So the slowness was a property of measuring in a hidden pane, not of the demo.
 What it does not show: behaviour on a slower GPU or phone, or with tile counts
 far above 6; the demo still fetches and uploads every tile at start.
+
+## 2026-11-15 — dorayaki-kawazu.pmtiles on stars; Martin 1.14 does not read gzip MLT tiles
+
+- The first archive (Surfel Block v5, gzip tiles, 15,952,873 B) was uploaded
+  with hfu authenticating. Martin did not register it: its log
+  (`systemctl --user status martin`; `/home/stars/martin.log` is old) said
+  `reload apply failed; retaining baseline for retry error=PmtilesError(
+  InvalidMetadata("Format Mlt and compression Gzip are not yet supported"))`, and
+  `/dorayaki-kawazu` was 404 (Martin's catalog lists a source only when it
+  loads). The file was replaced by a raw-tile archive (23,357,992 B, SHA-256
+  `042e4dce...b3dbc`), which Martin registered within seconds.
+- Served tiles equal the local files byte for byte; Cloudflare does not
+  compress them in transit (6,333,031 B for the largest tile with
+  `Accept-Encoding: gzip, br`).
+- The Pages site was rebuilt with both tilesets listed from stars. Numazu is
+  still a version 4 archive on stars; the version 5 decoder reads it (37,628
+  splats). Kawazu loads with terrain and splat scale 1.3 by default.
+- A browser pane that has been hidden again between steps stalls MapLibre's
+  `load` (no basemap or DEM request is made); show the pane and reload.

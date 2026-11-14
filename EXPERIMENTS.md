@@ -644,6 +644,7 @@ canopy is what makes the scene read as a place.
 
 - Whether support 24 is right elsewhere (a city, a plain, a dense forest at
   another density); the value is tied to 121 points/m2 and 49 cm cells.
-- Whether Martin serves gzip-compressed MLT tiles with the right headers
-  (raw tiles were verified for Numazu).
+- ~~Whether Martin serves gzip-compressed MLT tiles~~: it does not (Martin 1.14.0:
+  `Format Mlt and compression Gzip are not yet supported`); the hosted archive has
+  raw tiles (documents/kawazu-demo.md), so the gzip saving is not realised on stars yet.
 - A measure of how much the canopy loses against the original points.
