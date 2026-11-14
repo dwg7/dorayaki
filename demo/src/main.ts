@@ -7,6 +7,7 @@ import { decodeSurfelTileWithLevels } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
+import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
 import { SurfelLayer } from "./surfel-layer.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
@@ -14,10 +15,11 @@ function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
 }
 
 /**
- * Real-data tilesets built offline (e.g. `npm run demo:numazu`). Their
- * tiles and placement come from tiles/<name>/manifest.json, not from code.
+ * Real-data tilesets, each named by a TileJSON URL: the local tilejson.json
+ * written by `npm run demo:numazu`, or a server such as Martin on stars that
+ * serves the PMTiles archive as z/x/y. The site build sets this list.
  */
-declare const __DORAYAKI_EXTERNAL_TILESETS__: readonly string[] | undefined;
+declare const __DORAYAKI_EXTERNAL_TILESETS__: Readonly<Record<string, string>> | undefined;
 declare const __DORAYAKI_WORKER_URL__: string | undefined;
 
 /**
@@ -29,19 +31,16 @@ declare const __DORAYAKI_WORKER_URL__: string | undefined;
 if (typeof __DORAYAKI_WORKER_URL__ !== "undefined") {
   setWorkerUrl(new URL(__DORAYAKI_WORKER_URL__, document.baseURI).href);
 }
-/** The static site build (scripts/build-site.ts) defines this as [] because it does not publish them. */
-const EXTERNAL_TILESETS: readonly string[] =
-  typeof __DORAYAKI_EXTERNAL_TILESETS__ !== "undefined" ? __DORAYAKI_EXTERNAL_TILESETS__ : ["numazu"];
+
+const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
+  typeof __DORAYAKI_EXTERNAL_TILESETS__ !== "undefined" ? __DORAYAKI_EXTERNAL_TILESETS__ : {
+        numazu: "tiles/numazu/tilejson.json",
+        "numazu-medium": "tiles/numazu-medium/tilejson.json",
+        "numazu-fine": "tiles/numazu-fine/tilejson.json",
+      };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
-const isExternal = (name: string): name is ExternalTileset => EXTERNAL_TILESETS.includes(name);
-
-interface Manifest {
-  name: string;
-  attribution: string;
-  centre: [number, number];
-  tiles: TileAddress[];
-}
+const isExternal = (name: string): name is ExternalTileset => Object.hasOwn(EXTERNAL_TILESETS, name);
 
 /** Tileset from `?fixture=`, defaulting to the bridge. */
 const requested = new URLSearchParams(location.search).get("fixture") ?? "bridge";
@@ -49,7 +48,7 @@ const tileset: Tileset = isDemoTileset(requested) || isExternal(requested) ? req
 
 const fixtureEl = document.getElementById("fixture") as HTMLElement;
 fixtureEl.replaceChildren(
-  ...[...DEMO_TILESETS, ...EXTERNAL_TILESETS].flatMap((name, i) => {
+  ...[...DEMO_TILESETS, ...Object.keys(EXTERNAL_TILESETS)].flatMap((name, i) => {
     const node = name === tileset ? Object.assign(document.createElement("strong"), { textContent: name })
       : Object.assign(document.createElement("a"), { textContent: name, href: `?fixture=${name}` });
     return i === 0 ? [node] : [document.createTextNode(" | "), node];
@@ -62,14 +61,9 @@ const setStatus = (text: string): void => {
   statusEl.textContent = text;
 };
 
-const manifest: Manifest | undefined = isExternal(tileset)
-  ? await fetch(`tiles/${tileset}/manifest.json`).then((r) => {
-      if (!r.ok) throw new Error(`tiles/${tileset}/manifest.json: ${r.status} (run npm run demo:${tileset})`);
-      return r.json() as Promise<Manifest>;
-    })
-  : undefined;
+const external: TileSource | undefined = isExternal(tileset) ? await loadTileJson(EXTERNAL_TILESETS[tileset]!, document.baseURI) : undefined;
 
-const tiles = manifest ? manifest.tiles : tilesetTiles(tileset as DemoTileset);
+const tiles = external ? external.tiles : tilesetTiles(tileset as DemoTileset);
 /** Outlines of the deepest zoom's tiles only, to keep the overlay readable. */
 const deepest = Math.max(...tiles.map((t) => t.z));
 const outlines = tiles.filter((t) => t.z === deepest).map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(t, x as number, y as number)));
@@ -82,8 +76,8 @@ const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-starlight";
 
 const map = new MapLibreMap({
   container: "map",
-  center: manifest ? manifest.centre : tileToLngLat(tiles[0] as TileAddress, 0.5, 0.5),
-  zoom: manifest ? 20.5 : 18.3,
+  center: external ? external.center : tileToLngLat(tiles[0] as TileAddress, 0.5, 0.5),
+  zoom: external ? 20.5 : 18.3,
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
@@ -92,16 +86,27 @@ const map = new MapLibreMap({
   hash: "map",
   style: BASEMAP_STYLE,
   // Real-data tilesets name their source next to the basemap's attribution.
-  attributionControl: manifest ? { customAttribution: manifest.attribution } : {},
+  attributionControl: external?.attribution ? { customAttribution: external.attribution } : {},
 });
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
-const urls = tiles.map((t) =>
-  manifest ? `tiles/${tileset}/${t.z}/${t.x}/${t.y}.mlt` : tileUrlPath(tileset as DemoTileset, t),
-);
-const tilesPromise = fetchTilesBytes(urls).then((all) =>
-  all.map((bytes, n) => ({ tile: tiles[n] as TileAddress, bytes, ...decodeSurfelTileWithLevels(bytes) })),
-);
+const urls = tiles.map((t) => (external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t)));
+/** Decode a tile into splats and its level table. */
+function toLoaded(tile: TileAddress, bytes: Uint8Array) {
+  return { tile, bytes, ...decodeSurfelTileWithLevels(bytes) };
+}
+
+/** Load-time measurements (E001 in EXPERIMENTS.md). */
+const timings: { fetchMs?: number; decodeMs?: number } = {};
+const tFetch = performance.now();
+const tilesPromise = fetchTilesBytes(urls, undefined, { allowMissing: external !== undefined }).then((all) => {
+  timings.fetchMs = performance.now() - tFetch;
+  const tDecode = performance.now();
+  // Tiles listed from TileJSON bounds may not exist (204/404); skip those.
+  const decoded = all.flatMap((bytes, n) => (bytes ? [toLoaded(tiles[n] as TileAddress, bytes)] : []));
+  timings.decodeMs = performance.now() - tDecode;
+  return decoded;
+});
 
 map.on("load", () => {
   // Debug overlay on top of the basemap: the demo tile's boundary.
@@ -118,10 +123,12 @@ map.on("load", () => {
   tilesPromise.then(
     (loaded) => {
       const layer = new SurfelLayer("surfels", loaded);
+      const lod = Number(new URLSearchParams(location.search).get("lod"));
+      if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
       map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
       depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
       const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);
-      const count = loaded.reduce((n, t) => n + t.surfels.length, 0);
+      const count = loaded.reduce((n, t) => n + t.splats.length, 0);
       const loadedSummary = `${loaded.length} tile(s) of ${tileset}: ${bytes} bytes, ${count} surfels`;
       setStatus(loadedSummary);
       // After each frame, show what the zoom-based selection drew.
@@ -132,7 +139,36 @@ map.on("load", () => {
         setStatus(`${loadedSummary}. Drawing z${d.zoom}: ${d.tiles} tile(s), ${d.surfels} surfels` +
           (progressive ? `, levels ${d.levelsDrawn}, min radius ${(d.minRadius * 100).toFixed(1)} cm` : ""));
       });
-      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded };
+      /**
+       * Frame timing: force `frames` repaints in a row and report the median
+       * interval between rendered frames and the median CPU time of the
+       * surfel layer's render(). GPU time is not measured.
+       */
+      const measureFrames = (frames = 120): Promise<Record<string, number | string | undefined>> =>
+        new Promise((resolve) => {
+          const stamps: number[] = [];
+          const cpu: number[] = [];
+          const onRender = () => {
+            stamps.push(performance.now());
+            if (layer.lastRenderMs !== undefined) cpu.push(layer.lastRenderMs);
+            if (stamps.length > frames) {
+              map.off("render", onRender);
+              const median = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] ?? NaN;
+              const intervals = stamps.slice(1).map((t, i) => t - stamps[i]!);
+              resolve({
+                frames, medianFrameMs: median(intervals), medianLayerCpuMs: median(cpu),
+                drawnSurfels: layer.lastDraw?.surfels, gpu: layer.gpu, userAgent: navigator.userAgent,
+              });
+            } else map.triggerRepaint();
+          };
+          map.on("render", onRender);
+          map.triggerRepaint();
+        });
+      const report = () => ({
+        tileset, tiles: loaded.length, surfels: count, encodedBytes: bytes,
+        fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
+      });
+      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded, timings, report, measureFrames };
     },
     (err: unknown) => {
       setStatus(`failed: ${err instanceof Error ? err.message : String(err)}`);

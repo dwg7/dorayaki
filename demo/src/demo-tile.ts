@@ -3,9 +3,10 @@ import { generateBridge } from "../../src/fixtures/bridge.js";
 import { generateOverhang } from "../../src/fixtures/overhang.js";
 import { toyGaussianPly } from "../../src/fixtures/toy-gaussians.js";
 import { readPly } from "../../src/gaussian/ply.js";
-import { gaussianToDisc, gaussiansFromPly, placeDiscs } from "../../src/gaussian/to-surfels.js";
+import { gaussiansFromPly, placeGaussians } from "../../src/gaussian/to-surfels.js";
 import { concatFrames, encodeFrame, wrapSurfelBlock } from "../../src/mlt-frame.js";
-import { encodeSurfelBlock, type Surfel } from "../../src/surfel-block.js";
+import { surfelToSplat } from "../../src/splat.js";
+import { encodeSurfelBlock, type Splat, type Surfel } from "../../src/surfel-block.js";
 import { tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 import { blockTiles, splitByTile, type TileBlock, type TileSurfels } from "../../src/tiling.js";
 
@@ -32,18 +33,17 @@ const SYNTHETIC: Record<Exclude<DemoTileset, "toy-gs">, { block: TileBlock; gene
 };
 
 /**
- * Block and block-local surfels of a tileset. Synthetic fixtures use a fixed
+ * Block and block-local splats of a tileset. Synthetic fixtures use a fixed
  * block with DEMO_TILE at its north-west corner, sized for that tile's
  * width. `toy-gs` converts the toy 3DGS PLY around DEMO_ORIGIN, and its
  * block follows from the data's extent.
  */
-function tilesetContent(tileset: DemoTileset): { block: TileBlock; surfels: Surfel[] } {
+function tilesetContent(tileset: DemoTileset): { block: TileBlock; splats: Splat[] } {
   if (tileset === "toy-gs") {
-    const discs = gaussiansFromPly(readPly(toyGaussianPly())).map(gaussianToDisc);
-    return placeDiscs(discs, DEMO_ORIGIN, DEMO_TILE.z);
+    return placeGaussians(gaussiansFromPly(readPly(toyGaussianPly())), DEMO_ORIGIN, DEMO_TILE.z);
   }
   const { block, generate } = SYNTHETIC[tileset];
-  return { block, surfels: generate({ tileWidthMetres: tileWidthMetres(block.origin) }) };
+  return { block, splats: generate({ tileWidthMetres: tileWidthMetres(block.origin) }).map(surfelToSplat) };
 }
 
 export function isDemoTileset(name: string): name is DemoTileset {
@@ -68,21 +68,21 @@ export function demoTilePath(tileset: DemoTileset, t: TileAddress): string {
 /** Synthetic unknown frame placed before the surfel frame, to exercise skipping. */
 export const DEMO_UNKNOWN_TAG = 0x7e;
 
-/** Surfels of every tile of a tileset, distributed by the centre-ownership rule (src/tiling.ts). */
-export function demoTileSurfels(tileset: DemoTileset): TileSurfels[] {
-  const { block, surfels } = tilesetContent(tileset);
-  return splitByTile(surfels, block);
+/** Splats of every tile of a tileset, distributed by the centre-ownership rule (src/tiling.ts). */
+export function demoTileSplats(tileset: DemoTileset): TileSurfels<Splat>[] {
+  const { block, splats } = tilesetContent(tileset);
+  return splitByTile(splats, block);
 }
 
 /** Bytes of one tile: a synthetic unknown frame, then the surfel frame (with an optional level table). */
-export function encodeDemoTile(surfels: readonly Surfel[], levels?: readonly number[]): Uint8Array {
+export function encodeDemoTile(splats: readonly Splat[], levels?: readonly number[]): Uint8Array {
   return concatFrames([
     encodeFrame(DEMO_UNKNOWN_TAG, new TextEncoder().encode("dorayaki demo: unknown frame")),
-    wrapSurfelBlock(encodeSurfelBlock(surfels, levels)),
+    wrapSurfelBlock(encodeSurfelBlock(splats, levels)),
   ]);
 }
 
 /** Deterministic bytes of every tile of a tileset. */
 export function buildDemoTiles(tileset: DemoTileset): Array<{ tile: TileAddress; bytes: Uint8Array }> {
-  return demoTileSurfels(tileset).map(({ tile, surfels }) => ({ tile, bytes: encodeDemoTile(surfels) }));
+  return demoTileSplats(tileset).map(({ tile, surfels }) => ({ tile, bytes: encodeDemoTile(surfels) }));
 }

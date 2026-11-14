@@ -208,19 +208,25 @@ npm run build       # tsc src/ into dist/
 npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang,boundary,toy-gs}/18/x/y.mlt)
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
-npm run demo:numazu # build demo/tiles/numazu/ from data/ (download: README)
+npm run demo:numazu # build demo/tiles/numazu/ and dorayaki-numazu.pmtiles from data/ (download: README); DORAYAKI_NUMAZU_PROFILE=medium|fine for the others (default: coarse)
 npm run site        # rebuild the GitHub Pages site in docs/ (commit the output)
 npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size table
+npm run measure:omission  # E002: omission strategies on the Numazu data
+npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
+npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
+DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  # list Numazu on the site
 ```
 
 Current repository structure:
 
 ```text
-src/surfel-block.ts          naive Surfel Block encoder/decoder
+src/surfel-block.ts          Surfel Block encoder/decoder (v4: 16-byte quantized splats)
+src/splat.ts                 splat geometry: rotations, disc <-> splat conversions
 src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/tiling.ts                centre-ownership split of a tile block into tiles
 src/progressive.ts           nested refinement order for maxzoom tiles (v3 level table)
+src/pmtiles.ts               minimal PMTiles v3 writer (no leaf directories)
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/fixtures/overhang.ts     deterministic overhang fixture generator
@@ -228,23 +234,28 @@ src/fixtures/sampling.ts     per-patch sampling rule shared by fixtures
 src/fixtures/boundary.ts     deterministic boundary fixture (2 x 2 tiles)
 src/fixtures/toy-gaussians.ts  deterministic toy 3DGS PLY (stand-in for real data)
 src/gaussian/ply.ts          minimal binary little-endian PLY reader/writer
-src/gaussian/to-surfels.ts   lossy 3DGS Gaussian -> v2 surfel mapping and placement
+src/gaussian/to-surfels.ts   3DGS Gaussian -> splat mapping and tile placement
 src/pointcloud/las.ts        minimal LAS reader (formats 0-3, no LAZ)
 src/pointcloud/voxel-gaussians.ts  one Gaussian per voxel from a point cloud
+src/pointcloud/pyramid.ts    tile pyramid from a point cloud: aggregated zooms + maxzoom levels
 src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
 scripts/build-numazu-demo.ts builds the numazu tileset from data/ (not committed)
 src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
 scripts/generate-demo-tile.ts  writes one demo tile per tileset
 demo/index.html              demo page (MapLibre GL JS via import map)
-demo/src/                    demo modules: load, decode, tile selection, placement, GPU, layer
-NOTES.md                     observed experimental findings
+demo/src/                    demo modules: load, TileJSON, decode, tile selection, placement, splat instances, GPU, layer
+NOTES.md                     observed experimental findings (chronological)
+EXPERIMENTS.md               experiments E001, E002, ...: question, measurements, decision
 docs/                        built GitHub Pages site only (npm run site; do not edit by hand)
 scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline), worker, synthetic tiles
-documents/surfel-block-format.md  byte layout of the naive Surfel Block
+documents/surfel-block-format.md  byte layout and quantization of the Surfel Block (v4)
 documents/mlt-frame.md            experimental MLT frame envelope
 documents/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
 scripts/measure-numazu.ts    density and size measurements on the Numazu data
+scripts/measure-omission.ts  E002 omission measurements
+scripts/measure-codec.ts     codec timing in Node
+scripts/measure-coarse.ts    E003 coarse Gaussian measurements
 ```
 
 Do not invent commands that are not present in package.json.

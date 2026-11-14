@@ -18,8 +18,11 @@
  * self-contained; the build fails if it mentions another maplibre-gl*.mjs
  * (true up to 6.12.x, which imported maplibre-gl-shared.mjs).
  *
- * The Numazu point-cloud tileset is not published (about 17.6 MB of derived
- * binaries; see README). The site build hides its link.
+ * The Numazu point-cloud tileset (VIRTUAL SHIZUOKA, CC BY) is not copied
+ * into docs/. It is hosted as dorayaki-numazu.pmtiles on stars, where Martin
+ * serves it as z/x/y. Set DORAYAKI_NUMAZU_TILEJSON to its TileJSON URL
+ * (https://stars.optgeo.org/dorayaki-numazu) to list it on the site; without
+ * it the site omits Numazu and hides its link.
  */
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -31,6 +34,10 @@ import { DEMO_TILESETS, buildDemoTiles, tileUrlPath } from "../demo/src/demo-til
 const OUT = "docs";
 const MAPLIBRE_DIST = "node_modules/maplibre-gl/dist";
 const WORKER = "maplibre-gl-worker.mjs";
+
+const numazuTileJson = process.env.DORAYAKI_NUMAZU_TILEJSON;
+const externals: Record<string, string> = numazuTileJson ? { numazu: numazuTileJson } : {};
+console.log(numazuTileJson ? `Numazu from ${numazuTileJson}` : "DORAYAKI_NUMAZU_TILEJSON not set: the site omits Numazu");
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
@@ -44,7 +51,7 @@ const result = await build({
   write: false,
   logLevel: "warning",
   define: {
-    __DORAYAKI_EXTERNAL_TILESETS__: "[]",
+    __DORAYAKI_EXTERNAL_TILESETS__: JSON.stringify(externals),
     __DORAYAKI_WORKER_URL__: JSON.stringify(WORKER),
   },
 });

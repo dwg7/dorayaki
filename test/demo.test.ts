@@ -2,27 +2,29 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { decodeSurfelTile } from "../demo/src/decode-tile.js";
-import { DEMO_TILE, DEMO_UNKNOWN_TAG, buildDemoTiles, demoTilePath, demoTileSurfels, isDemoTileset, tilesetTiles } from "../demo/src/demo-tile.js";
+import { DEMO_TILE, DEMO_UNKNOWN_TAG, buildDemoTiles, demoTilePath, demoTileSplats, isDemoTileset, tilesetTiles } from "../demo/src/demo-tile.js";
 import { metricToMercatorMatrix, multiplyMat4, transformPoint } from "../demo/src/tile-matrix.js";
 import { generateBridge } from "../src/fixtures/bridge.js";
 import { generateOverhang } from "../src/fixtures/overhang.js";
 import { EXPERIMENTAL_SURFEL_FRAME_TAG, concatFrames, readFrames, wrapSurfelBlock } from "../src/mlt-frame.js";
+import { surfelToSplat } from "../src/splat.js";
 import { encodeSurfelBlock } from "../src/surfel-block.js";
 import { tileWidthMetres } from "../src/tile-geometry.js";
+import { expectSplatsClose } from "./helpers.js";
 
 const W = tileWidthMetres(DEMO_TILE);
 
 test("demo tiles are an unknown frame followed by the fixture's surfel frame", () => {
   const cases = [
-    ["bridge", generateBridge({ tileWidthMetres: W })],
-    ["overhang", generateOverhang({ tileWidthMetres: W })],
+    ["bridge", generateBridge({ tileWidthMetres: W }).map(surfelToSplat)],
+    ["overhang", generateOverhang({ tileWidthMetres: W }).map(surfelToSplat)],
   ] as const;
   for (const [tileset, surfels] of cases) {
     const [only, ...rest] = buildDemoTiles(tileset);
     assert.equal(rest.length, 0);
     const tile = (only as { bytes: Uint8Array }).bytes;
     assert.deepEqual(readFrames(tile).map((f) => f.tag), [DEMO_UNKNOWN_TAG, EXPERIMENTAL_SURFEL_FRAME_TAG]);
-    assert.deepEqual(decodeSurfelTile(tile), surfels);
+    expectSplatsClose(decodeSurfelTile(tile), surfels);
     assert.deepEqual(buildDemoTiles(tileset)[0]?.bytes, tile);
     assert.equal(demoTilePath(tileset, DEMO_TILE), `demo/tiles/${tileset}/18/234000/96256.mlt`);
   }
@@ -38,10 +40,10 @@ test("the boundary tileset is a 2 × 2 block whose tiles decode to the split fix
     { z: 18, x: 234000, y: 96257 },
     { z: 18, x: 234001, y: 96257 },
   ]);
-  const expected = demoTileSurfels("boundary");
+  const expected = demoTileSplats("boundary");
   const built = buildDemoTiles("boundary");
   assert.deepEqual(built.map((b) => b.tile), tiles);
-  built.forEach((b, n) => assert.deepEqual(decodeSurfelTile(b.bytes), expected[n]?.surfels));
+  built.forEach((b, n) => expectSplatsClose(decodeSurfelTile(b.bytes), expected[n]!.surfels));
   assert.ok(expected.every((t) => t.surfels.length > 0));
 });
 

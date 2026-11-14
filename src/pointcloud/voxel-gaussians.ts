@@ -12,6 +12,7 @@
  * written as a reference-3DGS PLY with gaussiansToPlyRows.
  */
 import { SH_C0, type Gaussian } from "../gaussian/to-surfels.js";
+import { quaternionFromAxes } from "../splat.js";
 
 export interface LocalPoints {
   count: number;
@@ -26,6 +27,13 @@ export interface VoxelOptions {
   minPoints?: number;
   /** Lower bound on a Gaussian's scale (metres); avoids log(0) for planar voxels. */
   minScale?: number;
+  /**
+   * Scale (metres) given to all three axes of a voxel with fewer than 3
+   * points, whose covariance cannot define a shape. Defaults to minScale.
+   * Applying a large floor to every voxel instead would flatten nothing:
+   * it erases the thin axis of planar voxels (E003).
+   */
+  degenerateScale?: number;
   opacity?: number;
 }
 
@@ -63,35 +71,14 @@ export function symmetricEigen3(m: readonly number[]): { values: [number, number
   return { values: [a[0]![0]!, a[1]![1]!, a[2]![2]!], vectors: v };
 }
 
-/** Unit quaternion (w, x, y, z) of a proper rotation matrix given by its columns. */
-export function quaternionFromAxes(c0: number[], c1: number[], c2: number[]): [number, number, number, number] {
-  const [m00, m10, m20] = c0 as [number, number, number];
-  const [m01, m11, m21] = c1 as [number, number, number];
-  const [m02, m12, m22] = c2 as [number, number, number];
-  const tr = m00 + m11 + m22;
-  let q: [number, number, number, number];
-  if (tr > 0) {
-    const s = Math.sqrt(tr + 1) * 2;
-    q = [0.25 * s, (m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s];
-  } else if (m00 > m11 && m00 > m22) {
-    const s = Math.sqrt(1 + m00 - m11 - m22) * 2;
-    q = [(m21 - m12) / s, 0.25 * s, (m01 + m10) / s, (m02 + m20) / s];
-  } else if (m11 > m22) {
-    const s = Math.sqrt(1 + m11 - m00 - m22) * 2;
-    q = [(m02 - m20) / s, (m01 + m10) / s, 0.25 * s, (m12 + m21) / s];
-  } else {
-    const s = Math.sqrt(1 + m22 - m00 - m11) * 2;
-    q = [(m10 - m01) / s, (m02 + m20) / s, (m12 + m21) / s, 0.25 * s];
-  }
-  const len = Math.hypot(...q);
-  return q.map((x) => x / len) as [number, number, number, number];
-}
+export { quaternionFromAxes };
 
 export function fitVoxelGaussians(points: LocalPoints, options: VoxelOptions): Gaussian[] {
   const size = options.voxelSize;
   if (!(size > 0)) throw new RangeError("voxelSize must be positive");
   const minPoints = options.minPoints ?? 4;
   const minScale = options.minScale ?? 0.001;
+  const degenerateScale = options.degenerateScale ?? minScale;
   const opacity = options.opacity ?? 0.95;
 
   // Accumulate sums per voxel: count, Σx (3), Σxxᵀ (6), Σrgb (3).
@@ -127,10 +114,11 @@ export function fitVoxelGaussians(points: LocalPoints, options: VoxelOptions): G
     if (det < 0) c2 = c2.map((v) => -v);
     out.push({
       position: [mx, my, mz],
-      scales: values.map((ev) => Math.max(minScale, Math.sqrt(Math.max(0, ev)))) as [number, number, number],
+      scales: values.map((ev) => Math.max(n < 3 ? degenerateScale : minScale, Math.sqrt(Math.max(0, ev)))) as [number, number, number],
       rotation: quaternionFromAxes(c0, c1, c2),
       colour: [s[10]! / n, s[11]! / n, s[12]! / n],
       opacity,
+      support: n,
     });
   }
   return out;

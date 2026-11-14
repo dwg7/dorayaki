@@ -1,15 +1,17 @@
 /**
- * Toy mapping from 3D Gaussian Splatting (3DGS) Gaussians to Surfel Block
- * v2 surfels, and their placement on tiles.
+ * Mapping from 3D Gaussian Splatting (3DGS) Gaussians to Surfel Block v4
+ * splats, and their placement on tiles.
  *
- * This mapping is deliberately lossy. It exists to observe what the
- * current circular-disc record cannot carry, not to reproduce 3DGS:
+ * A Gaussian's position, three scales and rotation map directly onto a
+ * splat (only the frame changes: east-north-up to east-south-up, and
+ * quantization). What is still dropped:
  *
- * - normal = the Gaussian's shortest axis;
- * - radius = RADIUS_SIGMAS · √(s_a · s_b), where s_a and s_b are the two
- *   longer axis scales (an isotropic disc replaces the ellipse);
  * - colour = the SH degree-0 (DC) term only; higher SH terms are dropped;
- * - alpha = sigmoid(opacity), stored but not used by the opaque renderer.
+ * - alpha = sigmoid(opacity), stored; the renderer may or may not use it.
+ *
+ * `gaussianToDisc` is a statistics helper: the circular reduction the
+ * v1-v3 records used (normal = shortest axis, radius = RADIUS_SIGMAS ·
+ * √(s_a · s_b)), with flatness and anisotropy.
  *
  * PLY conventions follow the reference 3DGS implementation: scale_* are
  * log scales, opacity is a logit, rot_0..rot_3 is a quaternion (w, x, y, z),
@@ -19,7 +21,8 @@
  * geographic origin. It uses the Mercator scale at the origin latitude for
  * the whole set, which is adequate for a toy extent of a few tiles.
  */
-import type { Surfel } from "../surfel-block.js";
+import type { Splat } from "../surfel-block.js";
+import { quaternionFromAxes, rotationAxes } from "../splat.js";
 import { EARTH_CIRCUMFERENCE_METRES } from "../tile-geometry.js";
 import type { TileBlock } from "../tiling.js";
 import type { PlyVertices } from "./ply.js";
@@ -40,6 +43,8 @@ export interface Gaussian {
   colour: [number, number, number];
   /** [0, 1]. */
   opacity: number;
+  /** Number of source points behind this Gaussian, when known (point-cloud fits). */
+  support?: number;
 }
 
 const REQUIRED = ["x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2", "opacity",
@@ -70,16 +75,7 @@ export function gaussiansFromPly(ply: PlyVertices): Gaussian[] {
   return out;
 }
 
-/** Columns of the rotation matrix of a unit quaternion (w, x, y, z): the Gaussian's axes. */
-export function rotationAxes([w, x, y, z]: readonly [number, number, number, number]): [
-  [number, number, number], [number, number, number], [number, number, number],
-] {
-  return [
-    [1 - 2 * (y * y + z * z), 2 * (x * y + w * z), 2 * (x * z - w * y)],
-    [2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x)],
-    [2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y)],
-  ];
-}
+export { rotationAxes };
 
 export interface Disc {
   /** East, north, up, metres. */
@@ -93,6 +89,8 @@ export interface Disc {
   anisotropy: number;
   /** Shortest scale / geometric mean of the in-plane scales; near 0 means flat. */
   flatness: number;
+  /** Source points behind the Gaussian, when known. */
+  support?: number;
 }
 
 export function gaussianToDisc(g: Gaussian): Disc {
@@ -110,6 +108,7 @@ export function gaussianToDisc(g: Gaussian): Disc {
     opacity: g.opacity,
     anisotropy: sb / sa,
     flatness: g.scales[n]! / inPlane,
+    ...(g.support !== undefined ? { support: g.support } : {}),
   };
 }
 
@@ -118,21 +117,26 @@ export interface GeoOrigin {
   lat: number;
 }
 
+/** A splat in block-local coordinates (x, y in tile units over the whole block) with its point support. */
+export type PlacedSplat = Splat & { support?: number };
+
 /**
- * Place east-north-up discs around a geographic origin on z-level tiles.
- * Returns the smallest tile block containing every disc centre, and the
- * surfels in that block's block-local coordinates (see src/tiling.ts).
+ * Place east-north-up Gaussians around a geographic origin on zoom-level
+ * tiles. Returns the smallest tile block containing every centre, and the
+ * splats in that block's block-local coordinates (see src/tiling.ts;
+ * x, y span [0, cols) and [0, rows) tile units). Rotations are converted
+ * from east-north-up to the east-south-up frame of a block.
  */
-export function placeDiscs(discs: readonly Disc[], origin: GeoOrigin, zoom: number): { block: TileBlock; surfels: Surfel[] } {
-  if (discs.length === 0) throw new Error("no discs to place");
+export function placeGaussians(gaussians: readonly Gaussian[], origin: GeoOrigin, zoom: number): { block: TileBlock; splats: PlacedSplat[] } {
+  if (gaussians.length === 0) throw new Error("no Gaussians to place");
   const n = 2 ** zoom;
   const lat0 = (origin.lat * Math.PI) / 180;
   const u0 = ((origin.lng + 180) / 360) * n; // tile units
   const v0 = ((1 - Math.asinh(Math.tan(lat0)) / Math.PI) / 2) * n;
   const tilesPerMetre = n / (EARTH_CIRCUMFERENCE_METRES * Math.cos(lat0));
 
-  const tx = discs.map((d) => u0 + d.position[0] * tilesPerMetre);
-  const ty = discs.map((d) => v0 - d.position[1] * tilesPerMetre);
+  const tx = gaussians.map((g) => u0 + g.position[0] * tilesPerMetre);
+  const ty = gaussians.map((g) => v0 - g.position[1] * tilesPerMetre);
   // Loops, not Math.min(...array): spreading hundreds of thousands of
   // arguments overflows the call stack.
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -148,24 +152,21 @@ export function placeDiscs(discs: readonly Disc[], origin: GeoOrigin, zoom: numb
     rows: Math.floor(maxY) - y0 + 1,
   };
   const byte = (v: number): number => Math.round(clamp01(v) * 255);
-  const surfels = discs.map((d, i): Surfel => ({
-    x: Math.fround(tx[i]! - x0),
-    y: Math.fround(ty[i]! - y0),
-    z: Math.fround(d.position[2]),
-    // East-north-up -> east-south-up.
-    nx: Math.fround(d.normal[0]),
-    ny: Math.fround(-d.normal[1]),
-    nz: Math.fround(d.normal[2]),
-    radius: Math.fround(d.radius),
-    r: byte(d.colour[0]),
-    g: byte(d.colour[1]),
-    b: byte(d.colour[2]),
-    a: byte(d.opacity),
-  }));
-  // A centre rounded to float32 can land exactly on the block's far edge; keep it inside.
-  for (const s of surfels) {
-    if (s.x >= block.cols) s.x = Math.fround(block.cols - 2 ** -20);
-    if (s.y >= block.rows) s.y = Math.fround(block.rows - 2 ** -20);
-  }
-  return { block, surfels };
+  const splats = gaussians.map((g, i): PlacedSplat => {
+    // East-north-up -> east-south-up flips y; flipping one local axis as
+    // well keeps the matrix a proper rotation (axes are unsigned lines).
+    const [a0, a1, a2] = rotationAxes(g.rotation);
+    const [qw, qx, qy, qz] = quaternionFromAxes([-a0[0], a0[1], -a0[2]], [a1[0], -a1[1], a1[2]], [a2[0], -a2[1], a2[2]]);
+    return {
+      x: tx[i]! - x0,
+      y: ty[i]! - y0,
+      z: g.position[2],
+      sx: g.scales[0], sy: g.scales[1], sz: g.scales[2],
+      qw, qx, qy, qz,
+      r: byte(g.colour[0]), g: byte(g.colour[1]), b: byte(g.colour[2]),
+      a: byte(g.opacity),
+      ...(g.support !== undefined ? { support: g.support } : {}),
+    };
+  });
+  return { block, splats };
 }

@@ -10,7 +10,12 @@ import {
   generateBridge as generateBridgeAt,
   generateBridgeParts as generateBridgePartsAt,
 } from "../src/fixtures/bridge.js";
+import { splatToSurfel, surfelToSplat } from "../src/splat.js";
 import { decodeSurfelBlock, encodeSurfelBlock, surfelBlockByteLength, type Surfel } from "../src/surfel-block.js";
+import { expectSplatsClose } from "./helpers.js";
+
+/** Normals come back from a quantized rotation: snap each component to the nearest integer. */
+const snap = (v: number): number => Math.round(v) + 0;
 
 /**
  * Tests use a 128 m tile: maximum pitch 8 m. Each 16 m × 11 m pier face is
@@ -21,10 +26,10 @@ const generateBridge = () => generateBridgeAt({ tileWidthMetres: WIDTH });
 const generateBridgeParts = () => generateBridgePartsAt({ tileWidthMetres: WIDTH });
 
 /**
- * SHA-256 of encodeSurfelBlock(generateBridge()) on a 128 m tile. If this changes, the
+ * SHA-256 of encodeSurfelBlock(generateBridge().map(surfelToSplat)) on a 128 m tile. If this changes, the
  * fixture or the wire format changed; update it deliberately.
  */
-const BRIDGE_SHA256 = "ea0882218837d4df7196e3fadad079243b773bdf7301f07bb4e1d8b53c31302f";
+const BRIDGE_SHA256 = "fdde0c1998093173d6a282ffc5fc34fcb476a318fbef7771c11d49ba066979fc";
 
 const C = 1 / 16;
 const centre = (k: number): number => (k + 0.5) * C;
@@ -42,9 +47,13 @@ function columns(surfels: readonly Surfel[]): Map<string, Surfel[]> {
   return map;
 }
 
-function roundTrip(): { original: Surfel[]; decoded: Surfel[] } {
+function roundTrip() {
   const original = generateBridge();
-  return { original, decoded: decodeSurfelBlock(encodeSurfelBlock(original)) };
+  const splats = original.map(surfelToSplat);
+  const decodedSplats = decodeSurfelBlock(encodeSurfelBlock(splats));
+  // The disc view of the decoded splats, with axis-aligned normals snapped.
+  const decoded = decodedSplats.map(splatToSurfel).map((s) => ({ ...s, nx: snap(s.nx), ny: snap(s.ny), nz: snap(s.nz) }));
+  return { original, splats, decodedSplats, decoded };
 }
 
 test("bridge has ground, deck, underside, and supports", () => {
@@ -83,15 +92,15 @@ test("supports are vertical faces between ground and underside", () => {
   assert.deepEqual([...normals].sort(), ["-1,0", "0,-1", "0,1", "1,0"]);
 });
 
-test("bridge survives an encode/decode round trip, in order", () => {
-  const { original, decoded } = roundTrip();
-  assert.equal(encodeSurfelBlock(original).byteLength, surfelBlockByteLength(432));
-  assert.deepEqual(decoded, original);
+test("bridge survives an encode/decode round trip, in order, within the quantization tolerances", () => {
+  const { splats, decodedSplats } = roundTrip();
+  assert.equal(encodeSurfelBlock(splats).byteLength, surfelBlockByteLength(432));
+  expectSplatsClose(decodedSplats, splats);
 });
 
 test("bridge fixture is deterministic", () => {
-  const bytes = encodeSurfelBlock(generateBridge());
-  assert.deepEqual(bytes, encodeSurfelBlock(generateBridge()));
+  const bytes = encodeSurfelBlock(generateBridge().map(surfelToSplat));
+  assert.deepEqual(bytes, encodeSurfelBlock(generateBridge().map(surfelToSplat)));
   assert.equal(createHash("sha256").update(bytes).digest("hex"), BRIDGE_SHA256);
 });
 

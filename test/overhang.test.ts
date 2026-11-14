@@ -11,7 +11,12 @@ import {
   generateOverhang as generateOverhangAt,
   generateOverhangParts as generateOverhangPartsAt,
 } from "../src/fixtures/overhang.js";
+import { splatToSurfel, surfelToSplat } from "../src/splat.js";
 import { decodeSurfelBlock, encodeSurfelBlock, surfelBlockByteLength, type Surfel } from "../src/surfel-block.js";
+import { expectSplatsClose } from "./helpers.js";
+
+/** Normals come back from a quantized rotation: snap each component to the nearest integer. */
+const snap = (v: number): number => Math.round(v) + 0;
 
 /** Tests use a 128 m tile: pitch 8 m, so each 8 m face gets one row. */
 const WIDTH = 128;
@@ -19,10 +24,10 @@ const generateOverhang = () => generateOverhangAt({ tileWidthMetres: WIDTH });
 const generateOverhangParts = () => generateOverhangPartsAt({ tileWidthMetres: WIDTH });
 
 /**
- * SHA-256 of encodeSurfelBlock(generateOverhang()) on a 128 m tile. If this
+ * SHA-256 of encodeSurfelBlock(generateOverhang().map(surfelToSplat)) on a 128 m tile. If this
  * changes, the fixture or the wire format changed; update it deliberately.
  */
-const OVERHANG_SHA256 = "4441e324c2a1ca40254e85c54485b46eb2f1eef000932d641efec19ffec199ea";
+const OVERHANG_SHA256 = "7a8e3128f7c9eff44f1b19450861853a034f924585c9e9b02ac75d1225ea63fa";
 
 const centre = (k: number): number => (k + 0.5) / 16;
 
@@ -36,7 +41,11 @@ function columns(surfels: readonly Surfel[]): Map<string, Surfel[]> {
   return map;
 }
 
-const roundTrip = (): Surfel[] => decodeSurfelBlock(encodeSurfelBlock(generateOverhang()));
+/** The disc view of the decoded splats, with axis-aligned normals snapped. */
+const roundTrip = (): Surfel[] =>
+  decodeSurfelBlock(encodeSurfelBlock(generateOverhang().map(surfelToSplat)))
+    .map(splatToSurfel)
+    .map((s) => ({ ...s, nx: snap(s.nx), ny: snap(s.ny), nz: snap(s.nz) }));
 
 test("overhang has top, lip, underside, back wall, and ground", () => {
   const p = generateOverhangParts();
@@ -62,16 +71,16 @@ test("vertical faces span their height ranges", () => {
   assert.ok(OVERHANG_WALL_Y < OVERHANG_LIP_Y);
 });
 
-test("overhang survives an encode/decode round trip, in order", () => {
-  const original = generateOverhang();
-  const bytes = encodeSurfelBlock(original);
-  assert.equal(bytes.byteLength, surfelBlockByteLength(416));
-  assert.deepEqual(decodeSurfelBlock(bytes), original);
+test("overhang survives an encode/decode round trip, in order, within the quantization tolerances", () => {
+  const splats = generateOverhang().map(surfelToSplat);
+  const bytes = encodeSurfelBlock(splats);
+  assert.equal(bytes.byteLength, surfelBlockByteLength(splats.length));
+  expectSplatsClose(decodeSurfelBlock(bytes), splats);
 });
 
 test("overhang fixture is deterministic", () => {
-  const bytes = encodeSurfelBlock(generateOverhang());
-  assert.deepEqual(bytes, encodeSurfelBlock(generateOverhang()));
+  const bytes = encodeSurfelBlock(generateOverhang().map(surfelToSplat));
+  assert.deepEqual(bytes, encodeSurfelBlock(generateOverhang().map(surfelToSplat)));
   assert.equal(createHash("sha256").update(bytes).digest("hex"), OVERHANG_SHA256);
 });
 

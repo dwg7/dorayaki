@@ -17,12 +17,16 @@
     "demo": "npm run demo:tile && esbuild demo/src/main.ts --bundle --format=esm --external:maplibre-gl --sourcemap --outdir=demo/build --servedir=. --serve=127.0.0.1:8000",
     "demo:numazu": "esbuild scripts/build-numazu-demo.ts --bundle --platform=node --format=esm --outfile=demo/build/build-numazu-demo.mjs --log-level=warning && node demo/build/build-numazu-demo.mjs",
     "measure:numazu": "esbuild scripts/measure-numazu.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-numazu.mjs --log-level=warning && node demo/build/measure-numazu.mjs",
-    "site": "esbuild scripts/build-site.ts --bundle --platform=node --format=esm --packages=external --outfile=demo/build/build-site.mjs --log-level=warning && node demo/build/build-site.mjs"
+    "site": "esbuild scripts/build-site.ts --bundle --platform=node --format=esm --packages=external --outfile=demo/build/build-site.mjs --log-level=warning && node demo/build/build-site.mjs",
+    "measure:omission": "esbuild scripts/measure-omission.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-omission.mjs --log-level=warning && node demo/build/measure-omission.mjs",
+    "measure:codec": "esbuild scripts/measure-codec.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-codec.mjs --log-level=warning && node demo/build/measure-codec.mjs",
+    "measure:coarse": "esbuild scripts/measure-coarse.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-coarse.mjs --log-level=warning && node demo/build/measure-coarse.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
     "esbuild": "0.28.2",
     "maplibre-gl": "6.16.0",
+    "pmtiles": "4.5.0",
     "typescript": "7.0.2"
   }
 }

@@ -1,38 +1,55 @@
 /**
- * GPU resources for surfels: shader program, buffer upload, draw call.
+ * GPU resources for splats: shader program, buffer upload, draw call.
  *
- * Deliberately simple: one instanced quad per surfel, oriented in the
- * plane perpendicular to its normal, with fragments outside the unit
- * circle discarded (a flat disc). Lambert shading from a fixed light makes
- * up-, down- and side-facing surfaces distinguishable. No knowledge of
- * MapLibre or of the wire format; input is decoded Surfel objects.
+ * Deliberately simple: one instanced quad per splat. A splat with a
+ * preferred orientation is drawn as its 2-sigma ellipse, in the plane of
+ * its two longer axes (the quad's corners are `centre ± axisU ± axisV`
+ * and fragments outside the unit circle are discarded). A splat with no
+ * preferred orientation ("round") is drawn as a camera-facing disc.
+ * Two-sided Lambert shading from a fixed light: the sign of a splat's axis
+ * carries no meaning. No knowledge of MapLibre or of the wire format; input
+ * is decoded Splat objects (see splat-instances.ts).
  */
-import type { Surfel } from "../../src/surfel-block.js";
+import type { Splat } from "../../src/surfel-block.js";
+import { cameraAxes, splatInstances } from "./splat-instances.js";
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
-uniform mat4 u_matrix;   // local metric frame (metres; east, south, up) -> clip
+uniform mat4 u_matrix;      // local metric frame (metres; east, south, up) -> clip
 uniform float u_tile_width; // metres per tile-local unit
-uniform float u_min_radius; // metres; radius floor when drawing a progressive prefix
-uniform vec3 u_light;    // local metric frame, normalized
-in vec2 a_corner;        // quad corner in [-1, 1]^2
-in vec3 a_position;      // x, y tile-local; z metres
-in vec3 a_normal;
-in float a_radius;       // metres
+uniform float u_min_radius; // metres; semi-axis floor when drawing a progressive prefix
+uniform vec3 u_light;       // local metric frame, normalized
+uniform vec3 u_right;       // camera right in the local metric frame, normalized
+uniform vec3 u_up;          // camera up in the local metric frame, normalized
+in vec2 a_corner;           // quad corner in [-1, 1]^2
+in vec3 a_position;         // x, y tile-local; z metres
+in vec3 a_axis_u;           // semi-axis vector along the major axis, metres
+in vec3 a_axis_v;           // semi-axis vector along the minor axis, metres
+in vec3 a_normal;           // shortest axis
+in float a_round;           // 1: camera-facing disc of radius |a_axis_u|
 in vec4 a_color;
 out vec2 v_corner;
 out vec3 v_color;
 void main() {
-  vec3 n = normalize(a_normal);
-  vec3 helper = abs(n.z) < 0.9 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
-  vec3 t = normalize(cross(helper, n));
-  vec3 b = cross(n, t);
   vec3 centre = vec3(a_position.xy * u_tile_width, a_position.z);
-  float radius = max(a_radius, u_min_radius);
-  vec3 p = centre + radius * (a_corner.x * t + a_corner.y * b);
+  vec3 u = a_axis_u;
+  vec3 v = a_axis_v;
+  float shade;
+  if (a_round > 0.5) {
+    float r = max(length(a_axis_u), u_min_radius);
+    u = u_right * r;
+    v = u_up * r;
+    shade = 0.8;
+  } else {
+    float lu = max(length(u), 1e-9);
+    float lv = max(length(v), 1e-9);
+    u *= max(1.0, u_min_radius / lu);
+    v *= max(1.0, u_min_radius / lv);
+    shade = 0.35 + 0.65 * abs(dot(normalize(a_normal), u_light));
+  }
+  vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
-  float shade = 0.35 + 0.65 * max(dot(n, u_light), 0.0);
   v_color = a_color.rgb * shade;
 }`;
 
@@ -55,6 +72,8 @@ export interface SurfelProgram {
   uTileWidth: WebGLUniformLocation;
   uMinRadius: WebGLUniformLocation;
   uLight: WebGLUniformLocation;
+  uRight: WebGLUniformLocation;
+  uUp: WebGLUniformLocation;
 }
 
 export interface SurfelBuffers {
@@ -82,7 +101,7 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
 }
 
 // Fixed attribute locations so the VAO does not depend on the program.
-const LOC = { corner: 0, position: 1, normal: 2, radius: 3, color: 4 } as const;
+const LOC = { corner: 0, position: 1, axisU: 2, axisV: 3, normal: 4, round: 5, color: 6 } as const;
 
 export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
   const vs = compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
@@ -93,8 +112,10 @@ export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
   gl.attachShader(program, fs);
   gl.bindAttribLocation(program, LOC.corner, "a_corner");
   gl.bindAttribLocation(program, LOC.position, "a_position");
+  gl.bindAttribLocation(program, LOC.axisU, "a_axis_u");
+  gl.bindAttribLocation(program, LOC.axisV, "a_axis_v");
   gl.bindAttribLocation(program, LOC.normal, "a_normal");
-  gl.bindAttribLocation(program, LOC.radius, "a_radius");
+  gl.bindAttribLocation(program, LOC.round, "a_round");
   gl.bindAttribLocation(program, LOC.color, "a_color");
   gl.linkProgram(program);
   gl.deleteShader(vs);
@@ -102,26 +123,24 @@ export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
     throw new Error(`program link failed: ${gl.getProgramInfoLog(program)}`);
   }
-  const uMatrix = gl.getUniformLocation(program, "u_matrix");
-  const uTileWidth = gl.getUniformLocation(program, "u_tile_width");
-  const uMinRadius = gl.getUniformLocation(program, "u_min_radius");
-  const uLight = gl.getUniformLocation(program, "u_light");
-  if (!uMatrix || !uTileWidth || !uMinRadius || !uLight) throw new Error("missing uniform");
-  return { program, uMatrix, uTileWidth, uMinRadius, uLight };
+  const uniform = (name: string): WebGLUniformLocation => {
+    const loc = gl.getUniformLocation(program, name);
+    if (!loc) throw new Error(`missing uniform ${name}`);
+    return loc;
+  };
+  return {
+    program,
+    uMatrix: uniform("u_matrix"),
+    uTileWidth: uniform("u_tile_width"),
+    uMinRadius: uniform("u_min_radius"),
+    uLight: uniform("u_light"),
+    uRight: uniform("u_right"),
+    uUp: uniform("u_up"),
+  };
 }
 
-export function uploadSurfels(gl: WebGL2RenderingContext, surfels: readonly Surfel[]): SurfelBuffers {
-  const n = surfels.length;
-  const position = new Float32Array(n * 3);
-  const normal = new Float32Array(n * 3);
-  const radius = new Float32Array(n);
-  const color = new Uint8Array(n * 4);
-  surfels.forEach((s, i) => {
-    position.set([s.x, s.y, s.z], i * 3);
-    normal.set([s.nx, s.ny, s.nz], i * 3);
-    radius[i] = s.radius;
-    color.set([s.r, s.g, s.b, s.a], i * 4);
-  });
+export function uploadSplats(gl: WebGL2RenderingContext, splats: readonly Splat[]): SurfelBuffers {
+  const inst = splatInstances(splats);
 
   const vao = gl.createVertexArray();
   if (!vao) throw new Error("createVertexArray failed");
@@ -140,13 +159,15 @@ export function uploadSurfels(gl: WebGL2RenderingContext, surfels: readonly Surf
     gl.vertexAttribDivisor(loc, divisor);
   };
   attrib(LOC.corner, Float32Array.of(-1, -1, 1, -1, -1, 1, 1, 1), 2, gl.FLOAT, false, 0);
-  attrib(LOC.position, position, 3, gl.FLOAT, false, 1);
-  attrib(LOC.normal, normal, 3, gl.FLOAT, false, 1);
-  attrib(LOC.radius, radius, 1, gl.FLOAT, false, 1);
-  attrib(LOC.color, color, 4, gl.UNSIGNED_BYTE, true, 1);
+  attrib(LOC.position, inst.position, 3, gl.FLOAT, false, 1);
+  attrib(LOC.axisU, inst.axisU, 3, gl.FLOAT, false, 1);
+  attrib(LOC.axisV, inst.axisV, 3, gl.FLOAT, false, 1);
+  attrib(LOC.normal, inst.normal, 3, gl.FLOAT, false, 1);
+  attrib(LOC.round, inst.round, 1, gl.FLOAT, false, 1);
+  attrib(LOC.color, inst.colour, 4, gl.UNSIGNED_BYTE, true, 1);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return { vao, buffers, count: n };
+  return { vao, buffers, count: inst.count };
 }
 
 export interface DrawOptions {
@@ -156,7 +177,7 @@ export interface DrawOptions {
   tileWidthMetres: number;
   /** Draw only the first `count` instances (default: all). */
   count?: number;
-  /** Radius floor in metres (default 0). */
+  /** Semi-axis floor in metres (default 0). */
   minRadius?: number;
   depthTest: boolean;
 }
@@ -164,11 +185,14 @@ export interface DrawOptions {
 export function drawSurfels(
   gl: WebGL2RenderingContext, p: SurfelProgram, b: SurfelBuffers, opts: DrawOptions,
 ): void {
+  const { right, up } = cameraAxes(opts.matrix);
   gl.useProgram(p.program);
   gl.uniformMatrix4fv(p.uMatrix, false, opts.matrix);
   gl.uniform1f(p.uTileWidth, opts.tileWidthMetres);
   gl.uniform1f(p.uMinRadius, opts.minRadius ?? 0);
   gl.uniform3fv(p.uLight, LIGHT);
+  gl.uniform3fv(p.uRight, right);
+  gl.uniform3fv(p.uUp, up);
   if (opts.depthTest) {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
@@ -176,7 +200,7 @@ export function drawSurfels(
   } else {
     gl.disable(gl.DEPTH_TEST);
   }
-  gl.disable(gl.CULL_FACE); // discs are two-sided
+  gl.disable(gl.CULL_FACE); // splats are two-sided
   gl.bindVertexArray(b.vao);
   gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.min(b.count, opts.count ?? b.count));
   gl.bindVertexArray(null);

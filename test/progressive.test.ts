@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { BASE_CELLS, orderByRefinement, prefixCount } from "../src/progressive.js";
+import { BASE_CELLS, omitWeakRefinements, orderByRefinement, prefixCount } from "../src/progressive.js";
+import { surfelToSplat } from "../src/splat.js";
 import { decodeSurfelBlockWithLevels, encodeSurfelBlock, type Surfel } from "../src/surfel-block.js";
+import { expectSplatsClose } from "./helpers.js";
 
 const W = 32; // metres; level-0 cell = 32 / 512 = 6.25 cm
 const s = (x: number, y: number, z: number, r = 0): Surfel => ({ x, y, z, nx: 0, ny: 0, nz: 1, radius: Math.fround(0.01), r, g: 0, b: 0, a: 255 });
@@ -63,9 +65,26 @@ test("one level is the whole set; ordering is deterministic", () => {
 
 test("the ordered tile round-trips with its level table", () => {
   const { surfels, levels } = orderByRefinement(lattice(), W, 3);
-  const back = decodeSurfelBlockWithLevels(encodeSurfelBlock(surfels, levels));
+  const splats = surfels.map(surfelToSplat);
+  const back = decodeSurfelBlockWithLevels(encodeSurfelBlock(splats, levels));
   assert.deepEqual(back.levels, levels);
-  assert.deepEqual(back.surfels, surfels);
+  expectSplatsClose(back.splats, splats);
   assert.equal(prefixCount(levels, 0), 0);
   assert.equal(prefixCount(levels, 99), surfels.length);
+});
+
+test("omitting weak refinements keeps level 0 whole and thins later levels in order", () => {
+  const order = orderByRefinement(lattice(), W, 3);
+  const keep = (q: Surfel) => q.r % 2 === 0; // r encodes the lattice column
+  const thin = omitWeakRefinements(order, keep);
+  assert.equal(thin.levels[0], order.levels[0]);
+  assert.deepEqual(thin.surfels.slice(0, thin.levels[0]), order.surfels.slice(0, order.levels[0]));
+  const rest = order.surfels.slice(order.levels[0]).filter(keep);
+  assert.deepEqual(thin.surfels.slice(thin.levels[0]), rest);
+  assert.equal(thin.levels.reduce((a, b) => a + b, 0), thin.surfels.length);
+  // Level-0 coverage is unchanged.
+  const cell = (q: Surfel) => `${Math.floor(q.x * BASE_CELLS)},${Math.floor(q.y * BASE_CELLS)},${Math.floor(q.z / (W / BASE_CELLS))}`;
+  assert.deepEqual(new Set(thin.surfels.map(cell)), new Set(order.surfels.map(cell)));
+  // Keeping everything is the identity.
+  assert.deepEqual(omitWeakRefinements(order, () => true), order);
 });

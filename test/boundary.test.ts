@@ -10,7 +10,9 @@ import {
   generateBoundary as generateBoundaryAt,
   generateBoundaryParts as generateBoundaryPartsAt,
 } from "../src/fixtures/boundary.js";
+import { surfelToSplat } from "../src/splat.js";
 import { decodeSurfelBlock, encodeSurfelBlock } from "../src/surfel-block.js";
+import { expectSplatsClose } from "./helpers.js";
 import { splitByTile } from "../src/tiling.js";
 
 /** 128 m tiles: pitch 8 m; each 64 m × 20 m wall is 10 columns × 3 rows. */
@@ -24,7 +26,7 @@ const BLOCK = { origin: { z: 18, x: 1000, y: 2000 }, cols: BOUNDARY_COLS, rows: 
  * order, on 128 m tiles. If this changes, the fixture, the ownership rule,
  * or the wire format changed; update it deliberately.
  */
-const BOUNDARY_SHA256 = "c51725ffa7c541e3a063829c91dc7b66b2a01b0b2128eadd382e639eddb5d687";
+const BOUNDARY_SHA256 = "afd1859ff70664cd63ad5bb308f913a65693a005bf42eefb023da15dc97ad009";
 
 const tiles = () => splitByTile(generateBoundary(), BLOCK);
 
@@ -71,7 +73,10 @@ test("the four tiles together hold exactly the generated surfels", () => {
 });
 
 test("each tile survives an encode/decode round trip", () => {
-  for (const { surfels } of tiles()) assert.deepEqual(decodeSurfelBlock(encodeSurfelBlock(surfels)), surfels);
+  for (const { surfels } of tiles()) {
+    const splats = surfels.map(surfelToSplat);
+    expectSplatsClose(decodeSurfelBlock(encodeSurfelBlock(splats)), splats);
+  }
 });
 
 test("ground grid continues across seams without restarting", () => {
@@ -81,7 +86,7 @@ test("ground grid continues across seams without restarting", () => {
 });
 
 test("boundary tiles are deterministic", () => {
-  const bytes = () => Buffer.concat(tiles().map(({ surfels }) => encodeSurfelBlock(surfels)));
+  const bytes = () => Buffer.concat(tiles().map(({ surfels }) => encodeSurfelBlock(surfels.map(surfelToSplat))));
   assert.deepEqual(bytes(), bytes());
   assert.equal(createHash("sha256").update(bytes()).digest("hex"), BOUNDARY_SHA256);
 });

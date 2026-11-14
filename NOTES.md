@@ -295,3 +295,170 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
 - Not yet verified on GitHub Pages itself: the live URL and the
   Content-Type served for `.mlt` (read as an ArrayBuffer, so it should not
   matter).
+
+## 2026-11-14 — Numazu: omission at maxzoom; EXPERIMENTS.md
+
+- Pages is live at https://dwg7.unopengis.org/dorayaki/. The worker is
+  served as `text/javascript` (200) and `.mlt` tiles as
+  `application/octet-stream` (200). Numazu was missing because the site
+  build excluded it (17.6 MB).
+- Omission measured in `EXPERIMENTS.md` E002. Keeping level 0 whole and
+  dropping refinement surfels with support below 6 brings the whole
+  Numazu pyramid to 5,140,841 B (0.99× COPC xyz+rgb), with all level-0
+  cells covered.
+- The large-array spread trap struck again, in a measurement script
+  (`push(...keep)` with about 170 k elements). Fixed with a loop.
+- `splitByTile` and `orderByRefinement` are now generic, so per-surfel
+  producer data (here `support`) survives tiling and ordering.
+- Browser timings (GPU upload, frame time) could not be taken: the
+  session's browser pane was hidden, so MapLibre never fired `load`. The
+  demo now carries the instrumentation (`dorayaki.report()`,
+  `dorayaki.measureFrames()`).
+
+## 2026-11-14 — Numazu as PMTiles on stars; scale-floor artefact
+
+- Decision (hfu): the Numazu tiles are not committed to `docs/`. They are
+  packed into one PMTiles archive, `dorayaki-numazu.pmtiles`, for stars,
+  where Martin decodes the archive and serves z/x/y. `src/pmtiles.ts`
+  writes PMTiles v3: tile type 6 (MLT), raw tiles, and gzip directories
+  and metadata, the same shape as stars' existing MLT archives. Tile IDs
+  match the pmtiles reference implementation exhaustively at z4 and at
+  sample tiles up to z26. The pmtiles 4.5.0 reader reads back the header,
+  metadata and every tile.
+- stars' answer (stars session): files go to `/home/stars/data/` on the
+  stars host, uploaded under a hidden name and then moved into place.
+  Martin 1.14.0 registers them without a restart and serves them as
+  `application/vnd.maplibre-tile`. CORS echoes the requesting origin.
+  Missing in-range tiles are 204. Placement needs hfu's direct instruction
+  to the stars session; this session does not upload.
+- The demo now reads external tilesets from TileJSON (local
+  `tiles/numazu/tilejson.json`, or Martin's), and lists tiles from bounds
+  and zoom range. East and south edges count as exclusive, so pyramid
+  bounds do not pull in neighbour tiles. The site build lists Numazu only
+  when `DORAYAKI_NUMAZU_TILEJSON` is set.
+- Artefact found: the voxel fit floored every Gaussian's scales at a
+  quarter voxel (since v3). This erased the thin axis of planar voxels.
+  Fixed: the floor applies only to voxels with fewer than 3 points. It
+  corrects the 2026-11-13 "0 % flat" finding (EXPERIMENTS.md E003).
+
+## 2026-11-15 — Surfel Block v4: anisotropic splat records (breaking)
+
+- The record is now a 16-byte quantized Gaussian splat instead of a
+  32-byte disc: x, y as uint16 of the tile, z as uint16 steps (1 mm) from a
+  per-block float64 origin, three log-quantized scales (10 steps per octave),
+  a 23-bit "smallest three" rotation, and RGBA. Header 32 bytes (z origin and
+  step added). v1–v3 are rejected. Decoding is lossy within documented
+  tolerances (`documents/surfel-block-format.md`).
+- Quantization finding: with codes 0..126 and code 63 = 0, the identity and
+  all axis-aligned rotations are exact. A first grid of 128 codes could not
+  represent 0 and left every identity rotation 0.6° off. Round-to-nearest
+  on the three stored components then gave up to 1.6° worst case on random
+  rotations, and more than 2° where all four components are about 0.5 (the
+  wall normals of the synthetic fixtures). Choosing the best of 8 round-up/
+  down combinations at encode time brings that to 1.2° worst, 0.7° mean,
+  with no change to the decoder.
+- Fixtures stay circular surfels and are converted by `surfelToSplat` before
+  encoding; the demo reduces decoded splats back to discs (`splatToSurfel`) in
+  this step. The renderer does not draw anisotropy or round blobs
+  differently yet; that is the next step.
+- Test vectors, fixture hashes and the MLT frame examples were regenerated.
+  Tests compare decoded splats with the originals within the quantization
+  tolerances (`test/helpers.ts`) instead of exactly.
+- Numazu pyramid in v4 (`npm run demo:numazu`, same inputs and omission as
+  E002): z18 122,294 B, z19 479,894 B, z20 491,326 + 1,477,086 B; the
+  PMTiles archive (gzip directories) is 2,571,655 B, exactly half of the v3
+  archive (5,141,899 B) and 0.50x the COPC (xyz+rgb, 5,183,226 B). Node
+  decode of the larger z20 tile: 26.2 ms for 92,313 splats (v3: 22.7 ms).
+
+## 2026-11-15 — renderer: ellipses and camera-facing round splats
+
+- The demo draws each splat as its 2-sigma ellipse in the plane of its two
+  longer axes (`demo/src/splat-instances.ts` builds the per-splat semi-axis
+  vectors; the shader uses `centre ± axisU ± axisV`). A splat whose largest
+  scale is under 1.5x its smallest (`ROUND_RATIO`) is a round blob and is
+  drawn as a camera-facing disc of the equal-area radius; the camera's right
+  and up come from rows 0 and 1 of the local-frame-to-clip matrix.
+- Shading is now two-sided (`abs(dot(normal, light))`), because an axis's
+  sign carries no meaning in v4. The synthetic fixtures' down-facing
+  surfaces (bridge underside, overhang underside) are therefore lit like
+  up-facing ones and are told apart by their colour, no longer by being dark.
+  Round splats use a constant shade.
+- Observed: in `toy-gs` the isotropic blob, which v3 drew as three thin
+  vertical slabs, now reads as a rounded cluster. In the Numazu tiles the
+  crown of the tree reads as a volume and the roof as tiled ellipses; the
+  vector basemap is unchanged.
+- Numazu in the browser (Apple M1, ANGLE Metal): the four tiles (2,570,600 B,
+  160,644 splats) took 59 ms to fetch from the local server, 505 ms to
+  decode and 47 ms to upload. The decode is about 3 µs per splat in the
+  page against 0.28 µs in Node: the first calls run cold, and each splat
+  becomes a JS object. Decoding straight into typed arrays is the obvious
+  next optimization, but it is not needed yet.
+- Browser tooling: navigating to a URL that differs only in the hash does not
+  reload the page, so a rebuilt bundle was not picked up until a query was
+  added. Screenshots of the hidden pane lag: the DOM and the map state are
+  current, but the image can show an earlier frame for several seconds.
+
+## 2026-11-15 — Numazu profiles; coarser is better at close range
+
+- `buildPyramid` (`src/pointcloud/pyramid.ts`) now builds the Numazu
+  pyramid; `npm run demo:numazu` takes `DORAYAKI_NUMAZU_PROFILE` = `medium`,
+  `fine` (the E002 pyramid) or `coarse`. Sizes and the
+  visual comparison are in EXPERIMENTS.md E004: PMTiles 2,204,268 B
+  (medium), 2,571,701 B (fine), 603,132 B (coarse).
+- The finding that matters: the thinned `fine` pyramid looks worse close up
+  than the single-level `medium` one, although it costs more. Its level 0
+  is made of sampled 1.5 cm Gaussians, so it is a sparse cloud, not a
+  surface.
+- The demo has `?lod=<zoom>`, a debug override that chooses tiles and levels
+  as if the map were at that zoom. It exists because the map zoom does not
+  follow the camera's distance to the data.
+- The medium PMTiles was cross-checked with go-pmtiles 1.28 (`pmtiles tile`
+  returned a z20 tile byte-identical to the file written by the producer).
+- During these browser checks someone clicked in the pane, and the camera
+  state can drift if scripted and manual input mix.
+
+## 2026-11-15 — coarse becomes the standard Numazu tileset
+
+- Direction (hfu): the hosted `dorayaki-numazu.pmtiles` is the `coarse`
+  profile, to lead with how light it is (603,132 B, 0.12 times the COPC,
+  0.62 bytes per source point), then refine according to need. `npm run
+  demo:numazu` now defaults to `coarse`; `medium` builds
+  `dorayaki-numazu-medium.pmtiles` and the dev demo's `numazu-medium`, `fine`
+  builds `numazu-fine`.
+- The standard archive: 2 tiles (z18/232154/103715 and z19/464309/207430),
+  gzip directories, tile type MLT, minzoom 18, maxzoom 19. go-pmtiles 1.28
+  returned the z19 tile byte-identical to the producer's file. The z19 tile
+  differs from the one inside the `medium` archive: in `coarse` it goes
+  through the maxzoom path (ordered by cell), in `medium` through the
+  aggregated path, so the content is the same set of Gaussians in a different
+  order.
+- Upload procedure on stars (from hfu/stars `CLAUDE.md` and
+  `docs/KNOWN_FACTS.md`): `ssh spacex.optgeo.org` lands as the `stars`
+  user; files go to `/home/stars/data/`; stage under a hidden name
+  (`.dorayaki-numazu.pmtiles.new.<rand>`, invisible to Martin's `*.pmtiles`
+  scan), then `mv` into place; Martin registers new files without restart.
+  Authentication is hfu's.
+
+## 2026-11-15 — dorayaki-numazu.pmtiles published on stars
+
+- Uploaded with hfu authenticating (Cloudflare Access opens a browser window
+  for `ssh spacex.optgeo.org`; the first attempt timed out at a 20 s connect
+  timeout while the window waited, so use a long `ConnectTimeout`):
+  read-only check (no dorayaki files, 1.3 TB free, Martin active), `scp` to
+  `/home/stars/data/.dorayaki-numazu.pmtiles.new.<rand>`, size and sha256
+  verified on the host (603,132 B, `7c3ce0b1…d643b017`), then `mv -n` to
+  `dorayaki-numazu.pmtiles`.
+- Martin registered it with no restart. `https://stars.optgeo.org/dorayaki-numazu`
+  returns a TileJSON (minzoom 18, maxzoom 19, the attribution from the
+  PMTiles metadata). z18 and z19 tiles come back as
+  `application/vnd.maplibre-tile` with the exact sizes (122,294 and 479,894 B)
+  and the producer's sha256. Out-of-range tiles are 404. CORS echoes the
+  request origin (`https://dwg7.unopengis.org` and a local origin were
+  checked). Responses are cached for 4 hours (`max-age=14400`).
+- Martin 1.14.0 read the archive with gzip directories and raw MLT tiles, as
+  predicted. A `?cb=` query on the TileJSON request is copied into the
+  `tiles` template it returns; without a query the template is clean.
+- The demo page (built with `DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu`)
+  loads Numazu from stars: 2 tiles, 602,188 B, 37,628 splats. Fetch from
+  stars 235 ms, decode 14.7 ms, upload 13.5 ms (Apple M1, local page, remote
+  data), with no console errors.

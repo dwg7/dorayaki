@@ -3,14 +3,19 @@ import { createHash } from "node:crypto";
 import { test } from "node:test";
 
 import { generatePlane } from "../src/fixtures/plane.js";
+import { surfelToSplat } from "../src/splat.js";
 import { decodeSurfelBlock, encodeSurfelBlock, surfelBlockByteLength } from "../src/surfel-block.js";
+import { expectSplatsClose } from "./helpers.js";
+
+/** The fixture as stored: circular surfels converted to splats. */
+const splatsOf = (o: Parameters<typeof generatePlane>[0]) => generatePlane(o).map(surfelToSplat);
 
 /**
- * SHA-256 of encodeSurfelBlock(generatePlane(OPTS)): default 16 × 16 grid
+ * SHA-256 of encodeSurfelBlock(splatsOf(OPTS)): default 16 × 16 grid
  * on a 128 m tile. If this changes, the fixture or the wire format changed; update it
  * deliberately and say so in the commit.
  */
-const PLANE_16_SHA256 = "e7fe148dfa6c19383f822c5ed3a8558b3b89ac9761be185a73ba3c088f55f369";
+const PLANE_16_SHA256 = "85f63ab06ea60c4cc13941ba5ed6950e3f7370b30f473dc93d458808fb6b7c74";
 const OPTS = { tileWidthMetres: 128 };
 
 test("plane fixture has the expected shape", () => {
@@ -28,16 +33,16 @@ test("plane fixture has the expected shape", () => {
 });
 
 test("plane fixture is deterministic", () => {
-  assert.deepEqual(encodeSurfelBlock(generatePlane(OPTS)), encodeSurfelBlock(generatePlane(OPTS)));
-  const digest = createHash("sha256").update(encodeSurfelBlock(generatePlane(OPTS))).digest("hex");
+  assert.deepEqual(encodeSurfelBlock(splatsOf(OPTS)), encodeSurfelBlock(splatsOf(OPTS)));
+  const digest = createHash("sha256").update(encodeSurfelBlock(splatsOf(OPTS))).digest("hex");
   assert.equal(digest, PLANE_16_SHA256);
 });
 
 test("plane fixture survives an encode/decode round trip", () => {
-  const plane = generatePlane(OPTS);
+  const plane = splatsOf(OPTS);
   const bytes = encodeSurfelBlock(plane);
   assert.equal(bytes.byteLength, surfelBlockByteLength(256));
-  assert.deepEqual(decodeSurfelBlock(bytes), plane);
+  expectSplatsClose(decodeSurfelBlock(bytes), plane);
 });
 
 test("plane fixture rejects invalid grid sizes", () => {

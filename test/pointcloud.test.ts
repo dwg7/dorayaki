@@ -98,3 +98,12 @@ test("voxel Gaussians round-trip through a reference-3DGS PLY", () => {
     close(back[i]!.opacity, g.opacity, 1e-5);
   });
 });
+
+test("a scale floor for degenerate voxels does not erase the thin axis of planar ones", () => {
+  const gs = fitVoxelGaussians(syntheticPoints(), { voxelSize: 0.25, minScale: 0.001, degenerateScale: 0.0625 });
+  // The 1 m patch is planar: its voxels must stay flat despite the large degenerate floor.
+  for (const d of gs.slice(0, 16).map(gaussianToDisc)) assert.ok(d.flatness < 0.05, `flatness ${d.flatness}`);
+  // A lone point gets the degenerate scale on all axes.
+  const lone = fitVoxelGaussians({ count: 1, xyz: Float64Array.of(5, 5, 5), rgb: Float32Array.of(1, 1, 1) }, { voxelSize: 0.25, minPoints: 1, degenerateScale: 0.0625 });
+  assert.deepEqual(lone[0]?.scales, [0.0625, 0.0625, 0.0625]);
+});

@@ -9,11 +9,12 @@ project's goals and working method.
 
 Implemented:
 
-- a naive Surfel Block codec (`src/surfel-block.ts`, version 3): a 16-byte
-  header and a level table, followed by 32-byte little-endian surfel
-  records, with x, y tile-local, z as orthometric height and radius in
-  metres. The byte layout and coordinate frame
-  are in [`documents/surfel-block-format.md`](documents/surfel-block-format.md);
+- a Surfel Block codec (`src/surfel-block.ts`, version 4): a 32-byte header
+  and a level table, followed by 16-byte quantized anisotropic Gaussian
+  splat records (position, three scales, rotation, colour), the primitive of
+  3D Gaussian Splatting. x, y are tile-local, z is orthometric height, scales
+  are metres. The byte layout and quantization are in
+  [`documents/surfel-block-format.md`](documents/surfel-block-format.md);
 - an experimental MLT frame wrapper (`src/mlt-frame.ts`): a Surfel Block
   as the body of an MLT frame with the local, unassigned tag `0xD0`; see
   [`documents/mlt-frame.md`](documents/mlt-frame.md). It skips unknown frames by
@@ -75,6 +76,8 @@ a view can be shared or reloaded. Other fixtures: the same URL with
 `?fixture=overhang`, `?fixture=boundary` or `?fixture=toy-gs` appended. Stop the server with
 Ctrl-C.
 
+Each splat is drawn as its 2-sigma ellipse in the plane of its two longer
+axes; splats with no preferred orientation are drawn as camera-facing discs.
 The page loads the fixture's tiles over plain HTTP:
 `demo/tiles/{fixture}/18/234000/96256.mlt` (at Sapporo Station, 111.7 m
 wide) for `bridge` and `overhang`, and that tile plus its east, south and
@@ -131,8 +134,12 @@ content hashes. Besides the page, only MapLibre's Web Worker
 `import.meta.url`, which bundling turns into the page URL. The build
 therefore defines the worker's page-relative path and the demo passes it
 to `setWorkerUrl`, so it resolves under `/dorayaki/`. The build fails if the
-worker is not self-contained. The Numazu point-cloud tileset (about
-17.6 MB of derived tiles) is not published.
+worker is not self-contained. The Numazu point-cloud tileset is not
+copied into `docs/`. It is hosted as a PMTiles archive on stars (see
+below) and listed on the site only when the build is given its TileJSON:
+`DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site`.
+In the page's console, `dorayaki.report()` and `await
+dorayaki.measureFrames()` give load, upload and frame timings.
 
 ## Numazu point cloud
 
@@ -148,14 +155,26 @@ npm run demo:numazu
 ```
 
 The zip is 14,113,240 bytes (SHA-256 `0af0a8ac…e1ca126d`). `npm run
-demo:numazu` writes the finest Gaussians as a reference-3DGS PLY next to
-the LAS, and a tile pyramid to `demo/tiles/numazu/`. The pyramid holds
-aggregated z18 and z19 tiles and z20 maxzoom tiles in a 3-level
-progressive order (`documents/progressive-maxzoom.md`). The demo draws the
-tiles and levels that match the map zoom. Open <http://127.0.0.1:8000/demo/?fixture=numazu>
-while `npm run demo` is running. Heights are the source's elevations
-(標高), so on the flat basemap the data floats at its real elevation,
-about 7.5 m above the map plane.
+demo:numazu` writes a tile pyramid with a `tilejson.json` to
+`demo/tiles/numazu/`, the finest Gaussians as a reference-3DGS PLY next to
+the LAS, and the same tiles as one PMTiles archive,
+`demo/tiles/dorayaki-numazu.pmtiles` (tile type MLT, gzip directories).
+That archive is what goes to stars, where Martin serves it as
+`https://stars.optgeo.org/dorayaki-numazu/{z}/{x}/{y}`. Placement on stars
+follows the stars project's procedure and needs hfu's instruction to the
+stars session.
+
+By default it builds the `coarse` profile: aggregated z18 tiles and z19 as
+the maxzoom, one level of 12 cm cells (37,628 splats, 603,132 bytes as
+PMTiles, 0.12 times the COPC of the same points). That is what is hosted.
+`DORAYAKI_NUMAZU_PROFILE=medium` builds one 6 cm level at z20 (2.2 MB,
+`dorayaki-numazu-medium.pmtiles`) and `=fine` the nested, thinned 3-level
+z20 pyramid (2.6 MB). The three are compared in `EXPERIMENTS.md` (E004).
+Open <http://127.0.0.1:8000/demo/?fixture=numazu> while `npm run demo` is
+running (`numazu-medium` and `numazu-fine` for the others, if built);
+`&lod=22` chooses tiles and levels as if the map were at that zoom. Heights
+are the source's elevations (標高), so on the flat basemap the data floats
+at its real elevation, about 7.5 m above the map plane.
 
 ## License
 
