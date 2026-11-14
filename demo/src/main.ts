@@ -37,6 +37,8 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         numazu: "tiles/numazu/tilejson.json",
         "numazu-medium": "tiles/numazu-medium/tilejson.json",
         "numazu-fine": "tiles/numazu-fine/tilejson.json",
+        "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
+        "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
@@ -109,6 +111,12 @@ const tilesPromise = fetchTilesBytes(urls, undefined, { allowMissing: external !
 });
 
 map.on("load", () => {
+  // Debug (`?terrain=1`): MapLibre terrain from stars' Terrarium DEM, to see how the custom layer behaves with it.
+  const terrain = Number(new URLSearchParams(location.search).get("terrain"));
+  if (terrain > 0) {
+    map.addSource("dem", { type: "raster-dem", url: "https://stars.optgeo.org/mapterhorn-japan-bridge", encoding: "terrarium", tileSize: 512 });
+    map.setTerrain({ source: "dem", exaggeration: terrain });
+  }
   // Debug overlay on top of the basemap: the demo tile's boundary.
   map.addSource("tile-outline", {
     type: "geojson",
@@ -125,6 +133,8 @@ map.on("load", () => {
       const layer = new SurfelLayer("surfels", loaded);
       const lod = Number(new URLSearchParams(location.search).get("lod"));
       if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+      const dz = Number(new URLSearchParams(location.search).get("dz"));
+      if (dz) layer.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
       map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
       depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
       const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);

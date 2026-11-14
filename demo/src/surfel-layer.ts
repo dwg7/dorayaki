@@ -132,6 +132,15 @@ export class SurfelLayer implements CustomLayerInterface {
     this.map = undefined;
   }
 
+  /** Debug aid (`?dz=`): raise every tile by `metres`, to test data at high elevation. */
+  setZOffset(metres: number): void {
+    for (const t of this.tiles) {
+      t.model = metricToMercatorMatrix(t.tile, t.widthMetres);
+      t.model[14] = metres * t.model[10]!; // z translation in Mercator units: s metres
+    }
+    this.map?.triggerRepaint();
+  }
+
   setDepthTest(enabled: boolean): void {
     this.depthTest = enabled;
     this.map?.triggerRepaint();
