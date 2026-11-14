@@ -62,6 +62,8 @@ export class SurfelLayer implements CustomLayerInterface {
    * does not follow the camera's distance to the data (NOTES.md).
    */
   zoomOverride: number | undefined;
+  /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
+  extent = 1;
 
   private readonly tiles: TileState[];
   private map: MapLibreMap | undefined;
@@ -113,6 +115,7 @@ export class SurfelLayer implements CustomLayerInterface {
         tileWidthMetres: t.widthMetres,
         count: plan.count,
         minRadius: plan.minRadius,
+        extent: this.extent,
         depthTest: this.depthTest,
       });
       drawn++;

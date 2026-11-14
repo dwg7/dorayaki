@@ -4,7 +4,10 @@
  * is built from the accumulated Gaussians (buildPyramidFrom). Memory depends
  * on the number of voxels, not points.
  *
- * Usage: node build-tileset.mjs <file.las> <zone> <name> <maxzoom> [aggregated zoom ...]
+ * Usage: node build-tileset.mjs <file.las[,file2.las ...]> <zone> <name> <maxzoom> [aggregated zoom ...]
+ * Several files (comma-separated) are merged into the same voxels, for example
+ * an MMS and an airborne mesh of the same area; the local origin is the centre of
+ * the union of their bounds. Each file's points count in the voxel fits as they are.
  * Output: demo/tiles/<name>/z/x/y.mlt, tilejson.json, manifest.json and
  * demo/tiles/dorayaki-<name>.pmtiles. One level per tile (no refinement);
  * the finest cells are tile width / 512 at the maxzoom (the `coarse` rule).
@@ -36,13 +39,20 @@ const config: PyramidConfig = {
 };
 const OUT = `demo/tiles/${name}`;
 
-const fd = openSync(file, "r");
-const head = new Uint8Array(375);
-readSync(fd, head, 0, 375, 0);
-const header = parseLasHeader(head);
-if (header.rgbOffset === undefined) throw new Error("expected RGB points");
-const e0 = (header.min[0] + header.max[0]) / 2;
-const n0 = (header.min[1] + header.max[1]) / 2;
+const files = file.split(",");
+const heads = files.map((f) => {
+  const fd = openSync(f, "r");
+  const head = new Uint8Array(375);
+  readSync(fd, head, 0, 375, 0);
+  closeSync(fd);
+  const header = parseLasHeader(head);
+  if (header.rgbOffset === undefined) throw new Error(`expected RGB points in ${f}`);
+  return header;
+});
+const minE = Math.min(...heads.map((h) => h.min[0])), maxE = Math.max(...heads.map((h) => h.max[0]));
+const minN = Math.min(...heads.map((h) => h.min[1])), maxN = Math.max(...heads.map((h) => h.max[1]));
+const e0 = (minE + maxE) / 2;
+const n0 = (minN + maxN) / 2;
 const origin = jprcsToLatLng(Number(zoneArg), n0, e0);
 
 const sizes = pyramidVoxelSizes(origin, config);
@@ -57,29 +67,35 @@ const baseSize = finestSize / 2 ** Number(process.env.DORAYAKI_ADAPTIVE_REFINE ?
 const baseAcc = adaptive ? (accs.get(baseSize) ?? new VoxelAccumulator(baseSize)) : undefined;
 if (baseAcc) accs.set(baseSize, baseAcc);
 let adaptiveLevels: number[] | undefined;
-
 const list = [...accs.values()];
-const CHUNK_RECORDS = Math.floor(64_000_000 / header.recordLength);
-const buf = new Uint8Array(CHUNK_RECORDS * header.recordLength);
+
 const t0 = Date.now();
 let done = 0;
-while (done < header.count) {
-  const n = Math.min(CHUNK_RECORDS, header.count - done);
-  const want = n * header.recordLength;
-  let got = 0;
-  while (got < want) {
-    const r = readSync(fd, buf, got, want - got, header.offsetToPoints + done * header.recordLength + got);
-    if (r === 0) throw new Error(`file ended after ${done} records`);
-    got += r;
+for (const [fi, f] of files.entries()) {
+  const header = heads[fi]!;
+  const fd = openSync(f, "r");
+  const CHUNK_RECORDS = Math.floor(64_000_000 / header.recordLength);
+  const buf = new Uint8Array(CHUNK_RECORDS * header.recordLength);
+  let fileDone = 0;
+  while (fileDone < header.count) {
+    const n = Math.min(CHUNK_RECORDS, header.count - fileDone);
+    const want = n * header.recordLength;
+    let got = 0;
+    while (got < want) {
+      const r = readSync(fd, buf, got, want - got, header.offsetToPoints + fileDone * header.recordLength + got);
+      if (r === 0) throw new Error(`${f} ended after ${fileDone} records`);
+      got += r;
+    }
+    forEachLasRecord(buf, header, n, (x, y, z, _c, r, g, b) => {
+      const lx = x - e0, ly = y - n0;
+      const cr = (r >> 8) / 255, cg = (g >> 8) / 255, cb = (b >> 8) / 255;
+      for (const a of list) a.add(lx, ly, z, cr, cg, cb);
+    });
+    fileDone += n;
   }
-  forEachLasRecord(buf, header, n, (x, y, z, _c, r, g, b) => {
-    const lx = x - e0, ly = y - n0;
-    const cr = (r >> 8) / 255, cg = (g >> 8) / 255, cb = (b >> 8) / 255;
-    for (const a of list) a.add(lx, ly, z, cr, cg, cb);
-  });
-  done += n;
+  closeSync(fd);
+  done += fileDone;
 }
-closeSync(fd);
 const tAccumulated = (Date.now() - t0) / 1000;
 
 const pyramid = buildPyramidFrom(

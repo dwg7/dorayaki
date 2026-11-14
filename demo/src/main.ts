@@ -135,6 +135,8 @@ map.on("load", () => {
       const layer = new SurfelLayer("surfels", loaded);
       const lod = Number(new URLSearchParams(location.search).get("lod"));
       if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+      const extent = Number(new URLSearchParams(location.search).get("extent"));
+      if (extent > 0) layer.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
       const dz = Number(new URLSearchParams(location.search).get("dz"));
       if (dz) layer.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
       map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
@@ -176,11 +178,33 @@ map.on("load", () => {
           map.on("render", onRender);
           map.triggerRepaint();
         });
+      /**
+       * Share of near-white (background) pixels in a screen rectangle given as
+       * fractions of the canvas, read back inside a render event. Used by E006
+       * to compare how many gaps different `?extent=` values leave on a road.
+       */
+      const holeFraction = (rect: [number, number, number, number] = [0.35, 0.55, 0.65, 0.9]): Promise<number> =>
+        new Promise((resolve) => {
+          const onRender = () => {
+            map.off("render", onRender);
+            const gl = map.getCanvas().getContext("webgl2") as WebGL2RenderingContext;
+            const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+            const x0 = Math.floor(rect[0] * w), x1 = Math.floor(rect[2] * w);
+            const y0 = Math.floor((1 - rect[3]) * h), y1 = Math.floor((1 - rect[1]) * h);
+            const px = new Uint8Array((x1 - x0) * (y1 - y0) * 4);
+            gl.readPixels(x0, y0, x1 - x0, y1 - y0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            let white = 0;
+            for (let i = 0; i < px.length; i += 4) if (px[i]! > 235 && px[i + 1]! > 235 && px[i + 2]! > 235) white++;
+            resolve(white / (px.length / 4));
+          };
+          map.on("render", onRender);
+          map.triggerRepaint();
+        });
       const report = () => ({
         tileset, tiles: loaded.length, surfels: count, encodedBytes: bytes,
         fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
       });
-      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded, timings, report, measureFrames };
+      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded, timings, report, measureFrames, holeFraction };
     },
     (err: unknown) => {
       setStatus(`failed: ${err instanceof Error ? err.message : String(err)}`);
