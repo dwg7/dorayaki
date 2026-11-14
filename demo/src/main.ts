@@ -37,6 +37,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         numazu: "tiles/numazu/tilejson.json",
         "numazu-medium": "tiles/numazu-medium/tilejson.json",
         "numazu-fine": "tiles/numazu-fine/tilejson.json",
+        kawazu: "tiles/kawazu/tilejson.json",
         "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
         "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
         "kawazu-ad-t20-c20": "tiles/kawazu-ad-t20-c20/tilejson.json",
@@ -45,10 +46,26 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-mix-c2-50cm": "tiles/kawazu-mix-c2-50cm/tilejson.json",
         "kawazu-mix-c2-ad-t20": "tiles/kawazu-mix-c2-ad-t20/tilejson.json",
         "kawazu-mix-first-50cm": "tiles/kawazu-mix-first-50cm/tilejson.json",
+        "kawazu-lp-sp24": "tiles/kawazu-lp-sp24/tilejson.json",
+        "kawazu-mix-sp12": "tiles/kawazu-mix-sp12/tilejson.json",
+        "kawazu-mix-sp24": "tiles/kawazu-mix-sp24/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
 const isExternal = (name: string): name is ExternalTileset => Object.hasOwn(EXTERNAL_TILESETS, name);
+
+/**
+ * Per-tileset defaults for the query flags below, overridden by the URL.
+ * Kawazu lies 130 to 360 m above sea level, where the camera of a map without
+ * terrain is far above the data (NOTES.md), so terrain is on by default; the
+ * splat scale 1.3 closes the gaps between neighbours (documents/adaptive-merging.md).
+ */
+const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  kawazu: { terrain: "1", extent: "1.3" },
+};
+/** A query flag: the URL's value, else the tileset's default. */
+const flag = (name: string, tileset: string): string | null =>
+  new URLSearchParams(location.search).get(name) ?? TILESET_DEFAULTS[tileset]?.[name] ?? null;
 
 /** Tileset from `?fixture=`, defaulting to the bridge. */
 const requested = new URLSearchParams(location.search).get("fixture") ?? "bridge";
@@ -85,7 +102,7 @@ const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-starlight";
 const map = new MapLibreMap({
   container: "map",
   center: external ? external.center : tileToLngLat(tiles[0] as TileAddress, 0.5, 0.5),
-  zoom: external ? 20.5 : 18.3,
+  zoom: external ? Math.max(...tiles.map((t) => t.z)) + 1.5 : 18.3, // numazu: 19 + 1.5 = 20.5
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
@@ -118,7 +135,7 @@ const tilesPromise = fetchTilesBytes(urls, undefined, { allowMissing: external !
 
 map.on("load", () => {
   // Debug (`?terrain=1`): MapLibre terrain from stars' Terrarium DEM, to see how the custom layer behaves with it.
-  const terrain = Number(new URLSearchParams(location.search).get("terrain"));
+  const terrain = Number(flag("terrain", tileset));
   if (terrain > 0) {
     map.addSource("dem", { type: "raster-dem", url: "https://stars.optgeo.org/mapterhorn-japan-bridge", encoding: "terrarium", tileSize: 512 });
     map.setTerrain({ source: "dem", exaggeration: terrain });
@@ -137,11 +154,11 @@ map.on("load", () => {
   tilesPromise.then(
     (loaded) => {
       const layer = new SurfelLayer("surfels", loaded);
-      const lod = Number(new URLSearchParams(location.search).get("lod"));
+      const lod = Number(flag("lod", tileset));
       if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
-      const extent = Number(new URLSearchParams(location.search).get("extent"));
+      const extent = Number(flag("extent", tileset));
       if (extent > 0) layer.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
-      const dz = Number(new URLSearchParams(location.search).get("dz"));
+      const dz = Number(flag("dz", tileset));
       if (dz) layer.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
       map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
       depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));

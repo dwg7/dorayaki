@@ -25,6 +25,14 @@ export interface AdaptiveOptions {
   thickness: number;
   /** ...and each child's mean colour within this of the merged mean, per channel (0..1). */
   colourTolerance: number;
+  /**
+   * Sparse rule (E008): also merge when every child has fewer than this many
+   * points (0 = off). Voxels supported by a handful of points carry little
+   * more than the points; merging them upward makes fewer, better supported
+   * Gaussians, at the cost of detail that was never well sampled. Applies
+   * whatever the thickness and colour.
+   */
+  sparseSupport?: number;
   minScale?: number;
   opacity?: number;
 }
@@ -71,6 +79,8 @@ function merge(kids: readonly Node[], ix: number, iy: number, iz: number): Node 
 }
 
 function acceptable(kids: readonly Node[], m: Node, o: AdaptiveOptions): boolean {
+  const sparse = o.sparseSupport ?? 0;
+  if (sparse > 0 && kids.every((k) => k.n < sparse)) return true;
   const [xx, xy, xz, yy, yz, zz] = m.m2.map((v) => v / m.n) as Node["m2"];
   const { values } = symmetricEigen3([xx, xy, xz, xy, yy, yz, xz, yz, zz]);
   if (Math.sqrt(Math.max(0, values[2])) > o.thickness) return false;

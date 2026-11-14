@@ -13,11 +13,13 @@
  * the finest cells are tile width / 512 at the maxzoom (the `coarse` rule).
  * A file may be followed by filters, `file.las@c2+1@first`: `@c<n>[+<n>...]`
  * keeps only those classifications, `@first` / `@last` only first / last returns.
- * Adaptive merging of the maxzoom Gaussians (E005, src/pointcloud/adaptive.ts),
+ * Adaptive merging of the Gaussians of every zoom (E005, src/pointcloud/adaptive.ts),
  * when DORAYAKI_ADAPTIVE_LEVELS is set: that many merge levels (cells double);
  * DORAYAKI_ADAPTIVE_REFINE (default 0) starts from cells 2^refine times finer
  * than the maxzoom's; DORAYAKI_ADAPTIVE_THICKNESS (metres, default 0.05) and
- * DORAYAKI_ADAPTIVE_COLOUR (default 0.1) are the merge limits.
+ * DORAYAKI_ADAPTIVE_COLOUR (default 0.1) are the merge limits;
+ * DORAYAKI_ADAPTIVE_SPARSE (default 0 = off) also merges children that all have
+ * fewer points than that (E008).
  * Local frame as in build-numazu-demo.ts: east/north from the header centre,
  * up = LAS Z (orthometric height).
  */
@@ -84,6 +86,7 @@ const adaptive = process.env.DORAYAKI_ADAPTIVE_LEVELS === undefined ? undefined 
   maxLevel: Number(process.env.DORAYAKI_ADAPTIVE_LEVELS),
   thickness: Number(process.env.DORAYAKI_ADAPTIVE_THICKNESS ?? 0.05),
   colourTolerance: Number(process.env.DORAYAKI_ADAPTIVE_COLOUR ?? 0.1),
+  sparseSupport: Number(process.env.DORAYAKI_ADAPTIVE_SPARSE ?? 0),
 };
 const baseSize = finestSize / 2 ** Number(process.env.DORAYAKI_ADAPTIVE_REFINE ?? 0);
 const baseAcc = adaptive ? (accs.get(baseSize) ?? new VoxelAccumulator(baseSize)) : undefined;
@@ -124,9 +127,10 @@ const tAccumulated = (Date.now() - t0) / 1000;
 
 const pyramid = buildPyramidFrom(
   (voxel) => {
-    if (adaptive && baseAcc && voxel === finestSize) {
-      const r = adaptiveGaussians(baseAcc, adaptive);
-      adaptiveLevels = r.perLevel;
+    if (adaptive) {
+      // Every zoom is merged by the same rule; only the maxzoom may start from finer cells.
+      const r = adaptiveGaussians(voxel === finestSize ? baseAcc! : accs.get(voxel)!, adaptive);
+      if (voxel === finestSize) adaptiveLevels = r.perLevel;
       return r.gaussians;
     }
     return accs.get(voxel)!.toGaussians({ minPoints: 1, minScale: 0.001, degenerateScale: voxel / 4 });
@@ -176,8 +180,11 @@ writeFileSync(`${OUT}/tilejson.json`, JSON.stringify({
   minzoom: Math.min(...config.aggregatedZooms, config.maxzoom), maxzoom: config.maxzoom, bounds,
   center: [origin.lng, origin.lat, config.maxzoom],
 }, null, 2) + "\n");
-const archive = writePmtiles(archiveTiles, {
-  tileType: PmtilesTileType.Mlt, bounds, center: [origin.lng, origin.lat, config.maxzoom],
+// PMTiles tile compression: gzip by default (the byte-plane layout of Surfel Block v5
+// compresses well; DORAYAKI_TILE_COMPRESSION=none keeps the tiles raw).
+const gzipTiles = process.env.DORAYAKI_TILE_COMPRESSION !== "none";
+const archive = writePmtiles(gzipTiles ? archiveTiles.map((t) => ({ ...t, data: new Uint8Array(gzipSync(t.data, { level: 9 })) })) : archiveTiles, {
+  tileType: PmtilesTileType.Mlt, bounds, ...(gzipTiles ? { tileCompression: PmtilesCompression.Gzip } : {}), center: [origin.lng, origin.lat, config.maxzoom],
   internal: { compression: PmtilesCompression.Gzip, compress: (b) => new Uint8Array(gzipSync(b)) },
   metadata: { name: manifest.name, attribution: manifest.attribution, dorayaki: manifest },
 });
