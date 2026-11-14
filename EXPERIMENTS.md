@@ -64,6 +64,26 @@ Sapporo Station, z18/234000/96256, 111.7 m wide.
 Retain the 32-byte AoS record as the baseline. Constraints first appear
 with real point-cloud data (E002), not with synthetic fixtures.
 
+### Follow-up (2026-11-15, Surfel Block v4)
+
+The record is no longer the 32-byte disc: v4 stores a 16-byte quantized
+splat (E004's baseline). The v3 numbers above remain the 32-byte baseline;
+v3 is in git history (commit `f43af71` and later, until the v4 commit).
+
+- bridge, v4: 432 splats, 6,948 B block (50.2 % of the v3 block), 6,981 B as
+  the served tile. Node codec: encode 0.73 ms, decode 0.27 ms
+  (`npm run measure:codec`, median of 50). Encode is slower than v3 because
+  the quaternion encoder tries 8 rounding combinations per splat.
+- Browser (Claude desktop browser pane, Chromium; GPU string `ANGLE (Apple,
+  ANGLE Metal Renderer: Apple M1)`): fetch 17.8 ms, decode 2.2 ms (first
+  call, cold JIT, includes MLT frame extraction), GPU upload 2.6 ms
+  (program creation, buffer upload and `gl.finish()`), from
+  `dorayaki.report()`.
+- Frame time: still not measured. `dorayaki.measureFrames()` timed out after
+  20 s: the pane reports `document.visibilityState = "hidden"`, so
+  `requestAnimationFrame` does not run continuously, although single frames
+  do render once the tab is fronted.
+
 ## E002: Omitting weakly supported surfels in maxzoom tiles
 
 ### Question

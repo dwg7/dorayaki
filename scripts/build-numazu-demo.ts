@@ -29,12 +29,13 @@ import { encodeDemoTile } from "../demo/src/demo-tile.js";
 import { TOY_GS_PROPERTIES } from "../src/fixtures/toy-gaussians.js";
 import { jprcsToLatLng } from "../src/geodesy/jprcs.js";
 import { writePlyFloat32 } from "../src/gaussian/ply.js";
-import { gaussianToDisc, placeDiscs } from "../src/gaussian/to-surfels.js";
+import { gaussianToDisc, placeGaussians } from "../src/gaussian/to-surfels.js";
 import { BASE_CELLS, omitWeakRefinements, orderByRefinement, prefixCount } from "../src/progressive.js";
 import { readLas } from "../src/pointcloud/las.js";
 import { fitVoxelGaussians, gaussiansToPlyRows } from "../src/pointcloud/voxel-gaussians.js";
 import { tileLatitude, tileLongitude, tileWidthMetres, type TileAddress } from "../src/tile-geometry.js";
 import { splitByTile } from "../src/tiling.js";
+import { surfelBlockByteLength } from "../src/surfel-block.js";
 import { PmtilesCompression, PmtilesTileType, writePmtiles } from "../src/pmtiles.js";
 import { gzipSync } from "node:zlib";
 
@@ -102,7 +103,7 @@ const write = (tile: TileAddress, surfels: Parameters<typeof encodeDemoTile>[0],
   writeFileSync(path, data);
   archiveTiles.push({ ...tile, data });
   // Bytes needed for each prefix of whole levels (frame overhead included in the last entry only).
-  const levelBytes = levels.map((_, k) => 16 + 4 * levels.length + 32 * prefixCount(levels, k + 1));
+  const levelBytes = levels.map((_, k) => surfelBlockByteLength(prefixCount(levels, k + 1), levels.length));
   manifestTiles.push({ ...tile, levels, bytes: data.byteLength, levelBytes });
   console.log(`wrote ${path} (${data.byteLength} bytes, ${surfels.length} surfels, levels ${levels.join("/")})`);
 };
@@ -110,10 +111,10 @@ const write = (tile: TileAddress, surfels: Parameters<typeof encodeDemoTile>[0],
 const perZoom: Record<number, { gaussians: number; bytes: number }> = {};
 for (const z of AGGREGATED_ZOOMS) {
   const voxel = widthAt(z) / BASE_CELLS;
-  const discs = fit(voxel).map(gaussianToDisc);
-  const { block, surfels } = placeDiscs(discs, origin, z);
-  for (const t of splitByTile(surfels, block)) if (t.surfels.length > 0) write(t.tile, t.surfels, [t.surfels.length]);
-  perZoom[z] = { gaussians: discs.length, bytes: 0 };
+  const gaussians = fit(voxel);
+  const { block, splats } = placeGaussians(gaussians, origin, z);
+  for (const t of splitByTile(splats, block)) if (t.surfels.length > 0) write(t.tile, t.surfels, [t.surfels.length]);
+  perZoom[z] = { gaussians: gaussians.length, bytes: 0 };
 }
 
 const finestVoxel = widthAt(MAXZOOM) / (BASE_CELLS * 2 ** (LEVELS - 1));
@@ -123,15 +124,14 @@ const ply = writePlyFloat32(TOY_GS_PROPERTIES, gaussiansToPlyRows(finest));
 writeFileSync(plyPath, ply);
 const finestDiscs = finest.map(gaussianToDisc);
 {
-  const { block, surfels: placed } = placeDiscs(finestDiscs, origin, MAXZOOM);
-  // Carry each Gaussian's point support with its surfel (placeDiscs keeps order;
-  // splitByTile and orderByRefinement keep the objects).
-  const surfels = placed.map((s, i) => ({ ...s, support: finestDiscs[i]!.support ?? 0 }));
-  for (const t of splitByTile(surfels, block)) {
+  // Each placed splat carries its Gaussian's point support through
+  // splitByTile and orderByRefinement.
+  const { block, splats } = placeGaussians(finest, origin, MAXZOOM);
+  for (const t of splitByTile(splats, block)) {
     if (t.surfels.length === 0) continue;
     const ordered = omitWeakRefinements(
       orderByRefinement(t.surfels, tileWidthMetres(t.tile), LEVELS),
-      (q) => q.support >= MIN_REFINEMENT_SUPPORT,
+      (q) => (q.support ?? 0) >= MIN_REFINEMENT_SUPPORT,
     );
     write(t.tile, ordered.surfels, ordered.levels);
   }

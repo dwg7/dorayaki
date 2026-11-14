@@ -11,17 +11,17 @@
  * (c) refinement levels: order all Gaussians, keep level 0 whole, drop
  *     support < s from every later level.
  * Reported per strategy and threshold: kept Gaussians, z20 bytes (all
- * levels, 32-byte records), ratio to COPC (xyz+rgb, 5,183,226 B), and the
+ * levels, 16-byte v4 records), ratio to COPC (xyz+rgb, 5,183,226 B), and the
  * share of level-0 cells (6.1 cm) still covered.
  */
 import { readFileSync } from "node:fs";
 
 import { jprcsToLatLng } from "../src/geodesy/jprcs.js";
-import { gaussianToDisc, placeDiscs } from "../src/gaussian/to-surfels.js";
+import { placeGaussians } from "../src/gaussian/to-surfels.js";
 import { readLas } from "../src/pointcloud/las.js";
 import { fitVoxelGaussians } from "../src/pointcloud/voxel-gaussians.js";
 import { BASE_CELLS, orderByRefinement } from "../src/progressive.js";
-import type { Surfel } from "../src/surfel-block.js";
+import { surfelBlockByteLength, type Splat } from "../src/surfel-block.js";
 import { tileWidthMetres } from "../src/tile-geometry.js";
 import { splitByTile } from "../src/tiling.js";
 
@@ -47,21 +47,19 @@ const yRow = Math.floor(((1 - Math.asinh(Math.tan((origin.lat * Math.PI) / 180))
 const w20 = tileWidthMetres({ z: MAXZOOM, x: 0, y: yRow });
 const voxel = w20 / (BASE_CELLS * 2 ** (LEVELS - 1));
 const finest = fitVoxelGaussians({ count: las.count, xyz, rgb }, { voxelSize: voxel, minPoints: 1, minScale: 0.001, degenerateScale: voxel / 4 });
-const discs = finest.map(gaussianToDisc);
-const supports = discs.map((d) => d.support ?? 0);
+const supports = finest.map((g) => g.support ?? 0);
 
 // Support histogram.
 const hist: Record<string, number> = {};
 for (const s of supports) { const k = s >= 8 ? "8+" : String(s); hist[k] = (hist[k] ?? 0) + 1; }
-console.log(JSON.stringify({ voxelMetres: voxel, finestGaussians: discs.length, supportHistogram: hist }));
+console.log(JSON.stringify({ voxelMetres: voxel, finestGaussians: finest.length, supportHistogram: hist }));
 
-/** Surfels of all z20 tiles with their supports, tile by tile. */
-const { block, surfels } = placeDiscs(discs, origin, MAXZOOM);
-surfels.forEach((s, i) => ((s as Surfel & { support: number }).support = supports[i]!));
-const tiles = splitByTile(surfels, block).filter((t) => t.surfels.length > 0);
-const support = (s: Surfel) => (s as Surfel & { support: number }).support;
+/** Splats of all z20 tiles; each carries its point support. */
+const { block, splats } = placeGaussians(finest, origin, MAXZOOM);
+const tiles = splitByTile(splats, block).filter((t) => t.surfels.length > 0);
+const support = (s: Splat & { support?: number }) => s.support ?? 0;
 
-function level0Cells(list: readonly Surfel[], w: number): Set<string> {
+function level0Cells(list: readonly Splat[], w: number): Set<string> {
   const size = w / BASE_CELLS;
   return new Set(list.map((s) => `${Math.floor(s.x * BASE_CELLS)},${Math.floor(s.y * BASE_CELLS)},${Math.floor(s.z / size)}`));
 }
@@ -79,7 +77,7 @@ for (const strategy of ["global", "last-level", "refinement-levels"] as const) {
         ordered = orderByRefinement(t.surfels.filter((s) => support(s) >= threshold), w, LEVELS);
       } else if (strategy === "refinement-levels") {
         const full = orderByRefinement(t.surfels, w, LEVELS);
-        const out: Surfel[] = [];
+        const out: Splat[] = [];
         const levels: number[] = [];
         let at = 0;
         full.levels.forEach((c, k) => {
@@ -97,12 +95,12 @@ for (const strategy of ["global", "last-level", "refinement-levels"] as const) {
         ordered = { surfels: [...full.surfels.slice(0, headCount), ...tail], levels: [...full.levels.slice(0, -1), tail.length] };
       }
       kept += ordered.surfels.length;
-      bytes += 16 + 4 * LEVELS + 32 * ordered.surfels.length;
+      bytes += surfelBlockByteLength(ordered.surfels.length, LEVELS);
       ordered.levels.forEach((c, k) => (levelTotals[k] += c));
       covered += level0Cells(ordered.surfels.slice(0, ordered.levels[0]), w).size;
     }
     rows.push({
-      strategy, minSupport: threshold, kept, keptShare: +(kept / discs.length).toFixed(3),
+      strategy, minSupport: threshold, kept, keptShare: +(kept / finest.length).toFixed(3),
       levels: levelTotals.join("/"), z20Bytes: bytes, xCopc: +(bytes / COPC_XYZRGB).toFixed(2),
       level0Coverage: +(covered / baseCells).toFixed(3),
     });

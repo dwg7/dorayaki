@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { cpus } from "node:os";
 
 import { decodeSurfelTileWithLevels } from "../demo/src/decode-tile.js";
-import { demoTileSurfels } from "../demo/src/demo-tile.js";
+import { demoTileSplats } from "../demo/src/demo-tile.js";
 import { decodeSurfelBlock, encodeSurfelBlock } from "../src/surfel-block.js";
 
 const RUNS = 50;
@@ -32,7 +32,7 @@ function time(fn: () => unknown): number {
 }
 
 const rows: Array<Record<string, number | string>> = [];
-const [bridge] = demoTileSurfels("bridge");
+const [bridge] = demoTileSplats("bridge");
 const bridgeBytes = encodeSurfelBlock(bridge!.surfels);
 rows.push({
   case: "bridge (1 tile)", surfels: bridge!.surfels.length, blockBytes: bridgeBytes.byteLength,
@@ -48,8 +48,8 @@ if (existsSync(dir)) {
     const tile = new Uint8Array(readFileSync(f));
     const decoded = decodeSurfelTileWithLevels(tile);
     rows.push({
-      case: `numazu ${f.slice(dir.length + 1)}`, surfels: decoded.surfels.length, blockBytes: tile.byteLength,
-      encodeMs: time(() => encodeSurfelBlock(decoded.surfels, decoded.levels)), decodeMs: time(() => decodeSurfelTileWithLevels(tile)),
+      case: `numazu ${f.slice(dir.length + 1)}`, surfels: decoded.splats.length, blockBytes: tile.byteLength,
+      encodeMs: time(() => encodeSurfelBlock(decoded.splats, decoded.levels)), decodeMs: time(() => decodeSurfelTileWithLevels(tile)),
     });
   }
 }

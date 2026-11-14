@@ -36,3 +36,4 @@ export {
 } from "./fixtures/boundary.js";
 export { BASE_CELLS, omitWeakRefinements, orderByRefinement, prefixCount, type RefinementOrder } from "./progressive.js";
 export { PmtilesCompression, PmtilesTileType, writePmtiles, zxyToTileId, type PmtilesOptions, type PmtilesTile } from "./pmtiles.js";
+export { DISC_THICKNESS, quaternionFromAxes, rotationAxes, splatAxes, splatAxisOrder, splatRoundness, splatToSurfel, surfelToSplat, type Quat, type Vec3 } from "./splat.js";

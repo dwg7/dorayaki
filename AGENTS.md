@@ -220,7 +220,8 @@ DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  
 Current repository structure:
 
 ```text
-src/surfel-block.ts          naive Surfel Block encoder/decoder
+src/surfel-block.ts          Surfel Block encoder/decoder (v4: 16-byte quantized splats)
+src/splat.ts                 splat geometry: rotations, disc <-> splat conversions
 src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/tiling.ts                centre-ownership split of a tile block into tiles
@@ -233,7 +234,7 @@ src/fixtures/sampling.ts     per-patch sampling rule shared by fixtures
 src/fixtures/boundary.ts     deterministic boundary fixture (2 x 2 tiles)
 src/fixtures/toy-gaussians.ts  deterministic toy 3DGS PLY (stand-in for real data)
 src/gaussian/ply.ts          minimal binary little-endian PLY reader/writer
-src/gaussian/to-surfels.ts   lossy 3DGS Gaussian -> v2 surfel mapping and placement
+src/gaussian/to-surfels.ts   3DGS Gaussian -> splat mapping and tile placement
 src/pointcloud/las.ts        minimal LAS reader (formats 0-3, no LAZ)
 src/pointcloud/voxel-gaussians.ts  one Gaussian per voxel from a point cloud
 src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
@@ -247,7 +248,7 @@ NOTES.md                     observed experimental findings (chronological)
 EXPERIMENTS.md               experiments E001, E002, ...: question, measurements, decision
 docs/                        built GitHub Pages site only (npm run site; do not edit by hand)
 scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline), worker, synthetic tiles
-documents/surfel-block-format.md  byte layout of the naive Surfel Block
+documents/surfel-block-format.md  byte layout and quantization of the Surfel Block (v4)
 documents/mlt-frame.md            experimental MLT frame envelope
 documents/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
 scripts/measure-numazu.ts    density and size measurements on the Numazu data

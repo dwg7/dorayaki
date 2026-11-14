@@ -16,19 +16,20 @@
  * index). Within a level, records are sorted by cell (z, y, x) for
  * determinism.
  */
-import type { Surfel } from "./surfel-block.js";
+/** Anything with a position: tile-local x, y and z in metres. */
+type Positioned = { x: number; y: number; z: number };
 
 /** Cells per tile edge at level 0: one per CSS pixel of a 512 px tile. */
 export const BASE_CELLS = 512;
 
-export interface RefinementOrder<T extends Surfel = Surfel> {
+export interface RefinementOrder<T extends Positioned = Positioned> {
   surfels: T[];
   /** Surfel count per level; sums to surfels.length. */
   levels: number[];
 }
 
 /** Cell key of a surfel at a level, plus its integer coordinates. */
-function cellOf(s: Surfel, w: number, cellsPerTile: number): [string, number, number, number] {
+function cellOf(s: Positioned, w: number, cellsPerTile: number): [string, number, number, number] {
   const size = w / cellsPerTile;
   const ix = Math.floor(s.x * cellsPerTile);
   const iy = Math.floor(s.y * cellsPerTile);
@@ -41,7 +42,7 @@ function cellOf(s: Surfel, w: number, cellsPerTile: number): [string, number, nu
  * levelCount = 1 the result is one level holding every surfel, sorted by
  * finest cell.
  */
-export function orderByRefinement<T extends Surfel>(surfels: readonly T[], tileWidthMetres: number, levelCount: number): RefinementOrder<T> {
+export function orderByRefinement<T extends Positioned>(surfels: readonly T[], tileWidthMetres: number, levelCount: number): RefinementOrder<T> {
   if (!Number.isInteger(levelCount) || levelCount < 1) throw new RangeError("levelCount must be a positive integer");
   if (!(tileWidthMetres > 0)) throw new RangeError("tileWidthMetres must be positive");
   const chosen = new Uint8Array(surfels.length);
@@ -98,7 +99,7 @@ export function orderByRefinement<T extends Surfel>(surfels: readonly T[], tileW
  * only the detail added beyond level 0 is thinned. The order within each
  * level is preserved. (E002 in EXPERIMENTS.md.)
  */
-export function omitWeakRefinements<T extends Surfel>(order: RefinementOrder<T>, keep: (s: T) => boolean): RefinementOrder<T> {
+export function omitWeakRefinements<T extends Positioned>(order: RefinementOrder<T>, keep: (s: T) => boolean): RefinementOrder<T> {
   const surfels: T[] = [];
   const levels: number[] = [];
   let at = 0;

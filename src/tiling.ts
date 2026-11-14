@@ -13,7 +13,8 @@
  * Mercator tile units, so they are continuous across tiles; z and radius
  * stay in metres.
  */
-import type { Surfel } from "./surfel-block.js";
+/** Anything positioned by tile-local (or block-local) x, y: a surfel or a splat. */
+type Positioned = { x: number; y: number };
 import type { TileAddress } from "./tile-geometry.js";
 
 export interface TileBlock {
@@ -23,7 +24,7 @@ export interface TileBlock {
   rows: number;
 }
 
-export interface TileSurfels<T extends Surfel = Surfel> {
+export interface TileSurfels<T extends Positioned = Positioned> {
   tile: TileAddress;
   /** Surfels in tile-local coordinates, in their original relative order. */
   surfels: T[];
@@ -52,7 +53,7 @@ export function blockTiles(b: TileBlock): TileAddress[] {
  * order, including tiles that receive no surfels. Throws if a centre lies
  * outside the block.
  */
-export function splitByTile<T extends Surfel>(surfels: readonly T[], b: TileBlock): TileSurfels<T>[] {
+export function splitByTile<T extends Positioned>(surfels: readonly T[], b: TileBlock): TileSurfels<T>[] {
   const tiles = blockTiles(b).map((tile) => ({ tile, surfels: [] as T[] }));
   surfels.forEach((s, n) => {
     const i = Math.floor(s.x);

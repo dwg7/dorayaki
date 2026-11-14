@@ -340,3 +340,32 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   quarter voxel (since v3). This erased the thin axis of planar voxels.
   Fixed: the floor applies only to voxels with fewer than 3 points. It
   corrects the 2026-11-13 "0 % flat" finding (EXPERIMENTS.md E003).
+
+## 2026-11-15 — Surfel Block v4: anisotropic splat records (breaking)
+
+- The record is now a 16-byte quantized Gaussian splat instead of a
+  32-byte disc: x, y as uint16 of the tile, z as uint16 steps (1 mm) from a
+  per-block float64 origin, three log-quantized scales (10 steps per octave),
+  a 23-bit "smallest three" rotation, and RGBA. Header 32 bytes (z origin and
+  step added). v1–v3 are rejected. Decoding is lossy within documented
+  tolerances (`documents/surfel-block-format.md`).
+- Quantization finding: with codes 0..126 and code 63 = 0, the identity and
+  all axis-aligned rotations are exact. A first grid of 128 codes could not
+  represent 0 and left every identity rotation 0.6° off. Round-to-nearest
+  on the three stored components then gave up to 1.6° worst case on random
+  rotations, and more than 2° where all four components are about 0.5 (the
+  wall normals of the synthetic fixtures). Choosing the best of 8 round-up/
+  down combinations at encode time brings that to 1.2° worst, 0.7° mean,
+  with no change to the decoder.
+- Fixtures stay circular surfels and are converted by `surfelToSplat` before
+  encoding; the demo reduces decoded splats back to discs (`splatToSurfel`) in
+  this step. The renderer does not draw anisotropy or round blobs
+  differently yet; that is the next step.
+- Test vectors, fixture hashes and the MLT frame examples were regenerated.
+  Tests compare decoded splats with the originals within the quantization
+  tolerances (`test/helpers.ts`) instead of exactly.
+- Numazu pyramid in v4 (`npm run demo:numazu`, same inputs and omission as
+  E002): z18 122,294 B, z19 479,894 B, z20 491,326 + 1,477,086 B; the
+  PMTiles archive (gzip directories) is 2,571,655 B, exactly half of the v3
+  archive (5,141,899 B) and 0.50x the COPC (xyz+rgb, 5,183,226 B). Node
+  decode of the larger z20 tile: 26.2 ms for 92,313 splats (v3: 22.7 ms).

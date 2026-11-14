@@ -3,8 +3,10 @@ import { test } from "node:test";
 
 import { TOY_GS_COUNTS, TOY_GS_PROPERTIES, toyGaussianPly } from "../src/fixtures/toy-gaussians.js";
 import { PlyError, readPly, writePlyFloat32 } from "../src/gaussian/ply.js";
-import { gaussianToDisc, gaussiansFromPly, placeDiscs, rotationAxes, type Gaussian } from "../src/gaussian/to-surfels.js";
+import { gaussianToDisc, gaussiansFromPly, placeGaussians, rotationAxes, type Gaussian } from "../src/gaussian/to-surfels.js";
+import { splatAxes, splatAxisOrder, splatToSurfel } from "../src/splat.js";
 import { decodeSurfelBlock, encodeSurfelBlock } from "../src/surfel-block.js";
+import { expectSplatsClose } from "./helpers.js";
 import { tileWidthMetres } from "../src/tile-geometry.js";
 import { splitByTile } from "../src/tiling.js";
 
@@ -83,20 +85,41 @@ test("a Gaussian becomes a disc: shortest axis is the normal, radius from the ot
   assert.deepEqual(wall.normal, [0, 1, 0]);
 });
 
-test("placement: east grows x, north shrinks y, normals flip to south-positive y", () => {
-  const discs = [
-    { ...gaussianToDisc(gaussian([1, 0.02, 1])), position: [0, 0, 5] as [number, number, number] },
-    { ...gaussianToDisc(gaussian([1, 1, 0.02])), position: [10, 20, 0] as [number, number, number] },
-  ];
-  const { block, surfels } = placeDiscs(discs, SAPPORO, 18);
+test("placement: east grows x, north shrinks y, and the frame becomes east-south-up", () => {
+  const wall = { ...gaussian([1, 0.02, 1]), position: [0, 0, 5] as [number, number, number] }; // thin axis = north
+  const ground = { ...gaussian([1, 1, 0.02]), position: [10, 20, 0] as [number, number, number] };
+  const { block, splats } = placeGaussians([wall, ground], SAPPORO, 18);
   assert.deepEqual(block.origin, { z: 18, x: 234000, y: 96256 });
-  const [a, b] = surfels as [typeof surfels[0], typeof surfels[0]];
-  assert.equal(a.ny, -1); // facing north
+  const [a, b] = splats as [typeof splats[0], typeof splats[0]];
   assert.equal(a.z, 5);
   const w = tileWidthMetres(block.origin);
   close(b.x - a.x, 10 / w, 1e-5);
   close(a.y - b.y, 20 / w, 1e-5);
   assert.equal(a.a, Math.round(0.8 * 255));
+  // The wall's thin axis is north-south, whichever sign the rotation takes.
+  const n = splatAxes(a)[splatAxisOrder(a)[0]]!;
+  close(Math.abs(n[1]), 1, 1e-9);
+  // The ground's thin axis stays vertical.
+  const g = splatAxes(b)[splatAxisOrder(b)[0]]!;
+  close(Math.abs(g[2]), 1, 1e-9);
+  // Each placed rotation is a unit quaternion (the frame change keeps it a proper rotation).
+  for (const q of [a, b]) close(Math.hypot(q.qw, q.qx, q.qy, q.qz), 1, 1e-12);
+});
+
+test("an arbitrary rotation keeps its axes as lines after the frame change", () => {
+  // Axes of a rotated Gaussian in ENU, as unsigned lines, vs the splat's axes in ESU.
+  const half = (37 * Math.PI) / 360;
+  const q: [number, number, number, number] = [Math.cos(half), 0.3 * Math.sin(half), 0.5 * Math.sin(half), Math.sqrt(1 - 0.34) * Math.sin(half)];
+  const l = Math.hypot(...q);
+  const g = { ...gaussian([3, 2, 1], q.map((v) => v / l) as [number, number, number, number]), position: [1, 2, 3] as [number, number, number] };
+  const enu = rotationAxes(g.rotation);
+  const { splats } = placeGaussians([g], SAPPORO, 18);
+  const esu = splatAxes(splats[0]!);
+  enu.forEach((axis, k) => {
+    const flipped = [axis[0], -axis[1], axis[2]];
+    const dot = Math.abs(flipped[0]! * esu[k]![0] + flipped[1]! * esu[k]![1] + flipped[2]! * esu[k]![2]);
+    close(dot, 1, 1e-9);
+  });
 });
 
 test("the toy GS PLY converts, tiles, and survives encode/decode", () => {
@@ -115,15 +138,18 @@ test("the toy GS PLY converts, tiles, and survives encode/decode", () => {
   for (const d of blob) close(d.flatness, 1, 1e-5); // no preferred axis: the normal is arbitrary
   for (const d of ground) close(d.anisotropy, 1.5, 1e-5); // ellipse flattened to a disc
 
-  const { block, surfels } = placeDiscs(discs, SAPPORO, 18);
-  const tiles = splitByTile(surfels, block);
+  const { block, splats } = placeGaussians(gaussiansFromPly(ply), SAPPORO, 18);
+  const tiles = splitByTile(splats, block);
   assert.equal(tiles.reduce((n, t) => n + t.surfels.length, 0), ply.count);
-  for (const t of tiles) assert.deepEqual(decodeSurfelBlock(encodeSurfelBlock(t.surfels)), t.surfels);
+  for (const t of tiles) expectSplatsClose(decodeSurfelBlock(encodeSurfelBlock(t.surfels)), t.surfels);
+  // The round blob keeps equal scales: it reads back as round (no preferred orientation).
+  const blobSplats = splats.slice(TOY_GS_COUNTS.ground + TOY_GS_COUNTS.wall);
+  for (const q of blobSplats) assert.ok(Math.max(q.sx, q.sy, q.sz) / Math.min(q.sx, q.sy, q.sz) < 1.0001);
 });
 
-test("placement handles hundreds of thousands of discs", () => {
-  const base = gaussianToDisc(gaussian([1, 1, 0.02]));
-  const discs = Array.from({ length: 600_000 }, (_, i) => ({ ...base, position: [(i % 1000) * 0.01, Math.floor(i / 1000) * 0.01, 0] as [number, number, number] }));
-  const { surfels } = placeDiscs(discs, SAPPORO, 20);
-  assert.equal(surfels.length, 600_000);
+test("placement handles hundreds of thousands of Gaussians", () => {
+  const base = gaussian([1, 1, 0.02]);
+  const gaussians = Array.from({ length: 600_000 }, (_, i) => ({ ...base, position: [(i % 1000) * 0.01, Math.floor(i / 1000) * 0.01, 0] as [number, number, number] }));
+  const { splats } = placeGaussians(gaussians, SAPPORO, 20);
+  assert.equal(splats.length, 600_000);
 });

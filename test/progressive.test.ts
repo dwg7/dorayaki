@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { BASE_CELLS, omitWeakRefinements, orderByRefinement, prefixCount } from "../src/progressive.js";
+import { surfelToSplat } from "../src/splat.js";
 import { decodeSurfelBlockWithLevels, encodeSurfelBlock, type Surfel } from "../src/surfel-block.js";
+import { expectSplatsClose } from "./helpers.js";
 
 const W = 32; // metres; level-0 cell = 32 / 512 = 6.25 cm
 const s = (x: number, y: number, z: number, r = 0): Surfel => ({ x, y, z, nx: 0, ny: 0, nz: 1, radius: Math.fround(0.01), r, g: 0, b: 0, a: 255 });
@@ -63,9 +65,10 @@ test("one level is the whole set; ordering is deterministic", () => {
 
 test("the ordered tile round-trips with its level table", () => {
   const { surfels, levels } = orderByRefinement(lattice(), W, 3);
-  const back = decodeSurfelBlockWithLevels(encodeSurfelBlock(surfels, levels));
+  const splats = surfels.map(surfelToSplat);
+  const back = decodeSurfelBlockWithLevels(encodeSurfelBlock(splats, levels));
   assert.deepEqual(back.levels, levels);
-  assert.deepEqual(back.surfels, surfels);
+  expectSplatsClose(back.splats, splats);
   assert.equal(prefixCount(levels, 0), 0);
   assert.equal(prefixCount(levels, 99), surfels.length);
 });

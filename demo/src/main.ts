@@ -3,6 +3,7 @@
  */
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from "maplibre-gl";
 
+import { splatToSurfel } from "../../src/splat.js";
 import { decodeSurfelTileWithLevels } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
@@ -87,6 +88,16 @@ const map = new MapLibreMap({
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
 const urls = tiles.map((t) => (external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t)));
+/**
+ * Decode a tile. This renderer draws circular discs, so each decoded splat is
+ * reduced to a disc (the shortest axis as normal, equal-area radius); the
+ * anisotropy a v4 record carries is not drawn yet.
+ */
+function toLoaded(tile: TileAddress, bytes: Uint8Array) {
+  const { splats, levels } = decodeSurfelTileWithLevels(bytes);
+  return { tile, bytes, surfels: splats.map(splatToSurfel), levels };
+}
+
 /** Load-time measurements (E001 in EXPERIMENTS.md). */
 const timings: { fetchMs?: number; decodeMs?: number } = {};
 const tFetch = performance.now();
@@ -94,7 +105,7 @@ const tilesPromise = fetchTilesBytes(urls, undefined, { allowMissing: external !
   timings.fetchMs = performance.now() - tFetch;
   const tDecode = performance.now();
   // Tiles listed from TileJSON bounds may not exist (204/404); skip those.
-  const decoded = all.flatMap((bytes, n) => (bytes ? [{ tile: tiles[n] as TileAddress, bytes, ...decodeSurfelTileWithLevels(bytes) }] : []));
+  const decoded = all.flatMap((bytes, n) => (bytes ? [toLoaded(tiles[n] as TileAddress, bytes)] : []));
   timings.decodeMs = performance.now() - tDecode;
   return decoded;
 });

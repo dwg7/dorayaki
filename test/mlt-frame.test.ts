@@ -14,10 +14,12 @@ import {
   wrapSurfelBlock,
   type MltFrameErrorCode,
 } from "../src/mlt-frame.js";
+import { surfelToSplat } from "../src/splat.js";
 import { decodeSurfelBlock, encodeSurfelBlock } from "../src/surfel-block.js";
+import { expectSplatsClose } from "./helpers.js";
 
-/** Bridge at an arbitrary but fixed tile width; the wrapper treats bodies as opaque. */
-const generateBridge = () => generateBridgeFixture({ tileWidthMetres: 128 });
+/** Bridge splats at an arbitrary but fixed tile width; the wrapper treats bodies as opaque. */
+const generateBridge = () => generateBridgeFixture({ tileWidthMetres: 128 }).map(surfelToSplat);
 
 const hex = (b: Uint8Array): string => Buffer.from(b).toString("hex");
 const bytes = (h: string): Uint8Array => Uint8Array.from(Buffer.from(h.replace(/\s+/g, ""), "hex"));
@@ -70,16 +72,16 @@ describe("frame envelope", () => {
   test("empty Surfel Block frame has the exact byte layout", () => {
     const block = encodeSurfelBlock([]);
     const frame = wrapSurfelBlock(block);
-    // size = 1 (tag) + 20 (v3 block: 16-byte header + 1-level table) = 21 = 0x15
-    assert.equal(hex(frame), "15" + "d0" + hex(block));
+    // size = 1 (tag) + 36 (v4 block: 32-byte header + 1-level table) = 37 = 0x25
+    assert.equal(hex(frame), "25" + "d0" + hex(block));
   });
 
   test("bridge frame uses a two-byte size varint", () => {
     const block = encodeSurfelBlock(generateBridge());
-    assert.equal(block.byteLength, 13844); // 16 + 4 + 32 × 432
+    assert.equal(block.byteLength, 6948); // 32 + 4 + 16 × 432
     const frame = wrapSurfelBlock(block);
-    assert.equal(hex(frame.subarray(0, 3)), "956c" + "d0"); // size 13845
-    assert.equal(frame.byteLength, 2 + 1 + 13844);
+    assert.equal(hex(frame.subarray(0, 3)), "a536" + "d0"); // size 6949
+    assert.equal(frame.byteLength, 2 + 1 + 6948);
   });
 
   test("experimental tag is not an assigned MLT tag", () => {
@@ -109,12 +111,12 @@ describe("finding and extracting", () => {
 
     const frames = readFrames(tile);
     assert.deepEqual(frames.map((f) => f.tag), [UNKNOWN_TAG, EXPERIMENTAL_SURFEL_FRAME_TAG, UNKNOWN_TAG]);
-    assert.deepEqual(frames.map((f) => f.offset), [0, 6, 6 + 2 + 1 + 13844]);
+    assert.deepEqual(frames.map((f) => f.offset), [0, 6, 6 + 2 + 1 + 6948]);
 
     const found = extractSurfelBlocks(tile);
     assert.equal(found.length, 1);
     assert.deepEqual(found[0], block);
-    assert.deepEqual(decodeSurfelBlock(found[0] as Uint8Array), bridge);
+    expectSplatsClose(decodeSurfelBlock(found[0] as Uint8Array), bridge);
   });
 
   test("unknown frames are skipped by length, not scanned", () => {
@@ -152,7 +154,7 @@ describe("finding and extracting", () => {
     const padded = new Uint8Array(tile.byteLength + 5);
     padded.set(tile, 5);
     const [found] = extractSurfelBlocks(padded.subarray(5));
-    assert.deepEqual(decodeSurfelBlock(found as Uint8Array), generateBridge().slice(0, 2));
+    expectSplatsClose(decodeSurfelBlock(found as Uint8Array), generateBridge().slice(0, 2));
   });
 });
 
