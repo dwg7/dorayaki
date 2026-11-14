@@ -33,6 +33,26 @@ Each splat is drawn as its 2-sigma ellipse in the plane of its two longer
 axes; splats with no preferred orientation are drawn as camera-facing
 discs. Mercator projection only.
 
+## URL flags
+
+All optional; the camera is in the fragment, the rest in the query.
+
+| flag | effect |
+| --- | --- |
+| `?fixture=<name>` | tileset: `bridge`, `overhang`, `boundary`, `toy-gs`, or a real-data set listed in `EXTERNAL_TILESETS` of `demo/src/main.ts` (`numazu*`, `kawazu-*`; those under `demo/tiles/` exist only after building them) |
+| `?lod=<zoom>` | choose tiles and levels as if the map were at this zoom |
+| `?terrain=<exaggeration>` | add MapLibre terrain from stars' `mapterhorn-japan-bridge` Terrarium DEM. Needed for data far above sea level: without terrain the camera is relative to 0 m and high data vanishes or is magnified (NOTES.md) |
+| `?dz=<metres>` | raise every tile, to test high-elevation behaviour |
+| `?extent=<factor>` | scale every splat's semi-axes (default 1); about 1.3 closes the gaps between neighbours ([adaptive-merging.md](adaptive-merging.md)) |
+
+In the page, `window.dorayaki` exposes `map`, `layer`, `loaded`, `timings`,
+`report()`, `measureFrames()` and `holeFraction(rect)` for measurements.
+
+**Measuring in a hidden pane is misleading.** A page in a hidden browser pane
+runs as a background page; MapLibre's `load` waits for a rendered frame and was
+delayed by about 60 s (NOTES.md, 2026-11-15). Show the pane before timing
+anything.
+
 ## Demo modules (`demo/src/`)
 
 Kept separate as AGENTS.md requires.

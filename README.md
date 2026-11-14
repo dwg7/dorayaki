@@ -42,6 +42,12 @@ scales, a rotation and a colour. Here it is quantized into **16 bytes**.
   a lossless copy; finer profiles are 0.43× and 0.50× COPC. See
   [documents/numazu-demo.md](documents/numazu-demo.md) and
   [EXPERIMENTS.md](EXPERIMENTS.md).
+- **Real data, large (local only).** A 196.6-million-point mesh (Kawazu loop
+  bridge, 6.7 GB of LAS) is aggregated in 22 s with 0.8 GB of memory and
+  becomes a 6.3 MB tileset at 49 cm cells or 26 MB at 24.5 cm. These sets are
+  built and viewed locally; they are not hosted yet. See
+  [documents/large-point-clouds.md](documents/large-point-clouds.md) and
+  [documents/size-and-scale.md](documents/size-and-scale.md).
 - **Ordinary delivery.** The Numazu tiles are served from a normal HTTP tile
   endpoint ([TileJSON](https://stars.optgeo.org/dorayaki-numazu), backed by
   PMTiles) and drawn by a MapLibre GL JS custom layer, with pan, zoom,
@@ -78,8 +84,10 @@ Please read this before depending on anything here.
   data, so tilted views at close range can pick the wrong detail.
 - **Frame time is unmeasured**, and browser decoding is slower than in
   Node (about 3 µs per splat vs 0.28 µs).
-- **Mercator only**: no globe or terrain. Heights are orthometric
-  (標高); the geoid model is not recorded in the block.
+- **Mercator only**: no globe. Terrain works through a debug flag
+  (`?terrain=1`) and is needed for data far above sea level (the camera is
+  otherwise relative to 0 m). Heights are orthometric (標高); the geoid
+  model is not recorded in the block.
 - No compression beyond quantization, no spherical harmonics, no
   source-point storage.
 
@@ -94,7 +102,10 @@ in [EXPERIMENTS.md](EXPERIMENTS.md).
 | [documents/mlt-frame.md](documents/mlt-frame.md) | the experimental MLT frame envelope |
 | [documents/progressive-maxzoom.md](documents/progressive-maxzoom.md) | maxzoom and nested refinement order |
 | [documents/numazu-demo.md](documents/numazu-demo.md) | rebuilding and hosting the Numazu tiles; profiles |
-| [documents/demo-and-site.md](documents/demo-and-site.md) | running the demo locally, demo modules, the Pages site |
+| [documents/demo-and-site.md](documents/demo-and-site.md) | running the demo locally, URL flags, demo modules, the Pages site |
+| [documents/large-point-clouds.md](documents/large-point-clouds.md) | streaming build of big LAS files; Virtual Shizuoka data and Kawazu |
+| [documents/adaptive-merging.md](documents/adaptive-merging.md) | merging coplanar splats; covering gaps (`?extent=`) |
+| [documents/size-and-scale.md](documents/size-and-scale.md) | what a tile and a prefecture cost; browser memory |
 | [AGENTS.md](AGENTS.md) | project goals and working method |
 
 ## Development

@@ -597,3 +597,19 @@ Run on the 196.6 M-point Kawazu MMS mesh (zone 8), built and viewed with
   railings blur into patches, tree crowns become blocks. 25 cm keeps the road
   surface and the pillar shapes. Judged by eye in one browser; no frame time
   or image metric was taken.
+
+## 2026-11-15 — Slow loading in the browser pane was the hidden pane
+
+While comparing Kawazu sets the demo page sat on "loading..." for 30 to 60 s.
+`performance.getEntriesByType("resource")` showed all requests to the local
+server and to stars finished within 0.2 s, then nothing until the DEM TileJSON
+request (made in `map.on("load")`) started at 60.3 s. The page's own timings
+(`dorayaki.report()`) were small: fetch 97 ms, decode 669 ms, upload 103 ms for
+388,755 splats (6.2 MB). The Browser pane was hidden (`tabs_context` said so);
+a hidden page runs as a background page and its animation frames are throttled,
+and MapLibre's `load` waits for a rendered frame. After showing the pane and
+reloading, `load` fired at 447 ms, and fetch 132 ms, decode 90 ms, upload
+84 ms, the page ready within about 10 s (the check happened after a 10 s wait).
+So the slowness was a property of measuring in a hidden pane, not of the demo.
+What it does not show: behaviour on a slower GPU or phone, or with tile counts
+far above 6; the demo still fetches and uploads every tile at start.

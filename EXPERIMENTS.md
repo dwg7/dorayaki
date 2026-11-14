@@ -429,3 +429,59 @@ needs a metric or a larger set of views.
 - Whether the renderer's overdraw at large merged splats costs frame time.
 - A merge rule that adapts thickness to the cell size.
 - Size effect of compressing the result (not tried).
+
+## E006: Covering the gaps between splats (`?extent=`)
+
+### Question
+
+Oblique views of a road show a regular pattern of white gaps between splats
+(E005). Does drawing every splat larger than its 2-sigma ellipse close them,
+and at what factor?
+
+### Method
+
+The demo's shader scales every semi-axis by `u_extent` (`?extent=<factor>`;
+round splats scale their radius). `dorayaki.holeFraction(rect)` reads the
+canvas back inside a render event and returns the share of near-white pixels
+(each of R, G, B above 235, the basemap's background) in a screen rectangle.
+Sets: `kawazu-50cm` (uniform 49 cm) and `kawazu-ad-t20-c20` (E005). Views at
+`?terrain=1`, centre of the loop road: `close` zoom 20.5, bearing -30,
+pitch 60, rectangle (x 0.35 to 0.65, y 0.55 to 0.9 of the canvas); `close2`
+zoom 20.3, bearing 150, pitch 50 and `close3` zoom 20.0, bearing 60, pitch 45,
+both rectangle (0.3 to 0.7, 0.5 to 0.95). The pane was visible.
+
+### Measurements (share of near-white pixels)
+
+| view | extent | uniform 49 cm | adaptive |
+| --- | ---: | ---: | ---: |
+| close | 1.0 | 5.05 % | 5.42 % |
+| close | 1.2 | 1.24 % | 1.67 % |
+| close | 1.3 | 0.97 % | 1.37 % |
+| close | 1.5 | 0.62 % | 0.88 % |
+| close2 | 1.0 | 3.99 % | 4.44 % |
+| close2 | 1.3 | 1.30 % | 1.49 % |
+| close2 | 1.5 | 0.98 % | 1.11 % |
+| close3 | 1.0 | 6.03 % | 4.20 % |
+| close3 | 1.3 | 4.73 % | 2.07 % |
+| close3 | 1.5 | 4.15 % | 1.65 % |
+
+### Observations
+
+- A factor of 1.2 removes about three quarters of the gaps in `close` and
+  `close2`; 1.3 and 1.5 remove a little more. 1.22 is the factor at which a
+  square lattice of 2-sigma ellipses of an evenly filled cell would just
+  cover the cell's corners (adaptive-merging.md).
+- In `close3` the rectangle contains foliage and sky, so a floor of real
+  gaps remains; the direction is the same.
+- In the screenshot at 1.3 the adaptive road is continuous and its centre
+  line is one stripe. No view with thin structures (railings) was checked
+  at 1.3; the factor also thickens them and widens overlaps at edges.
+- The metric counts any near-white pixel, including real gaps and bright
+  road paint; it is a relative measure between factors in one view, not a
+  coverage measurement.
+
+### Not yet shown
+
+- The cost on thin structures and silhouettes.
+- Whether the factor should depend on the splat (round discs, merged cells).
+- A default: the flag is off (1.0).

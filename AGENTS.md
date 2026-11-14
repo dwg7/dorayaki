@@ -257,6 +257,9 @@ scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline
 documents/surfel-block-format.md  byte layout and quantization of the Surfel Block (v4)
 documents/mlt-frame.md            experimental MLT frame envelope
 documents/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
+documents/large-point-clouds.md   streaming build, Virtual Shizuoka data, Kawazu
+documents/adaptive-merging.md     E005 merging and E006 gap coverage
+documents/size-and-scale.md       tile and prefecture size arithmetic, browser memory
 scripts/measure-numazu.ts    density and size measurements on the Numazu data
 scripts/measure-omission.ts  E002 omission measurements
 scripts/measure-codec.ts     codec timing in Node
