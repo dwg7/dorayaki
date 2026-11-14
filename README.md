@@ -1,180 +1,132 @@
 # Dorayaki
 
-Dorayaki is an experiment in carrying fully three-dimensional surfels in
-conventional two-dimensional map tiles. It is an implementation
-experiment, not a specification or standard. See `AGENTS.md` for the
-project's goals and working method.
+**Carry 3D Gaussian splats, made from point clouds, in ordinary z/x/y map
+tiles — and draw them in MapLibre GL JS.**
 
-## Current state
+An experiment, not a standard. [日本語の要約は下](#日本語)
 
-Implemented:
+**[Try it in your browser →](https://dwg7.unopengis.org/dorayaki/)** (needs
+WebGL2) · [a real point cloud at Numazu, Japan](https://dwg7.unopengis.org/dorayaki/?fixture=numazu#map=20/35.13419/138.81596/0/60)
+· [a bridge with its underside](https://dwg7.unopengis.org/dorayaki/?fixture=bridge)
+· [an overhang](https://dwg7.unopengis.org/dorayaki/?fixture=overhang)
 
-- a Surfel Block codec (`src/surfel-block.ts`, version 4): a 32-byte header
-  and a level table, followed by 16-byte quantized anisotropic Gaussian
-  splat records (position, three scales, rotation, colour), the primitive of
-  3D Gaussian Splatting. x, y are tile-local, z is orthometric height, scales
-  are metres. The byte layout and quantization are in
-  [`documents/surfel-block-format.md`](documents/surfel-block-format.md);
-- an experimental MLT frame wrapper (`src/mlt-frame.ts`): a Surfel Block
-  as the body of an MLT frame with the local, unassigned tag `0xD0`; see
-  [`documents/mlt-frame.md`](documents/mlt-frame.md). It skips unknown frames by
-  their declared size and rejects malformed sizes;
-- deterministic fixture generators: `plane` (`src/fixtures/plane.ts`),
-  `bridge` (`src/fixtures/bridge.ts`: ground, deck, underside, and vertical
-  piers) and `overhang` (`src/fixtures/overhang.ts`: top, vertical lip,
-  downward-facing underside, recessed back wall, and ground). Both
-  `bridge` and `overhang` hold several surfels at the same x/y with
-  different z;
-- a `boundary` fixture (`src/fixtures/boundary.ts`): a building centred on
-  the corner where four tiles meet, split into a 2 × 2 tile block by the
-  centre-ownership rule in `src/tiling.ts`;
-- a toy 3DGS path (`src/gaussian/`): a minimal PLY reader and a deliberately
-  lossy mapping from 3D Gaussians to v2 surfels, exercised on a
-  deterministic toy PLY (`src/fixtures/toy-gaussians.ts`);
-- a real-data path for point clouds (`src/pointcloud/`, `src/geodesy/`):
-  a minimal LAS reader, the JGD2011 plane rectangular inverse, and one
-  Gaussian per voxel. It is shown in the demo with a VIRTUAL SHIZUOKA MMS
-  point cloud at Numazu (see [Numazu point cloud](#numazu-point-cloud));
-- automated tests for round trips and malformed input (`test/`);
-- a browser demo (`demo/`) that loads one pre-generated bridge tile over
-  HTTP, decodes it, and draws the surfels as instanced discs in a MapLibre
-  GL JS custom layer (`renderingMode: "3d"`). See [Demo](#demo).
+Drag to pan, right-drag or Ctrl-drag to rotate and tilt. The camera is in
+the URL, so you can share a view.
 
-Not yet implemented: PMTiles, tile selection by viewport, tile lifecycle
-integration with MapLibre sources, globe or terrain support, the remaining
-fixtures listed in `AGENTS.md` (`fold`, `floating`), and any compression or quantization.
+## The idea
 
-## Requirements
+> Horizontal addressing uses tiles. Tile contents use surfels.
+
+Map tiles address the world in two dimensions. Terrain in a tile is usually
+a height field: one height per horizontal position. That cannot hold a
+bridge and the road under it, a vertical wall, an overhang, or a tree
+crown. Dorayaki keeps the familiar `z/x/y` addressing and puts a
+three-dimensional distribution of splats inside each tile. Several splats
+may share the same horizontal position at different heights and
+orientations.
+
+A splat is the primitive of 3D Gaussian Splatting: a position, three
+scales, a rotation and a colour. Here it is quantized into **16 bytes**.
+
+## What has been demonstrated
+
+- **Round trip.** A Surfel Block (the tile's contents) encodes and decodes
+  within stated quantization tolerances (`npm test`).
+- **Not a height field.** The `bridge` and `overhang` fixtures hold
+  multiple heights at the same x/y and render correctly from above and
+  below.
+- **Real data, small.** One mobile-mapping point cloud mesh
+  (976,195 points, VIRTUAL SHIZUOKA, Numazu) becomes a 603 KB PMTiles
+  archive in its default `coarse` form: **0.12×** the size of the same
+  points as COPC. That is a coarse picture (one splat per 12 cm cell), not
+  a lossless copy; finer profiles are 0.43× and 0.50× COPC. See
+  [documents/numazu-demo.md](documents/numazu-demo.md) and
+  [EXPERIMENTS.md](EXPERIMENTS.md).
+- **Ordinary delivery.** The Numazu tiles are served from a normal HTTP tile
+  endpoint ([TileJSON](https://stars.optgeo.org/dorayaki-numazu), backed by
+  PMTiles) and drawn by a MapLibre GL JS custom layer, with pan, zoom,
+  bearing and pitch.
+
+## How it works
+
+1. A point cloud is fitted with one Gaussian per voxel (`src/pointcloud/`).
+2. Gaussians are assigned to the one tile containing their centre. Zoom
+   levels below the maximum hold coarser aggregates; the level of detail is
+   the ordinary tile zoom hierarchy.
+3. Each tile's splats are packed into a **Surfel Block** (`DSRF`, version 4)
+   and wrapped in an **experimental MapLibre Tile frame**.
+4. The browser fetches `z/x/y`, unwraps the frame, decodes the block, and
+   draws instanced ellipses (round splats face the camera).
+
+The three concerns are separable: the Surfel Block codec runs and is tested
+without MapLibre; the frame wrapper skips unknown frames and rejects
+malformed lengths; the renderer only sees decoded splats.
+
+## Status and limits
+
+Please read this before depending on anything here.
+
+- **Not a specification.** The byte layout changes without notice and
+  version numbers rise freely (it is at version 4; breaking changes are
+  stated in the format document).
+- **Not an MLT assignment.** Frame tag `0xD0` is a local, unassigned value
+  chosen for the experiment. The upstream MapLibre Tile implementation is
+  unmodified.
+- **One small real dataset.** Conclusions about size come from a single
+  point cloud.
+- **Tile selection follows map zoom**, not the camera's distance to the
+  data, so tilted views at close range can pick the wrong detail.
+- **Frame time is unmeasured**, and browser decoding is slower than in
+  Node (about 3 µs per splat vs 0.28 µs).
+- **Mercator only**: no globe or terrain. Heights are orthometric
+  (標高); the geoid model is not recorded in the block.
+- No compression beyond quantization, no spherical harmonics, no
+  source-point storage.
+
+Observed findings are logged in [NOTES.md](NOTES.md); measured experiments
+in [EXPERIMENTS.md](EXPERIMENTS.md).
+
+## Read more
+
+| document | contents |
+| --- | --- |
+| [documents/surfel-block-format.md](documents/surfel-block-format.md) | byte layout, quantization, coordinate frame |
+| [documents/mlt-frame.md](documents/mlt-frame.md) | the experimental MLT frame envelope |
+| [documents/progressive-maxzoom.md](documents/progressive-maxzoom.md) | maxzoom and nested refinement order |
+| [documents/numazu-demo.md](documents/numazu-demo.md) | rebuilding and hosting the Numazu tiles; profiles |
+| [documents/demo-and-site.md](documents/demo-and-site.md) | running the demo locally, demo modules, the Pages site |
+| [AGENTS.md](AGENTS.md) | project goals and working method |
+
+## Development
 
 Node.js 22 or later.
 
-## Commands
-
-```sh
-npm install         # install dev dependencies (TypeScript, esbuild, MapLibre GL JS)
-npm run typecheck   # type-check src/, test/, scripts/ and demo/src/ without emitting
-npm test            # compile src/ and test/ into build-test/, run node --test
-npm run build       # compile src/ into dist/ (JS, .d.ts, source maps)
-npm run demo:tile   # write demo/tiles/{bridge,overhang,boundary,toy-gs}/18/…/….mlt
-npm run demo:build  # demo:tile, then bundle demo/src/main.ts into demo/build/
-npm run demo        # demo:tile, then bundle and serve on http://127.0.0.1:8000
-```
-
-`dist/`, `build-test/`, `demo/build/` and `demo/tiles/` are generated and
-ignored by git.
-
-## Demo
-
 ```sh
 npm install
-npm run demo
+npm run typecheck   # type-check src/, test/, scripts/ and demo/src/
+npm test            # compile and run node --test
+npm run build       # compile src/ into dist/
+npm run demo        # generate tiles, bundle, serve the demo locally
 ```
 
-Then open <http://127.0.0.1:8000/demo/> in a browser with WebGL2. The
-camera is kept in the URL fragment (`#map=zoom/lat/lng/bearing/pitch`), so
-a view can be shared or reloaded. Other fixtures: the same URL with
-`?fixture=overhang`, `?fixture=boundary` or `?fixture=toy-gs` appended. Stop the server with
-Ctrl-C.
+`npm run demo` serves on 127.0.0.1:8000; details and the other scripts
+(`demo:numazu`, `site`, `measure:*`) are in
+[documents/demo-and-site.md](documents/demo-and-site.md) and `AGENTS.md`.
 
-Each splat is drawn as its 2-sigma ellipse in the plane of its two longer
-axes; splats with no preferred orientation are drawn as camera-facing discs.
-The page loads the fixture's tiles over plain HTTP:
-`demo/tiles/{fixture}/18/234000/96256.mlt` (at Sapporo Station, 111.7 m
-wide) for `bridge` and `overhang`, and that tile plus its east, south and
-south-east neighbours for `boundary`. Each fixture is its own
-tileset directory, so different fixtures can share a tile address. The tile
-holds a synthetic unknown frame followed by the fixture as an experimental
-surfel frame. The red dashed lines are the tile boundaries. The "depth test"
-checkbox turns depth testing off to show its effect. The basemap is the
-`bvmap-starlight` style from [hfu/stars](https://github.com/hfu/stars),
-loaded from `https://stars.optgeo.org/style/bvmap-starlight`. It draws
-GSI optimized vector tiles nationwide.
-The page therefore needs network access for the background map (not for
-the surfels). The surfels are drawn over the vector basemap; the tile
-outline is a GeoJSON line layer added on top.
+Source layout: `src/surfel-block.ts` (codec), `src/mlt-frame.ts` (frame),
+`src/pointcloud/` (point cloud → Gaussians → tile pyramid),
+`src/fixtures/` (deterministic synthetic data), `demo/` (browser demo),
+`test/`.
 
-The server is esbuild's dev server with the repository root as its
-document root, so the page can load MapLibre GL JS from `node_modules/`
-through an import map. It listens on 127.0.0.1 only.
+## 日本語
 
-Demo modules (`demo/src/`), kept separate as AGENTS.md requires:
-
-| module | responsibility |
-| --- | --- |
-| `load-tile.ts` | fetch tile bytes over HTTP |
-| `decode-tile.ts` | MLT frame extraction + Surfel Block decoding |
-| `tile-matrix.ts` | tile-local to Web Mercator placement (float64) |
-| `gpu-surfels.ts` | shaders, buffer upload, instanced draw |
-| `surfel-layer.ts` | MapLibre `CustomLayerInterface` lifecycle |
-| `main.ts` | map setup and wiring |
-| `demo-tile.ts` | demo tile address and deterministic tile bytes |
-
-Placement follows the Surfel Block v2 coordinate frame
-(`documents/surfel-block-format.md`): x and y in [0, 1] span the tile with y
-pointing south, z and radius are metres. The demo converts x, y to metres
-with `tileWidthMetres` (`src/tile-geometry.ts`), about 111.7 m for this
-tile. Mercator projection only.
-
-## Demo site (GitHub Pages)
-
-The demo with the synthetic fixtures is published from `main:docs/` (dwg7
-convention) at <https://dwg7.unopengis.org/dorayaki/>. `docs/` holds only
-the built site; the design documents live in `documents/`.
-
-```sh
-npm run site    # rebuild docs/ (wiped and rewritten)
-```
-
-Commit the result. GitHub Pages does not build anything. The page is a
-single file: `docs/index.html` carries all JavaScript (the demo and MapLibre
-GL JS, bundled by esbuild) and all CSS inline. File names carry no
-content hashes. Besides the page, only MapLibre's Web Worker
-(`docs/maplibre-gl-worker.mjs`, which cannot be inlined), the tiles and
-`.nojekyll` are separate files. MapLibre derives its worker URL from its own
-`import.meta.url`, which bundling turns into the page URL. The build
-therefore defines the worker's page-relative path and the demo passes it
-to `setWorkerUrl`, so it resolves under `/dorayaki/`. The build fails if the
-worker is not self-contained. The Numazu point-cloud tileset is not
-copied into `docs/`. It is hosted as a PMTiles archive on stars (see
-below) and listed on the site only when the build is given its TileJSON:
-`DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site`.
-In the page's console, `dorayaki.report()` and `await
-dorayaki.measureFrames()` give load, upload and frame timings.
-
-## Numazu point cloud
-
-A real-data demo tileset built from Shizuoka Prefecture's VIRTUAL SHIZUOKA
-MMS point cloud (2019, mesh `08NE2701`, CC BY). The data is not in this
-repository. To rebuild it:
-
-```sh
-mkdir -p data/virtual-shizuoka/2019-mms-08NE2701
-curl -o data/virtual-shizuoka/2019-mms-08NE2701/08NE2701.zip https://virtual-shizuoka.s3.ap-northeast-1.amazonaws.com/2019/MMS/Ground/08/NE/27/08NE2701.zip
-unzip data/virtual-shizuoka/2019-mms-08NE2701/08NE2701.zip -d data/virtual-shizuoka/2019-mms-08NE2701
-npm run demo:numazu
-```
-
-The zip is 14,113,240 bytes (SHA-256 `0af0a8ac…e1ca126d`). `npm run
-demo:numazu` writes a tile pyramid with a `tilejson.json` to
-`demo/tiles/numazu/`, the finest Gaussians as a reference-3DGS PLY next to
-the LAS, and the same tiles as one PMTiles archive,
-`demo/tiles/dorayaki-numazu.pmtiles` (tile type MLT, gzip directories).
-That archive is what goes to stars, where Martin serves it as
-`https://stars.optgeo.org/dorayaki-numazu/{z}/{x}/{y}`. Placement on stars
-follows the stars project's procedure and needs hfu's instruction to the
-stars session.
-
-By default it builds the `coarse` profile: aggregated z18 tiles and z19 as
-the maxzoom, one level of 12 cm cells (37,628 splats, 603,132 bytes as
-PMTiles, 0.12 times the COPC of the same points). That is what is hosted.
-`DORAYAKI_NUMAZU_PROFILE=medium` builds one 6 cm level at z20 (2.2 MB,
-`dorayaki-numazu-medium.pmtiles`) and `=fine` the nested, thinned 3-level
-z20 pyramid (2.6 MB). The three are compared in `EXPERIMENTS.md` (E004).
-Open <http://127.0.0.1:8000/demo/?fixture=numazu> while `npm run demo` is
-running (`numazu-medium` and `numazu-fine` for the others, if built);
-`&lod=22` chooses tiles and levels as if the map were at that zoom. Heights
-are the source's elevations (標高), so on the flat basemap the data floats
-at its real elevation, about 7.5 m above the map plane.
+点群から作った 3D Gaussian Splatting のスプラットを、通常の z/x/y 地図タイルに
+載せて MapLibre GL JS で描画する実験です。標準仕様ではありません。タイルの
+住所は従来どおり2次元、中身は3次元のスプラットなので、橋とその下の道路、垂直面、
+オーバーハング、樹冠のように、同じ水平位置に複数の高さがあるものも保持できます。
+沼津の MMS 点群(976,195点)は、既定の `coarse` で 603 KB の PMTiles
+(同じ点の COPC の 0.12 倍。粗い表現であり可逆ではありません)になります。
+[ブラウザで試す](https://dwg7.unopengis.org/dorayaki/)。
 
 ## License
 
