@@ -392,10 +392,39 @@ Tiles built and viewed (zoom 18.6, pitch 55, `?terrain=1`):
 - Browser load of these 6 MB sets was slow (tens of seconds) in this
   session; not measured or investigated.
 
+### Oblique check, 20 cm / 0.2 (`kawazu-ad-t20-c20`) against `kawazu-50cm` and `kawazu-25cm`
+
+Same views for each set, `?terrain=1`, in the browser pane; by eye, no image
+metric. The camera cannot get closer to the ground than the terrain allows,
+so the requested pitch 70 at zoom 20.4 was clamped to 64.
+
+- Road, zoom 19.4, bearing -30, pitch 70: all three show the road and the
+  yellow centre line. `kawazu-50cm` and the adaptive set both show a regular
+  pattern of white gaps on the road (the quads' ellipses do not cover the
+  cell corners); `kawazu-25cm` has fewer, smaller gaps. The adaptive set is
+  not worse than the uniform 50 cm one here.
+- Road close-up, zoom 20.5, bearing -30, pitch 60: the adaptive road is made
+  of larger ellipses with diamond-shaped gaps and a centre line that reads
+  as a nearly continuous line; the uniform 50 cm road is round discs with
+  round gaps and a dotted centre line. The gaps in the adaptive set are
+  larger and more angular.
+- Under the loop and in the trees, zoom 19.8, bearing 120, pitch 72: the
+  adaptive set shows large flat dark ellipses on shadowed ground and trunks
+  in the foreground, where the uniform 50 cm set shows round discs and the
+  25 cm set small ones. Shapes are recognisable in all three; the adaptive
+  one looks smoother on trunks and blobbier on foliage.
+- Not reached: a railing close-up and roof edges (no building in the views).
+  The loop's deck edge was only seen from zoom 19.2 and farther.
+
+Reading: at 20 cm, no failure that the uniform 50 cm set does not already
+have was found in these four views, and the centre line improves. The gaps
+between large ellipses are the visible cost. Whether it is a real regression
+needs a metric or a larger set of views.
+
 ### Not yet shown
 
-- Whether `thickness = 20 cm` creates visible errors at oblique angles, on
-  thin structures (railings, wires) or at roof edges: only one view looked at.
+- Whether `thickness = 20 cm` creates visible errors on thin structures
+  (railings, wires) or at roof edges: not reached by the views below.
 - Behaviour on airborne laser data and on merged MMS + airborne data.
 - Whether the renderer's overdraw at large merged splats costs frame time.
 - A merge rule that adapts thickness to the cell size.
