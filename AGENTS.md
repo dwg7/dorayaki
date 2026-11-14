@@ -208,7 +208,7 @@ npm run build       # tsc src/ into dist/
 npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang,boundary,toy-gs}/18/x/y.mlt)
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
-npm run demo:numazu # build demo/tiles/numazu/ from data/ (download: README)
+npm run demo:numazu # build demo/tiles/numazu/ and dorayaki-numazu.pmtiles from data/ (download: README); DORAYAKI_NUMAZU_PROFILE=fine|coarse for the others
 npm run site        # rebuild the GitHub Pages site in docs/ (commit the output)
 npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size table
 npm run measure:omission  # E002: omission strategies on the Numazu data
@@ -237,6 +237,7 @@ src/gaussian/ply.ts          minimal binary little-endian PLY reader/writer
 src/gaussian/to-surfels.ts   3DGS Gaussian -> splat mapping and tile placement
 src/pointcloud/las.ts        minimal LAS reader (formats 0-3, no LAZ)
 src/pointcloud/voxel-gaussians.ts  one Gaussian per voxel from a point cloud
+src/pointcloud/pyramid.ts    tile pyramid from a point cloud: aggregated zooms + maxzoom levels
 src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
 scripts/build-numazu-demo.ts builds the numazu tileset from data/ (not committed)
 src/index.ts                 package entry point

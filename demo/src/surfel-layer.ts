@@ -56,6 +56,12 @@ export class SurfelLayer implements CustomLayerInterface {
   readonly renderingMode = "3d" as const;
 
   depthTest = true;
+  /**
+   * Debug aid: choose tiles and levels as if the map were at this zoom
+   * (`?lod=` in the demo). Tile selection uses the map zoom by default, which
+   * does not follow the camera's distance to the data (NOTES.md).
+   */
+  zoomOverride: number | undefined;
 
   private readonly tiles: TileState[];
   private map: MapLibreMap | undefined;
@@ -94,7 +100,7 @@ export class SurfelLayer implements CustomLayerInterface {
   render(gl: WebGL2RenderingContext, options: CustomRenderMethodInput): void {
     if (!this.program || !this.map) return;
     const t0 = performance.now();
-    const displayZoom = this.map.getZoom();
+    const displayZoom = this.zoomOverride ?? this.map.getZoom();
     const zoom = selectZoom(this.tiles.map((t) => t.tile.z), displayZoom);
     let drawn = 0, count = 0;
     let plan: TileDraw = { count: 0, levelsDrawn: 1, minRadius: 0 };

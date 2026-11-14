@@ -155,19 +155,26 @@ npm run demo:numazu
 ```
 
 The zip is 14,113,240 bytes (SHA-256 `0af0a8ac…e1ca126d`). `npm run
-demo:numazu` writes the finest Gaussians as a reference-3DGS PLY next to
-the LAS, a tile pyramid with a `tilejson.json` to `demo/tiles/numazu/`, and
-the same tiles as one PMTiles archive, `demo/tiles/dorayaki-numazu.pmtiles`
-(tile type MLT, gzip directories). That archive is what goes to stars, where
-Martin serves it as `https://stars.optgeo.org/dorayaki-numazu/{z}/{x}/{y}`.
-Placement on stars follows the stars project's procedure and needs hfu's
-instruction to the stars session. The pyramid holds
-aggregated z18 and z19 tiles and z20 maxzoom tiles in a 3-level
-progressive order (`documents/progressive-maxzoom.md`). The demo draws the
-tiles and levels that match the map zoom. Open <http://127.0.0.1:8000/demo/?fixture=numazu>
-while `npm run demo` is running. Heights are the source's elevations
-(標高), so on the flat basemap the data floats at its real elevation,
-about 7.5 m above the map plane.
+demo:numazu` writes a tile pyramid with a `tilejson.json` to
+`demo/tiles/numazu/`, the finest Gaussians as a reference-3DGS PLY next to
+the LAS, and the same tiles as one PMTiles archive,
+`demo/tiles/dorayaki-numazu.pmtiles` (tile type MLT, gzip directories).
+That archive is what goes to stars, where Martin serves it as
+`https://stars.optgeo.org/dorayaki-numazu/{z}/{x}/{y}`. Placement on stars
+follows the stars project's procedure and needs hfu's instruction to the
+stars session.
+
+By default it builds the `medium` profile: aggregated z18 and z19 tiles and
+one 6 cm level at z20 (137,684 splats, about 2.2 MB as PMTiles, 0.43 times
+the COPC of the same points).
+`DORAYAKI_NUMAZU_PROFILE=fine` builds the nested, thinned 3-level z20
+pyramid (2.6 MB) and `=coarse` stops at z19 (0.6 MB). The three are compared
+in `EXPERIMENTS.md` (E004). Open
+<http://127.0.0.1:8000/demo/?fixture=numazu> while `npm run demo` is
+running (`numazu-fine` and `numazu-coarse` for the others, if built);
+`&lod=22` chooses tiles and levels as if the map were at that zoom. Heights
+are the source's elevations (標高), so on the flat basemap the data floats
+at its real elevation, about 7.5 m above the map plane.
 
 ## License
 

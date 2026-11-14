@@ -161,6 +161,10 @@ The tileset is distributed as one PMTiles archive (`dorayaki-numazu.pmtiles`,
 Next: coarser Gaussians and a compact record (E003, v4), measured against
 the same COPC reference.
 
+Update (2026-11-15): E004 compared the thinned `fine` pyramid with coarser
+ones in Surfel Block v4 and chose a single-level pyramid for the hosted
+Numazu tileset. The omission rule stays available (`fine` profile).
+
 Note (2026-11-14): these runs floored every Gaussian's scales at a quarter
 voxel. E003 found that this erases the thin axis of planar voxels. Counts,
 supports and bytes above do not depend on it; shape statistics do.
@@ -236,3 +240,82 @@ about 16 B). Then a Numazu pyramid whose maxzoom stops at coarser detail
 (z19–z20 voxels instead of point-level), compared visually and by size
 against the current tiles. The scale-floor fix is adopted now
 (`degenerateScale` in `src/pointcloud/voxel-gaussians.ts`).
+
+## E004: Coarser Numazu pyramids in Surfel Block v4
+
+### Question
+
+Surfel Block v4 (16-byte anisotropic splats) halves the size of the same
+tiles. Producing the surfels more coarsely should shrink the data further:
+by how much, and what does it cost in how the data looks?
+
+### Baseline
+
+Numazu mesh 08NE2701 as in E002, with the `fine` profile: z18 and z19
+aggregated; z20 maxzoom with 3 nested levels (6.1, 3.1 and 1.5 cm cells),
+refinement Gaussians with fewer than 6 points omitted. In v3 (32-byte
+records) it was 5,141,899 B as PMTiles.
+
+### Fixture
+
+VIRTUAL SHIZUOKA MMS mesh 08NE2701 (Numazu, 976,195 points, CC BY). COPC
+reference 5,183,226 B (xyz+rgb).
+
+### Measurements
+
+`DORAYAKI_NUMAZU_PROFILE=<name> npm run demo:numazu`. All use v4, 16-byte
+records, gzip PMTiles directories.
+
+| profile | pyramid | splats | tile bytes | PMTiles | × COPC | bytes per source point |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| v3 `fine` (reference) | z18, z19; z20 × 3 levels, support ≥ 6 | 160,644 | 5,140,841 | 5,141,899 | 0.99 | 5.27 |
+| `fine` | the same, v4 | 160,644 | 2,570,600 | 2,571,701 | 0.50 | 2.63 |
+| `medium` | z18, z19; z20 one level (6.1 cm) | 137,684 | 2,203,224 | 2,204,268 | 0.43 | 2.26 |
+| `coarse` | z18; z19 one level (12.2 cm) | 37,628 | 602,188 | 603,132 | 0.12 | 0.62 |
+
+Per zoom (splats / bytes): z18 7,639 / 122,294 in every profile; z19 29,989 /
+479,894 in `fine` and `medium`; z20 `fine` 123,016 / 1,968,412, `medium`
+100,056 / 1,601,036.
+
+Visual comparison: one camera 9 m south of the data and 12 m above sea
+level, pitch 80°, looking north (`?lod=22` forces the finest tile and level
+choice; see Observation).
+
+- `fine`: close up, the surfaces read as a sparse cloud of small dots about
+  6 cm apart, with gaps;
+- `medium`: continuous, overlapping 6 cm splats; roof tiles, walls and the
+  tree crown read as surfaces and volumes;
+- `coarse`: 12 cm discs, visibly separate at 9 m, but the structure (roof,
+  walls, crown) is still readable.
+
+### Observation
+
+- v4 halves the `fine` pyramid (5.14 → 2.57 MB), as the record halves.
+- Going coarser saves more: `medium` is 14 % smaller than `fine` and
+  `coarse` is 77 % smaller. Stopping at z19 puts the whole pyramid at 12 %
+  of the COPC.
+- The 6 cm level at z20 is most of the bytes: 1.60 MB of the `medium`
+  pyramid's 2.20 MB.
+- The nested refinement levels did not help at close range. In the
+  `fine` tile, level 0 holds one *finest* (1.5 cm) Gaussian per 6 cm cell,
+  not a 6 cm Gaussian. The renderer widens the drawn splats only to cover
+  the cell of the finest level it draws. When all three levels are drawn,
+  that floor is 1.1 cm, and omitted refinements leave holes. The extra
+  detail costs 19 % more bytes than `medium` and looks worse.
+- The hypothesis this suggests, not tested: a level should carry
+  Gaussians fitted at its own cell size, so that each prefix is a complete
+  surface, instead of sampled fine Gaussians.
+- At 9 m from the data the map zoom stayed about 19.8, so by default the
+  demo would draw z19 there. `?lod=` was added to the demo to compare
+  levels fairly. Distance-based selection is still not implemented.
+- Fidelity of the sampling itself is in E003: plane residual 0.36 cm at
+  6.1 cm and 0.79 cm at 12.2 cm, with the ellipse covering 91 % and 89 % of
+  a voxel's own points.
+
+### Decision
+
+Host `medium` as `dorayaki-numazu.pmtiles` (2,204,268 B): the best balance
+of size and look here, and it matches the request for slightly coarser
+surfels. `fine` stays as a profile for reference and for datasets dense
+enough to need progressive levels. `coarse` is the floor if size matters
+more than close-up quality. The final choice is the repository owner's.

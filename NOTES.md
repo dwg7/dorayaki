@@ -397,3 +397,22 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   reload the page, so a rebuilt bundle was not picked up until a query was
   added. Screenshots of the hidden pane lag: the DOM and the map state are
   current, but the image can show an earlier frame for several seconds.
+
+## 2026-11-15 — Numazu profiles; coarser is better at close range
+
+- `buildPyramid` (`src/pointcloud/pyramid.ts`) now builds the Numazu
+  pyramid; `npm run demo:numazu` takes `DORAYAKI_NUMAZU_PROFILE` = `medium`
+  (default, hosted), `fine` (the E002 pyramid) or `coarse`. Sizes and the
+  visual comparison are in EXPERIMENTS.md E004: PMTiles 2,204,268 B
+  (medium), 2,571,701 B (fine), 603,132 B (coarse).
+- The finding that matters: the thinned `fine` pyramid looks worse close up
+  than the single-level `medium` one, although it costs more. Its level 0
+  is made of sampled 1.5 cm Gaussians, so it is a sparse cloud, not a
+  surface.
+- The demo has `?lod=<zoom>`, a debug override that chooses tiles and levels
+  as if the map were at that zoom. It exists because the map zoom does not
+  follow the camera's distance to the data.
+- The medium PMTiles was cross-checked with go-pmtiles 1.28 (`pmtiles tile`
+  returned a z20 tile byte-identical to the file written by the producer).
+- During these browser checks someone clicked in the pane, and the camera
+  state can drift if scripted and manual input mix.

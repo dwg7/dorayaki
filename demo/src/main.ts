@@ -33,7 +33,11 @@ if (typeof __DORAYAKI_WORKER_URL__ !== "undefined") {
 }
 
 const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
-  typeof __DORAYAKI_EXTERNAL_TILESETS__ !== "undefined" ? __DORAYAKI_EXTERNAL_TILESETS__ : { numazu: "tiles/numazu/tilejson.json" };
+  typeof __DORAYAKI_EXTERNAL_TILESETS__ !== "undefined" ? __DORAYAKI_EXTERNAL_TILESETS__ : {
+        numazu: "tiles/numazu/tilejson.json",
+        "numazu-fine": "tiles/numazu-fine/tilejson.json",
+        "numazu-coarse": "tiles/numazu-coarse/tilejson.json",
+      };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
 const isExternal = (name: string): name is ExternalTileset => Object.hasOwn(EXTERNAL_TILESETS, name);
@@ -119,6 +123,8 @@ map.on("load", () => {
   tilesPromise.then(
     (loaded) => {
       const layer = new SurfelLayer("surfels", loaded);
+      const lod = Number(new URLSearchParams(location.search).get("lod"));
+      if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
       map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
       depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
       const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);

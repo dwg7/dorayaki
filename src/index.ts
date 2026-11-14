@@ -37,3 +37,4 @@ export {
 export { BASE_CELLS, omitWeakRefinements, orderByRefinement, prefixCount, type RefinementOrder } from "./progressive.js";
 export { PmtilesCompression, PmtilesTileType, writePmtiles, zxyToTileId, type PmtilesOptions, type PmtilesTile } from "./pmtiles.js";
 export { DISC_THICKNESS, quaternionFromAxes, rotationAxes, splatAxes, splatAxisOrder, splatRoundness, splatToSurfel, surfelToSplat, type Quat, type Vec3 } from "./splat.js";
+export { buildPyramid, fitVoxels, type Pyramid, type PyramidConfig, type PyramidTile } from "./pointcloud/pyramid.js";
