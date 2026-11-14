@@ -322,3 +322,81 @@ according to need afterwards. `medium` (2,204,268 B,
 matters, and `fine` stays as a profile for reference and for datasets dense
 enough to need progressive levels. The default profile of
 `npm run demo:numazu` is therefore `coarse`.
+
+## E005: Adaptive merging of voxel Gaussians (Kawazu MMS, 50 cm class)
+
+### Question
+
+A uniform 49 cm grid (`kawazu-50cm`: 318,817 splats at z17, 6.33 MB with
+z16) spends the same number of splats on a flat road as on a tree crown.
+Can the splat count at that size be cut, or the detail raised at the same
+count, by merging neighbouring Gaussians that are nearly coplanar and of the
+same colour?
+
+### Method
+
+`src/pointcloud/adaptive.ts` (`adaptiveGaussians`) starts from the occupied
+voxels of a streaming accumulator. For each merge level (cells double,
+`size · 2^k`) the occupied children of a parent cell are combined exactly
+(parallel-axis moments) and replaced by one Gaussian when (a) the smallest
+standard deviation of the merged points is at most `thickness` and (b) every
+child's mean colour is within `colour` of the merged mean, per channel.
+A parent that fails blocks all larger ancestors, so sizes never overlap. The
+result is a flat list of mixed-size Gaussians in one level, not an LOD.
+Aggregated zooms (z16) are unchanged. Counts: `npm run measure:adaptive`;
+tiles: `DORAYAKI_ADAPTIVE_*` with `npm run build:tileset`. Data: the Kawazu
+MMS mesh 08OF4060 (196.6 M points).
+
+### Measurements (splats at the maxzoom, share of the base voxel count)
+
+Base 49 cm (318,875 voxels), 4 levels (up to 7.8 m cells):
+
+| thickness | colour 0.1 | colour 0.3 | colour off |
+| ---: | ---: | ---: | ---: |
+| 3 cm | 91 % | 88 % | 87 % |
+| 5 cm | 89 % | 84 % | 83 % |
+| 10 cm | 83 % | 75 % | 74 % |
+| 20 cm | 68 % | 55 % | 52 % |
+
+Base 24.5 cm (1,232,448 voxels), 5 levels (up to 7.8 m cells):
+
+| thickness | colour 0.1 | colour 0.2 | colour 0.3 | colour off |
+| ---: | ---: | ---: | ---: | ---: |
+| 3 cm | 85 % | 82 % | 80 % | 79 % |
+| 5 cm | 80 % | 76 % | 74 % | 72 % |
+| 10 cm | 66 % | 59 % | 56 % | 53 % |
+| 20 cm | 39 % | 25 % | 20 % | 15 % |
+
+Tiles built and viewed (zoom 18.6, pitch 55, `?terrain=1`):
+
+| set | base | thickness, colour | splats at z17 | all tiles |
+| --- | --- | --- | ---: | ---: |
+| `kawazu-50cm` | 49 cm uniform | – | 318,817 | 6.33 MB |
+| `kawazu-ad-t20-c20` | 24.5 cm adaptive | 20 cm, 0.2 | 311,871 | 6.22 MB |
+| `kawazu-ad-t10-c20` | 24.5 cm adaptive | 10 cm, 0.2 | 725,736 | 12.84 MB |
+
+### Observations
+
+- With strict limits (5 cm) merging removes only 11 to 20 % of the
+  splats: on this scene most 50 cm and 25 cm voxels are not flat to 5 cm
+  (trees, railings, walls, MMS noise).
+- A uniform 49 cm cell has a thickness of up to 14 cm (cell / sqrt(12)),
+  so 20 cm is no looser than the uniform grid already is.
+  At 20 cm / 0.2 from the 25 cm base, the count equals the uniform 50 cm
+  set (311,871 against 318,817), while the picture shows more detail: the
+  lane markings on the loop road are visible, which the uniform 50 cm set
+  blurs. Judged by eye in one browser view; no image metric.
+- 10 cm / 0.2 at 726k splats looks like the 25 cm set (1.23 M).
+- The thickness limit is the dominant parameter; the colour limit moves
+  the count by 10 to 25 points of share, mostly at 20 cm.
+- Browser load of these 6 MB sets was slow (tens of seconds) in this
+  session; not measured or investigated.
+
+### Not yet shown
+
+- Whether `thickness = 20 cm` creates visible errors at oblique angles, on
+  thin structures (railings, wires) or at roof edges: only one view looked at.
+- Behaviour on airborne laser data and on merged MMS + airborne data.
+- Whether the renderer's overdraw at large merged splats costs frame time.
+- A merge rule that adapts thickness to the cell size.
+- Size effect of compressing the result (not tried).
