@@ -1,7 +1,7 @@
 /**
  * Demo entry point: wires loading -> decoding -> custom layer.
  */
-import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from "maplibre-gl";
+import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type ExpressionSpecification } from "maplibre-gl";
 
 import { decodeSurfelTileWithLevels } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
@@ -81,6 +81,17 @@ fixtureEl.replaceChildren(
   }),
 );
 
+// Minimize / restore the info panel (the title stays).
+const panelEl = document.getElementById("panel") as HTMLElement;
+const toggleEl = document.getElementById("panel-toggle") as HTMLButtonElement;
+toggleEl.addEventListener("click", () => {
+  const min = panelEl.classList.toggle("min");
+  toggleEl.textContent = min ? "+" : "\u2212";
+  toggleEl.setAttribute("aria-expanded", String(!min));
+  toggleEl.setAttribute("aria-label", min ? "Restore the panel" : "Minimize the panel");
+  toggleEl.title = min ? "Restore" : "Minimize";
+});
+
 const statusEl = document.getElementById("status") as HTMLElement;
 const depthEl = document.getElementById("depth") as HTMLInputElement;
 const setStatus = (text: string): void => {
@@ -135,6 +146,13 @@ const tilesPromise = fetchTilesBytes(urls, undefined, { allowMissing: external !
 });
 
 map.on("load", () => {
+  // Fade the basemap from zoom 15.5 (to 20 % at zoom 19) so the splats stand out; `?fade=0` keeps it as is.
+  // Only layers whose opacity is a plain number are changed.
+  const fade = (v: number): ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], 15.5, v, 19, v * 0.2];
+  if (flag("fade", tileset) !== "0") for (const l of map.getStyle().layers) for (const p of (l.type === "symbol" ? ["text-opacity", "icon-opacity"] : [`${l.type}-opacity`]) as "fill-opacity"[]) {
+    const v = map.getPaintProperty(l.id, p) ?? 1;
+    if (typeof v === "number") map.setPaintProperty(l.id, p, fade(v));
+  }
   // Debug (`?terrain=1`): MapLibre terrain from stars' Terrarium DEM, to see how the custom layer behaves with it.
   const terrain = Number(flag("terrain", tileset));
   if (terrain > 0) {

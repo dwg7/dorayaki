@@ -16,16 +16,27 @@
         background: rgba(255, 255, 255, 0.9); padding: 8px 10px;
         font: 13px/1.4 system-ui, sans-serif; border-radius: 4px; max-width: 22em;
       }
+      #panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6em; }
+      #panel-toggle {
+        font: inherit; line-height: 1; width: 1.6em; height: 1.6em; padding: 0; cursor: pointer;
+        border: 1px solid #999; border-radius: 3px; background: #fff;
+      }
+      #panel.min #panel-body { display: none; }
     </style>
   </head>
   <body>
     <div id="map"></div>
     <div id="panel">
-      <strong>Dorayaki</strong>: experimental surfel frame<br />
-      fixture: <span id="fixture"></span><br />
-      <span id="status">loading…</span><br />
-      <label><input type="checkbox" id="depth" checked /> depth test</label><br />
-      <small>Red dashed line: tile boundary. Ctrl/right-drag to rotate and pitch.</small>
+      <div id="panel-head">
+        <span><strong>Dorayaki</strong>: experimental surfel frame</span>
+        <button id="panel-toggle" type="button" aria-label="Minimize the panel" aria-expanded="true" title="Minimize">&minus;</button>
+      </div>
+      <div id="panel-body">
+        fixture: <span id="fixture"></span><br />
+        <span id="status">loading…</span><br />
+        <label><input type="checkbox" id="depth" checked /> depth test</label><br />
+        <small>Red dashed line: tile boundary. Ctrl/right-drag to rotate and pitch.</small>
+      </div>
     </div>
     <script type="module" src="/demo/build/main.js"></script>
   </body>

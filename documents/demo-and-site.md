@@ -43,7 +43,10 @@ All optional; the camera is in the fragment, the rest in the query.
 | `?lod=<zoom>` | choose tiles and levels as if the map were at this zoom |
 | `?terrain=<exaggeration>` | add MapLibre terrain from stars' `mapterhorn-japan-bridge` Terrarium DEM. Needed for data far above sea level: without terrain the camera is relative to 0 m and high data vanishes or is magnified (NOTES.md) |
 | `?dz=<metres>` | raise every tile, to test high-elevation behaviour |
+| `?fade=0` | keep the basemap at full opacity. By default its layers fade from zoom 15.5 to 20 % at zoom 19, so the splats stand out. Only layers whose opacity is a plain number are changed (92 of 135 opacity properties of the bvmap-starlight style, including 59 of 99 line properties); layers with their own zoom expressions are not |
 | `?extent=<factor>` | scale every splat's semi-axes (default 1); about 1.3 closes the gaps between neighbours ([adaptive-merging.md](adaptive-merging.md)) |
+
+The panel at the top left has a minimize button (the title stays).
 
 In the page, `window.dorayaki` exposes `map`, `layer`, `loaded`, `timings`,
 `report()`, `measureFrames()` and `holeFraction(rect)` for measurements.
