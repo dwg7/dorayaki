@@ -438,3 +438,27 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   (`.dorayaki-numazu.pmtiles.new.<rand>`, invisible to Martin's `*.pmtiles`
   scan), then `mv` into place; Martin registers new files without restart.
   Authentication is hfu's.
+
+## 2026-11-15 — dorayaki-numazu.pmtiles published on stars
+
+- Uploaded with hfu authenticating (Cloudflare Access opens a browser window
+  for `ssh spacex.optgeo.org`; the first attempt timed out at a 20 s connect
+  timeout while the window waited, so use a long `ConnectTimeout`):
+  read-only check (no dorayaki files, 1.3 TB free, Martin active), `scp` to
+  `/home/stars/data/.dorayaki-numazu.pmtiles.new.<rand>`, size and sha256
+  verified on the host (603,132 B, `7c3ce0b1…d643b017`), then `mv -n` to
+  `dorayaki-numazu.pmtiles`.
+- Martin registered it with no restart. `https://stars.optgeo.org/dorayaki-numazu`
+  returns a TileJSON (minzoom 18, maxzoom 19, the attribution from the
+  PMTiles metadata). z18 and z19 tiles come back as
+  `application/vnd.maplibre-tile` with the exact sizes (122,294 and 479,894 B)
+  and the producer's sha256. Out-of-range tiles are 404. CORS echoes the
+  request origin (`https://dwg7.unopengis.org` and a local origin were
+  checked). Responses are cached for 4 hours (`max-age=14400`).
+- Martin 1.14.0 read the archive with gzip directories and raw MLT tiles, as
+  predicted. A `?cb=` query on the TileJSON request is copied into the
+  `tiles` template it returns; without a query the template is clean.
+- The demo page (built with `DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu`)
+  loads Numazu from stars: 2 tiles, 602,188 B, 37,628 splats. Fetch from
+  stars 235 ms, decode 14.7 ms, upload 13.5 ms (Apple M1, local page, remote
+  data), with no console errors.
