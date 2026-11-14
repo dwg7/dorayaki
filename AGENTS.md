@@ -214,6 +214,8 @@ npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size t
 npm run measure:omission  # E002: omission strategies on the Numazu data
 npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
 npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
+npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
+npm run build:tileset -- <file.las> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size)
 DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  # list Numazu on the site
 ```
 
@@ -236,7 +238,8 @@ src/fixtures/toy-gaussians.ts  deterministic toy 3DGS PLY (stand-in for real dat
 src/gaussian/ply.ts          minimal binary little-endian PLY reader/writer
 src/gaussian/to-surfels.ts   3DGS Gaussian -> splat mapping and tile placement
 src/pointcloud/las.ts        minimal LAS reader (formats 0-3, no LAZ)
-src/pointcloud/voxel-gaussians.ts  one Gaussian per voxel from a point cloud
+src/pointcloud/voxel-gaussians.ts  one Gaussian per voxel from a point cloud (in memory)
+src/pointcloud/voxel-accumulator.ts  the same fit, streaming: memory grows with voxels, not points
 src/pointcloud/pyramid.ts    tile pyramid from a point cloud: aggregated zooms + maxzoom levels
 src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
 scripts/build-numazu-demo.ts builds the numazu tileset from data/ (not committed)
@@ -256,6 +259,8 @@ scripts/measure-numazu.ts    density and size measurements on the Numazu data
 scripts/measure-omission.ts  E002 omission measurements
 scripts/measure-codec.ts     codec timing in Node
 scripts/measure-coarse.ts    E003 coarse Gaussian measurements
+scripts/measure-stream.ts    streaming voxelisation of a LAS file (chunked read)
+scripts/build-tileset.ts     streaming tileset builder for a LAS file of any size (one level per tile)
 ```
 
 Do not invent commands that are not present in package.json.

@@ -104,24 +104,44 @@ export function fitVoxelGaussians(points: LocalPoints, options: VoxelOptions): G
     const n = s[0]!;
     if (n < minPoints) continue;
     const mx = s[1]! / n, my = s[2]! / n, mz = s[3]! / n;
-    const cxx = s[4]! / n - mx * mx, cxy = s[5]! / n - mx * my, cxz = s[6]! / n - mx * mz;
-    const cyy = s[7]! / n - my * my, cyz = s[8]! / n - my * mz, czz = s[9]! / n - mz * mz;
-    const { values, vectors } = symmetricEigen3([cxx, cxy, cxz, cxy, cyy, cyz, cxz, cyz, czz]);
-    const col = (j: number) => [vectors[0]![j]!, vectors[1]![j]!, vectors[2]![j]!];
-    let c0 = col(0), c1 = col(1), c2 = col(2);
-    // Ensure a proper rotation (determinant +1).
-    const det = c0[0]! * (c1[1]! * c2[2]! - c1[2]! * c2[1]!) - c0[1]! * (c1[0]! * c2[2]! - c1[2]! * c2[0]!) + c0[2]! * (c1[0]! * c2[1]! - c1[1]! * c2[0]!);
-    if (det < 0) c2 = c2.map((v) => -v);
-    out.push({
-      position: [mx, my, mz],
-      scales: values.map((ev) => Math.max(n < 3 ? degenerateScale : minScale, Math.sqrt(Math.max(0, ev)))) as [number, number, number],
-      rotation: quaternionFromAxes(c0, c1, c2),
-      colour: [s[10]! / n, s[11]! / n, s[12]! / n],
-      opacity,
-      support: n,
-    });
+    out.push(gaussianFromMoments(
+      n, [mx, my, mz],
+      [s[4]! / n - mx * mx, s[5]! / n - mx * my, s[6]! / n - mx * mz, s[7]! / n - my * my, s[8]! / n - my * mz, s[9]! / n - mz * mz],
+      [s[10]! / n, s[11]! / n, s[12]! / n],
+      { minScale, degenerateScale, opacity },
+    ));
   }
   return out;
+}
+
+/**
+ * The Gaussian of one voxel from its point count, mean, covariance
+ * (xx, xy, xz, yy, yz, zz) and mean colour. Shared by the in-memory fit and
+ * the streaming accumulator (voxel-accumulator.ts).
+ */
+export function gaussianFromMoments(
+  n: number,
+  mean: readonly [number, number, number],
+  cov: readonly [number, number, number, number, number, number],
+  colour: readonly [number, number, number],
+  options: { minScale: number; degenerateScale: number; opacity: number },
+): Gaussian {
+  const [cxx, cxy, cxz, cyy, cyz, czz] = cov;
+  const { values, vectors } = symmetricEigen3([cxx, cxy, cxz, cxy, cyy, cyz, cxz, cyz, czz]);
+  const col = (j: number) => [vectors[0]![j]!, vectors[1]![j]!, vectors[2]![j]!];
+  const c0 = col(0), c1 = col(1);
+  let c2 = col(2);
+  // Ensure a proper rotation (determinant +1).
+  const det = c0[0]! * (c1[1]! * c2[2]! - c1[2]! * c2[1]!) - c0[1]! * (c1[0]! * c2[2]! - c1[2]! * c2[0]!) + c0[2]! * (c1[0]! * c2[1]! - c1[1]! * c2[0]!);
+  if (det < 0) c2 = c2.map((v) => -v);
+  return {
+    position: [mean[0], mean[1], mean[2]],
+    scales: values.map((ev) => Math.max(n < 3 ? options.degenerateScale : options.minScale, Math.sqrt(Math.max(0, ev)))) as [number, number, number],
+    rotation: quaternionFromAxes(c0, c1, c2),
+    colour: [colour[0], colour[1], colour[2]],
+    opacity: options.opacity,
+    support: n,
+  };
 }
 
 /** Rows for writePlyFloat32 with the reference-3DGS property names (see TOY_GS_PROPERTIES). */

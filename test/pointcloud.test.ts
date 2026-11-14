@@ -5,7 +5,8 @@ import { TOY_GS_PROPERTIES } from "../src/fixtures/toy-gaussians.js";
 import { jprcsToLatLng } from "../src/geodesy/jprcs.js";
 import { readPly, writePlyFloat32 } from "../src/gaussian/ply.js";
 import { gaussianToDisc, gaussiansFromPly, rotationAxes } from "../src/gaussian/to-surfels.js";
-import { LasError, readLas, writeLas12Format3 } from "../src/pointcloud/las.js";
+import { forEachLasRecord, LasError, parseLasHeader, readLas, writeLas12Format3 } from "../src/pointcloud/las.js";
+import { VoxelAccumulator } from "../src/pointcloud/voxel-accumulator.js";
 import { fitVoxelGaussians, gaussiansToPlyRows, quaternionFromAxes, symmetricEigen3 } from "../src/pointcloud/voxel-gaussians.js";
 
 const close = (a: number, b: number, eps = 1e-6): void => assert.ok(Math.abs(a - b) < eps, `${a} vs ${b}`);
@@ -106,4 +107,63 @@ test("a scale floor for degenerate voxels does not erase the thin axis of planar
   // A lone point gets the degenerate scale on all axes.
   const lone = fitVoxelGaussians({ count: 1, xyz: Float64Array.of(5, 5, 5), rgb: Float32Array.of(1, 1, 1) }, { voxelSize: 0.25, minPoints: 1, degenerateScale: 0.0625 });
   assert.deepEqual(lone[0]?.scales, [0.0625, 0.0625, 0.0625]);
+});
+
+test("streaming voxel accumulator gives the same Gaussians as the in-memory fit", () => {
+  const pts = syntheticPoints();
+  const size = 0.25;
+  const fit = { minPoints: 1, minScale: 0.001, degenerateScale: size / 4 };
+  const want = fitVoxelGaussians(pts, { voxelSize: size, ...fit });
+  const acc = new VoxelAccumulator(size, 4); // tiny table: forces several grow() calls
+  for (let i = 0; i < pts.count; i++) {
+    acc.add(pts.xyz[i * 3]!, pts.xyz[i * 3 + 1]!, pts.xyz[i * 3 + 2]!, pts.rgb[i * 3]!, pts.rgb[i * 3 + 1]!, pts.rgb[i * 3 + 2]!);
+  }
+  assert.equal(acc.points, pts.count);
+  assert.equal(acc.voxels, want.length);
+  const got = acc.toGaussians(fit);
+  assert.equal(got.length, want.length);
+  got.forEach((g, i) => {
+    const w = want[i]!;
+    for (let k = 0; k < 3; k++) {
+      close(g.position[k]!, w.position[k]!, 1e-9);
+      close(g.scales[k]! / w.scales[k]!, 1, 1e-6);
+      close(g.colour[k]!, w.colour[k]!, 1e-6);
+    }
+    assert.equal(g.support, w.support);
+  });
+});
+
+test("streaming accumulator handles negative cells, many voxels, and rejects out-of-range points", () => {
+  const acc = new VoxelAccumulator(1, 2);
+  for (let i = -50; i < 50; i++) for (let j = -20; j < 20; j++) acc.add(i + 0.5, j + 0.5, -3.5, 0.5, 0.5, 0.5);
+  assert.equal(acc.voxels, 100 * 40);
+  const gs = acc.toGaussians({ minPoints: 1 });
+  assert.equal(gs.length, 4000);
+  assert.deepEqual(gs[0]!.position.map((v) => Math.round(v * 2) / 2), [-49.5, -19.5, -3.5]); // z, then y, then x order
+  assert.throws(() => acc.add(Number.NaN, 0, 0, 0, 0, 0), RangeError);
+  assert.throws(() => acc.add(1e12, 0, 0, 0, 0, 0), RangeError);
+  assert.throws(() => new VoxelAccumulator(0), RangeError);
+});
+
+test("LAS header parsing and chunked record iteration match readLas", () => {
+  const pts = Array.from({ length: 10 }, (_, i) => ({ x: 100 + i * 0.5, y: -200 + i, z: 5 + i * 0.1, cls: i % 3, rgb: [i * 1000, 2, 65535] as [number, number, number] }));
+  const bytes = writeLas12Format3(pts);
+  const header = parseLasHeader(bytes.subarray(0, 227));
+  assert.equal(header.count, 10);
+  assert.equal(header.recordLength, 34);
+  assert.equal(header.offsetToPoints, 227);
+  const whole = readLas(bytes);
+  const seen: number[][] = [];
+  for (let first = 0; first < 10; first += 4) {
+    const n = Math.min(4, 10 - first);
+    const chunk = bytes.subarray(header.offsetToPoints + first * 34, header.offsetToPoints + (first + n) * 34);
+    forEachLasRecord(chunk, header, n, (x, y, z, c, r, g, b) => seen.push([x, y, z, c, r, g, b]));
+  }
+  assert.equal(seen.length, 10);
+  seen.forEach((p, i) => {
+    close(p[0]!, whole.x[i]!, 1e-12); close(p[1]!, whole.y[i]!, 1e-12); close(p[2]!, whole.z[i]!, 1e-12);
+    assert.equal(p[3], whole.classification[i]);
+    assert.deepEqual(p.slice(4), [...whole.rgb!.slice(i * 3, i * 3 + 3)]);
+  });
+  assert.throws(() => forEachLasRecord(bytes.subarray(227, 227 + 34), header, 2, () => {}), LasError);
 });
