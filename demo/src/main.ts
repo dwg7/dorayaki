@@ -35,8 +35,8 @@ if (typeof __DORAYAKI_WORKER_URL__ !== "undefined") {
 const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
   typeof __DORAYAKI_EXTERNAL_TILESETS__ !== "undefined" ? __DORAYAKI_EXTERNAL_TILESETS__ : {
         numazu: "tiles/numazu/tilejson.json",
+        "numazu-medium": "tiles/numazu-medium/tilejson.json",
         "numazu-fine": "tiles/numazu-fine/tilejson.json",
-        "numazu-coarse": "tiles/numazu-coarse/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;

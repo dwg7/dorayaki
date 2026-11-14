@@ -164,14 +164,14 @@ That archive is what goes to stars, where Martin serves it as
 follows the stars project's procedure and needs hfu's instruction to the
 stars session.
 
-By default it builds the `medium` profile: aggregated z18 and z19 tiles and
-one 6 cm level at z20 (137,684 splats, about 2.2 MB as PMTiles, 0.43 times
-the COPC of the same points).
-`DORAYAKI_NUMAZU_PROFILE=fine` builds the nested, thinned 3-level z20
-pyramid (2.6 MB) and `=coarse` stops at z19 (0.6 MB). The three are compared
-in `EXPERIMENTS.md` (E004). Open
-<http://127.0.0.1:8000/demo/?fixture=numazu> while `npm run demo` is
-running (`numazu-fine` and `numazu-coarse` for the others, if built);
+By default it builds the `coarse` profile: aggregated z18 tiles and z19 as
+the maxzoom, one level of 12 cm cells (37,628 splats, 603,132 bytes as
+PMTiles, 0.12 times the COPC of the same points). That is what is hosted.
+`DORAYAKI_NUMAZU_PROFILE=medium` builds one 6 cm level at z20 (2.2 MB,
+`dorayaki-numazu-medium.pmtiles`) and `=fine` the nested, thinned 3-level
+z20 pyramid (2.6 MB). The three are compared in `EXPERIMENTS.md` (E004).
+Open <http://127.0.0.1:8000/demo/?fixture=numazu> while `npm run demo` is
+running (`numazu-medium` and `numazu-fine` for the others, if built);
 `&lod=22` chooses tiles and levels as if the map were at that zoom. Heights
 are the source's elevations (標高), so on the flat basemap the data floats
 at its real elevation, about 7.5 m above the map plane.

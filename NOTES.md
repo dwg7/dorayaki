@@ -401,8 +401,8 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
 ## 2026-11-15 — Numazu profiles; coarser is better at close range
 
 - `buildPyramid` (`src/pointcloud/pyramid.ts`) now builds the Numazu
-  pyramid; `npm run demo:numazu` takes `DORAYAKI_NUMAZU_PROFILE` = `medium`
-  (default, hosted), `fine` (the E002 pyramid) or `coarse`. Sizes and the
+  pyramid; `npm run demo:numazu` takes `DORAYAKI_NUMAZU_PROFILE` = `medium`,
+  `fine` (the E002 pyramid) or `coarse`. Sizes and the
   visual comparison are in EXPERIMENTS.md E004: PMTiles 2,204,268 B
   (medium), 2,571,701 B (fine), 603,132 B (coarse).
 - The finding that matters: the thinned `fine` pyramid looks worse close up
@@ -416,3 +416,25 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   returned a z20 tile byte-identical to the file written by the producer).
 - During these browser checks someone clicked in the pane, and the camera
   state can drift if scripted and manual input mix.
+
+## 2026-11-15 — coarse becomes the standard Numazu tileset
+
+- Direction (hfu): the hosted `dorayaki-numazu.pmtiles` is the `coarse`
+  profile, to lead with how light it is (603,132 B, 0.12 times the COPC,
+  0.62 bytes per source point), then refine according to need. `npm run
+  demo:numazu` now defaults to `coarse`; `medium` builds
+  `dorayaki-numazu-medium.pmtiles` and the dev demo's `numazu-medium`, `fine`
+  builds `numazu-fine`.
+- The standard archive: 2 tiles (z18/232154/103715 and z19/464309/207430),
+  gzip directories, tile type MLT, minzoom 18, maxzoom 19. go-pmtiles 1.28
+  returned the z19 tile byte-identical to the producer's file. The z19 tile
+  differs from the one inside the `medium` archive: in `coarse` it goes
+  through the maxzoom path (ordered by cell), in `medium` through the
+  aggregated path, so the content is the same set of Gaussians in a different
+  order.
+- Upload procedure on stars (from hfu/stars `CLAUDE.md` and
+  `docs/KNOWN_FACTS.md`): `ssh spacex.optgeo.org` lands as the `stars`
+  user; files go to `/home/stars/data/`; stage under a hidden name
+  (`.dorayaki-numazu.pmtiles.new.<rand>`, invisible to Martin's `*.pmtiles`
+  scan), then `mv` into place; Martin registers new files without restart.
+  Authentication is hfu's.

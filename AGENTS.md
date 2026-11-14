@@ -208,7 +208,7 @@ npm run build       # tsc src/ into dist/
 npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang,boundary,toy-gs}/18/x/y.mlt)
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
-npm run demo:numazu # build demo/tiles/numazu/ and dorayaki-numazu.pmtiles from data/ (download: README); DORAYAKI_NUMAZU_PROFILE=fine|coarse for the others
+npm run demo:numazu # build demo/tiles/numazu/ and dorayaki-numazu.pmtiles from data/ (download: README); DORAYAKI_NUMAZU_PROFILE=medium|fine for the others (default: coarse)
 npm run site        # rebuild the GitHub Pages site in docs/ (commit the output)
 npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size table
 npm run measure:omission  # E002: omission strategies on the Numazu data

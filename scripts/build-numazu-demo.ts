@@ -20,13 +20,13 @@
  *    written to demo/tiles/<dir>/ with manifest.json and tilejson.json, and
  *    as one PMTiles archive (tile type MLT, gzip directories).
  *
- * Profiles (DORAYAKI_NUMAZU_PROFILE, default `medium`; sizes and the
+ * Profiles (DORAYAKI_NUMAZU_PROFILE, default `coarse`; sizes and the
  * comparison in EXPERIMENTS.md E004):
- * - medium: z18, z19 aggregated; z20 maxzoom, one level (6.1 cm cells).
- *           The default, published as dorayaki-numazu.pmtiles;
+ * - coarse: z18 aggregated; z19 maxzoom, one level (12.2 cm cells). The
+ *           default, published as dorayaki-numazu.pmtiles: the lightest;
+ * - medium: z18, z19 aggregated; z20 maxzoom, one level (6.1 cm cells);
  * - fine:   z18, z19 aggregated; z20 maxzoom with 3 levels (6.1, 3.1, 1.5 cm
- *           cells), refinements with fewer than 6 points omitted (E002);
- * - coarse: z18 aggregated; z19 maxzoom, one level (12.2 cm cells).
+ *           cells), refinements with fewer than 6 points omitted (E002).
  * DORAYAKI_MIN_SUPPORT overrides the omission threshold of `fine`.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -53,20 +53,20 @@ const ZONE = 8;
 
 interface Profile { config: PyramidConfig; dir: string; pmtiles: string }
 const PROFILES: Record<string, Profile> = {
+  coarse: {
+    config: { aggregatedZooms: [18], maxzoom: 19, levels: 1, minRefinementSupport: 1 },
+    dir: "numazu", pmtiles: "dorayaki-numazu.pmtiles",
+  },
   medium: {
     config: { aggregatedZooms: [18, 19], maxzoom: 20, levels: 1, minRefinementSupport: 1 },
-    dir: "numazu", pmtiles: "dorayaki-numazu.pmtiles",
+    dir: "numazu-medium", pmtiles: "dorayaki-numazu-medium.pmtiles",
   },
   fine: {
     config: { aggregatedZooms: [18, 19], maxzoom: 20, levels: 3, minRefinementSupport: Number(process.env.DORAYAKI_MIN_SUPPORT ?? 6) },
     dir: "numazu-fine", pmtiles: "dorayaki-numazu-fine.pmtiles",
   },
-  coarse: {
-    config: { aggregatedZooms: [18], maxzoom: 19, levels: 1, minRefinementSupport: 1 },
-    dir: "numazu-coarse", pmtiles: "dorayaki-numazu-coarse.pmtiles",
-  },
 };
-const profileName = process.env.DORAYAKI_NUMAZU_PROFILE ?? "medium";
+const profileName = process.env.DORAYAKI_NUMAZU_PROFILE ?? "coarse";
 const profile = PROFILES[profileName];
 if (!profile) throw new Error(`unknown profile ${profileName}; use ${Object.keys(PROFILES).join(", ")}`);
 const { config } = profile;

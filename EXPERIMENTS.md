@@ -314,8 +314,11 @@ choice; see Observation).
 
 ### Decision
 
-Host `medium` as `dorayaki-numazu.pmtiles` (2,204,268 B): the best balance
-of size and look here, and it matches the request for slightly coarser
-surfels. `fine` stays as a profile for reference and for datasets dense
-enough to need progressive levels. `coarse` is the floor if size matters
-more than close-up quality. The final choice is the repository owner's.
+Direction from the repository owner (2026-11-15): host `coarse` as
+`dorayaki-numazu.pmtiles` (603,132 B). Lead with how light it is (0.12 times
+the COPC of the same points, 0.62 bytes per source point), and refine
+according to need afterwards. `medium` (2,204,268 B,
+`dorayaki-numazu-medium.pmtiles`) is the next step up when close-up quality
+matters, and `fine` stays as a profile for reference and for datasets dense
+enough to need progressive levels. The default profile of
+`npm run demo:numazu` is therefore `coarse`.
