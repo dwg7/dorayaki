@@ -369,3 +369,31 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   PMTiles archive (gzip directories) is 2,571,655 B, exactly half of the v3
   archive (5,141,899 B) and 0.50x the COPC (xyz+rgb, 5,183,226 B). Node
   decode of the larger z20 tile: 26.2 ms for 92,313 splats (v3: 22.7 ms).
+
+## 2026-11-15 — renderer: ellipses and camera-facing round splats
+
+- The demo draws each splat as its 2-sigma ellipse in the plane of its two
+  longer axes (`demo/src/splat-instances.ts` builds the per-splat semi-axis
+  vectors; the shader uses `centre ± axisU ± axisV`). A splat whose largest
+  scale is under 1.5x its smallest (`ROUND_RATIO`) is a round blob and is
+  drawn as a camera-facing disc of the equal-area radius; the camera's right
+  and up come from rows 0 and 1 of the local-frame-to-clip matrix.
+- Shading is now two-sided (`abs(dot(normal, light))`), because an axis's
+  sign carries no meaning in v4. The synthetic fixtures' down-facing
+  surfaces (bridge underside, overhang underside) are therefore lit like
+  up-facing ones and are told apart by their colour, no longer by being dark.
+  Round splats use a constant shade.
+- Observed: in `toy-gs` the isotropic blob, which v3 drew as three thin
+  vertical slabs, now reads as a rounded cluster. In the Numazu tiles the
+  crown of the tree reads as a volume and the roof as tiled ellipses; the
+  vector basemap is unchanged.
+- Numazu in the browser (Apple M1, ANGLE Metal): the four tiles (2,570,600 B,
+  160,644 splats) took 59 ms to fetch from the local server, 505 ms to
+  decode and 47 ms to upload. The decode is about 3 µs per splat in the
+  page against 0.28 µs in Node: the first calls run cold, and each splat
+  becomes a JS object. Decoding straight into typed arrays is the obvious
+  next optimization, but it is not needed yet.
+- Browser tooling: navigating to a URL that differs only in the hash does not
+  reload the page, so a rebuilt bundle was not picked up until a query was
+  added. Screenshots of the hidden pane lag: the DOM and the map state are
+  current, but the image can show an earlier frame for several seconds.

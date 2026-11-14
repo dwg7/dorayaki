@@ -3,7 +3,6 @@
  */
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from "maplibre-gl";
 
-import { splatToSurfel } from "../../src/splat.js";
 import { decodeSurfelTileWithLevels } from "./decode-tile.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
@@ -88,14 +87,9 @@ const map = new MapLibreMap({
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
 const urls = tiles.map((t) => (external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t)));
-/**
- * Decode a tile. This renderer draws circular discs, so each decoded splat is
- * reduced to a disc (the shortest axis as normal, equal-area radius); the
- * anisotropy a v4 record carries is not drawn yet.
- */
+/** Decode a tile into splats and its level table. */
 function toLoaded(tile: TileAddress, bytes: Uint8Array) {
-  const { splats, levels } = decodeSurfelTileWithLevels(bytes);
-  return { tile, bytes, surfels: splats.map(splatToSurfel), levels };
+  return { tile, bytes, ...decodeSurfelTileWithLevels(bytes) };
 }
 
 /** Load-time measurements (E001 in EXPERIMENTS.md). */
@@ -128,7 +122,7 @@ map.on("load", () => {
       map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
       depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
       const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);
-      const count = loaded.reduce((n, t) => n + t.surfels.length, 0);
+      const count = loaded.reduce((n, t) => n + t.splats.length, 0);
       const loadedSummary = `${loaded.length} tile(s) of ${tileset}: ${bytes} bytes, ${count} surfels`;
       setStatus(loadedSummary);
       // After each frame, show what the zoom-based selection drew.

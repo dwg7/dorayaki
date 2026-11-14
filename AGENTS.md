@@ -243,7 +243,7 @@ src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
 scripts/generate-demo-tile.ts  writes one demo tile per tileset
 demo/index.html              demo page (MapLibre GL JS via import map)
-demo/src/                    demo modules: load, TileJSON, decode, tile selection, placement, GPU, layer
+demo/src/                    demo modules: load, TileJSON, decode, tile selection, placement, splat instances, GPU, layer
 NOTES.md                     observed experimental findings (chronological)
 EXPERIMENTS.md               experiments E001, E002, ...: question, measurements, decision
 docs/                        built GitHub Pages site only (npm run site; do not edit by hand)

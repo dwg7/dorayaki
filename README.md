@@ -76,6 +76,8 @@ a view can be shared or reloaded. Other fixtures: the same URL with
 `?fixture=overhang`, `?fixture=boundary` or `?fixture=toy-gs` appended. Stop the server with
 Ctrl-C.
 
+Each splat is drawn as its 2-sigma ellipse in the plane of its two longer
+axes; splats with no preferred orientation are drawn as camera-facing discs.
 The page loads the fixture's tiles over plain HTTP:
 `demo/tiles/{fixture}/18/234000/96256.mlt` (at Sapporo Station, 111.7 m
 wide) for `bridge` and `overhang`, and that tile plus its east, south and
