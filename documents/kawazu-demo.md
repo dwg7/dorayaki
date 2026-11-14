@@ -45,9 +45,10 @@ DORAYAKI_ADAPTIVE_THICKNESS=0.2 DORAYAKI_ADAPTIVE_COLOUR=0.2 DORAYAKI_ADAPTIVE_S
 ```
 
 This writes `demo/tiles/kawazu/` (raw tiles and TileJSON, for the local demo)
-and `demo/tiles/dorayaki-kawazu.pmtiles`. `DORAYAKI_TILE_COMPRESSION=none`
-writes the archive with raw tiles (23.4 MB), which is what stars hosts; without it
-the tiles are gzipped (16.0 MB) and the archive does not load in Martin 1.14.
+and `demo/tiles/dorayaki-kawazu.pmtiles`. Tiles in the archive are raw (23.4 MB), which is what stars hosts; with
+`DORAYAKI_TILE_COMPRESSION=gzip` they are gzipped (16.0 MB), and the archive does
+not load in Martin 1.14 (see below). The first build of this archive used gzip
+by default; the default is now raw.
 
 Verified: the archive's 11 directory entries each gunzip to exactly the file
 on disk, and decoding all of them gives 1,459,754 splats.

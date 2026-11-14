@@ -17,6 +17,7 @@
     "demo": "npm run demo:tile && esbuild demo/src/main.ts --bundle --format=esm --external:maplibre-gl --sourcemap --outdir=demo/build --servedir=. --serve=127.0.0.1:8000",
     "demo:numazu": "esbuild scripts/build-numazu-demo.ts --bundle --platform=node --format=esm --outfile=demo/build/build-numazu-demo.mjs --log-level=warning && node demo/build/build-numazu-demo.mjs",
     "build:tileset": "esbuild scripts/build-tileset.ts --bundle --platform=node --format=esm --outfile=demo/build/build-tileset.mjs --log-level=warning && node --max-old-space-size=8192 demo/build/build-tileset.mjs",
+    "merge:tilesets": "esbuild scripts/merge-tilesets.ts --bundle --platform=node --format=esm --outfile=demo/build/merge-tilesets.mjs --log-level=warning && node --max-old-space-size=4096 demo/build/merge-tilesets.mjs",
     "measure:numazu": "esbuild scripts/measure-numazu.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-numazu.mjs --log-level=warning && node demo/build/measure-numazu.mjs",
     "site": "esbuild scripts/build-site.ts --bundle --platform=node --format=esm --packages=external --outfile=demo/build/build-site.mjs --log-level=warning && node demo/build/build-site.mjs",
     "measure:omission": "esbuild scripts/measure-omission.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-omission.mjs --log-level=warning && node demo/build/measure-omission.mjs",

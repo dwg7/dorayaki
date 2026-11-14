@@ -180,9 +180,10 @@ writeFileSync(`${OUT}/tilejson.json`, JSON.stringify({
   minzoom: Math.min(...config.aggregatedZooms, config.maxzoom), maxzoom: config.maxzoom, bounds,
   center: [origin.lng, origin.lat, config.maxzoom],
 }, null, 2) + "\n");
-// PMTiles tile compression: gzip by default (the byte-plane layout of Surfel Block v5
-// compresses well; DORAYAKI_TILE_COMPRESSION=none keeps the tiles raw).
-const gzipTiles = process.env.DORAYAKI_TILE_COMPRESSION !== "none";
+// PMTiles tile compression: raw by default, because Martin 1.14 (stars) cannot read gzip
+// MLT tiles; DORAYAKI_TILE_COMPRESSION=gzip compresses them (the byte-plane layout of
+// Surfel Block v5 compresses well).
+const gzipTiles = process.env.DORAYAKI_TILE_COMPRESSION === "gzip";
 const archive = writePmtiles(gzipTiles ? archiveTiles.map((t) => ({ ...t, data: new Uint8Array(gzipSync(t.data, { level: 9 })) })) : archiveTiles, {
   tileType: PmtilesTileType.Mlt, bounds, ...(gzipTiles ? { tileCompression: PmtilesCompression.Gzip } : {}), center: [origin.lng, origin.lat, config.maxzoom],
   internal: { compression: PmtilesCompression.Gzip, compress: (b) => new Uint8Array(gzipSync(b)) },
