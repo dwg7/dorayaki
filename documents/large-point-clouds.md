@@ -87,12 +87,23 @@ e.g. 2019/MMS/Ground/08/OF/40/08OF4060.zip
 | product | file | size | notes |
 | --- | --- | --- | --- |
 | 2019 MMS ground-and-structures point cloud | `2019/MMS/Ground/08/OF/40/08OF4060.zip` | 2,940 MB (LAS 6.68 GB) | LAS 1.2 format 3, 196,608,664 points, about 1,730 points/m², E 40,001.8 to 40,380.4, N -134,100.0 to -133,800.0, Z 177.1 to 245.2 m; Aero Asahi Corp. |
-| 2019 LP ground | `2019/LP/Ground/08/OF/40/08OF4060.zip` | 275 MB (LAS 495 MB) | LAS 1.2 format 3, 14,551,545 points, about 121 points/m² over the mesh, Z 125.5 to 364.1 m; **ground class only** (no trees, buildings or bridge decks) |
+| 2019 LP "Ground" | `2019/LP/Ground/08/OF/40/08OF4060.zip` | 275 MB (LAS 495 MB), SHA-256 `48c2a817...ca1274` | LAS 1.2 format 3, 14,551,545 points, about 121 points/m² over the mesh, Z 125.5 to 364.1 m. Despite the folder name it holds **all returns**: 2,492,669 points of class 2 (ground) and 12,058,876 of class 1 (unclassified: canopy, structures). Per 1 m x 1 m cell the median z spread is 16 m (forested slope) |
 
 `2020/LP/Ground` repeats the 2019 files (same sizes). `2021` and later `LP`
-products (`Original` = all returns) do not cover this mesh. So for Kawazu the
-airborne data available is the ground product: it fills the terrain around
-the road, while the MMS supplies the structures and the vegetation.
+products (`Original`) do not cover this mesh. The MMS classes are 2 (26.7 M
+points), 3 (43.5 M), 4 (24.8 M) and 5 (101.6 M), mostly vegetation along the
+road.
+
+Agreement of heights (both orthometric): on the 1,119 1 m cells where the LP
+surface is locally flat (z range under 0.5 m) and the MMS has class-2 points,
+LP minus MMS has median -0.175 m (quartiles -0.19 and -0.14). No gross datum
+offset; the airborne ground sits about 17 cm below the MMS road surface.
+
+### Filters in the tileset builder
+
+`file.las@c2+1@first`: `@c<n>[+<n>...]` keeps those classes, `@first` or
+`@last` only first or last returns. The effect of the choices on size is in
+[size-and-scale.md](size-and-scale.md) (E007).
 
 Other things checked, not used: `2019/ALB` covers meshes `08NE`, `NF`, `OE`,
 `OF`, `PE` (bathymetry). The 2019 MMS ground-and-structures data of zone 08

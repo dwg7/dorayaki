@@ -485,3 +485,69 @@ both rectangle (0.3 to 0.7, 0.5 to 0.95). The pane was visible.
 - The cost on thin structures and silhouettes.
 - Whether the factor should depend on the splat (round discs, merged cells).
 - A default: the flag is off (1.0).
+
+## E007: Merging airborne (LP) and MMS data on the Kawazu mesh, and what a surface costs
+
+### Question
+
+The goal is areal data: mobile mapping (MMS) where the airborne survey is
+shadowed, airborne laser elsewhere. Is the size of the merged tileset
+realistic, and which points are worth keeping?
+
+### Data and method
+
+Mesh 08OF4060 (300 m x 400 m). MMS: 196,608,664 points. Airborne LP
+("Ground" product, 2019): 14,551,545 points, 121 points/m2, of which
+2,492,669 are class 2 (ground) and 12,058,876 class 1; z range per
+1 m x 1 m cell has a median of 16 m. `npm run build:tileset` with several
+LAS files merges them into the same voxels; `@c2` / `@first` filters choose
+points. Uniform 49 cm cells, z16 + z17 (the 50 cm class); the adaptive rows
+start from 24.5 cm cells with the E005 rule. Bytes per m2 use the 120,526
+one-metre cells that hold airborne points.
+
+Heights: on 1,119 cells where the LP surface is locally flat (z range under
+0.5 m), LP minus MMS ground has median -0.175 m (quartiles -0.19, -0.14).
+
+### Measurements
+
+| set | z17 splats | all tiles | per m2 | largest z17 tile |
+| --- | ---: | ---: | ---: | ---: |
+| `kawazu-50cm` MMS only | 318,817 | 6.33 MB | 55.7 (box) | 3.51 MB |
+| `kawazu-lp-c2-50cm` | 549,337 | 11.56 MB | 96 | 4.31 MB |
+| `kawazu-lp-first-50cm` | 1,641,048 | 35.03 MB | 291 | 12.44 MB |
+| `kawazu-lp-50cm` (all returns) | 3,367,215 | 70.10 MB | 582 | 25.92 MB |
+| `kawazu-mix-c2-50cm` | 848,755 | 17.46 MB | 145 | 7.57 MB |
+| `kawazu-mix-first-50cm` | 1,855,785 | 39.08 MB | 324 | 14.87 MB |
+| `kawazu-mix-50cm` (all) | 3,546,675 | 73.42 MB | 609 | 27.94 MB |
+| `kawazu-mix-c2-ad-t20` (24.5 cm base, 20 cm, 0.2) | 641,362 | 14.14 MB | 117 | 6.66 MB |
+| `kawazu-mix-c2-ad-t10` (24.5 cm base, 10 cm, 0.2) | 1,134,654 | 22.03 MB | 183 | 12.25 MB |
+
+Build times 7 s to 90 s on an Apple M1 (the adaptive builds 54 and 80 s);
+the adaptive build of MMS + all returns was stopped after 13 minutes.
+
+### Observations
+
+- MMS plus airborne ground (`kawazu-mix-c2-50cm`) shows the hillside as a
+  continuous surface around the road and the loop bridge (viewed once,
+  zoom 17.3, pitch 50, `?extent=1.3`; no other check).
+- The airborne "Ground" file is not ground only. Keeping every return makes a
+  tile of 1.6 million splats (6.2 layers over the 262,144 columns) and 582
+  bytes per m2, nine times the ground class. First returns halve that.
+- Adding MMS to the airborne ground adds 5.9 MB, close to what MMS alone
+  costs (6.3 MB): little overlap.
+- Adaptive merging saves 19 % at a loose limit (14.14 against 17.46 MB) on
+  this mixed set, and none at 10 cm in this encoding (22.03 MB, more than
+  uniform 49 cm, because the base is 24.5 cm).
+- Taking this mesh as a scale for a 7,800 km2 prefecture (it is a forested
+  slope, which inflates counts): ground only about 0.75 TB, MMS + ground
+  about 1.1 TB, first returns about 2.3 TB, all returns about 4.5 TB
+  (size-and-scale.md).
+
+### Not yet shown
+
+- First returns plus ground as a canopy shell, or a column rule (keep the
+  highest and the lowest point per column).
+- Adaptive merging on the canopy sets (memory and time of the merge).
+- Whether airborne colours (taken from imagery?) look right next to the
+  MMS colours; they were not compared.
+- Any area other than this mesh; airborne data of a city or a plain.
