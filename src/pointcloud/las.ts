@@ -91,11 +91,16 @@ export function parseLasHeader(bytes: Uint8Array): LasHeader {
  * `bytes` holds records only, with no header, so a streaming reader can pass
  * any chunk that starts on a record boundary.
  */
+/**
+ * Call `fn` for `n` records starting at the start of `bytes` (formats 0-3):
+ * scaled x, y, z, classification, the 16-bit r, g, b (0 without colour) and
+ * the raw return byte (bits 0-2 return number, bits 3-5 number of returns).
+ */
 export function forEachLasRecord(
   bytes: Uint8Array,
   header: LasHeader,
   n: number,
-  fn: (x: number, y: number, z: number, classification: number, r: number, g: number, b: number) => void,
+  fn: (x: number, y: number, z: number, classification: number, r: number, g: number, b: number, returns: number) => void,
 ): void {
   const { recordLength, scale, offset, rgbOffset } = header;
   if (n * recordLength > bytes.byteLength) throw new LasError("chunk shorter than the records requested");
@@ -109,6 +114,7 @@ export function forEachLasRecord(
       rgbOffset === null ? 0 : v.getUint16(o + rgbOffset, true),
       rgbOffset === null ? 0 : v.getUint16(o + rgbOffset + 2, true),
       rgbOffset === null ? 0 : v.getUint16(o + rgbOffset + 4, true),
+      bytes[o + 14]!,
     );
   }
 }

@@ -167,3 +167,13 @@ test("LAS header parsing and chunked record iteration match readLas", () => {
   });
   assert.throws(() => forEachLasRecord(bytes.subarray(227, 227 + 34), header, 2, () => {}), LasError);
 });
+
+test("forEachLasRecord passes the raw return byte", () => {
+  const las = writeLas12Format3([{ x: 1, y: 2, z: 3, cls: 2, rgb: [0, 0, 0] }, { x: 4, y: 5, z: 6, cls: 1, rgb: [0, 0, 0] }]);
+  const header = parseLasHeader(las);
+  las[header.offsetToPoints + 14] = 0x12; // return 2 of 2
+  las[header.offsetToPoints + header.recordLength + 14] = 0x09; // return 1 of 1
+  const seen: number[] = [];
+  forEachLasRecord(las.subarray(header.offsetToPoints), header, 2, (_x, _y, _z, _c, _r, _g, _b, returns) => seen.push(returns));
+  assert.deepEqual(seen, [0x12, 0x09]);
+});

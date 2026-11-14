@@ -41,6 +41,10 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
         "kawazu-ad-t20-c20": "tiles/kawazu-ad-t20-c20/tilejson.json",
         "kawazu-ad-t10-c20": "tiles/kawazu-ad-t10-c20/tilejson.json",
+        "kawazu-lp-c2-50cm": "tiles/kawazu-lp-c2-50cm/tilejson.json",
+        "kawazu-mix-c2-50cm": "tiles/kawazu-mix-c2-50cm/tilejson.json",
+        "kawazu-mix-c2-ad-t20": "tiles/kawazu-mix-c2-ad-t20/tilejson.json",
+        "kawazu-mix-first-50cm": "tiles/kawazu-mix-first-50cm/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;

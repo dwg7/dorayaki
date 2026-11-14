@@ -11,6 +11,8 @@
  * Output: demo/tiles/<name>/z/x/y.mlt, tilejson.json, manifest.json and
  * demo/tiles/dorayaki-<name>.pmtiles. One level per tile (no refinement);
  * the finest cells are tile width / 512 at the maxzoom (the `coarse` rule).
+ * A file may be followed by filters, `file.las@c2+1@first`: `@c<n>[+<n>...]`
+ * keeps only those classifications, `@first` / `@last` only first / last returns.
  * Adaptive merging of the maxzoom Gaussians (E005, src/pointcloud/adaptive.ts),
  * when DORAYAKI_ADAPTIVE_LEVELS is set: that many merge levels (cells double);
  * DORAYAKI_ADAPTIVE_REFINE (default 0) starts from cells 2^refine times finer
@@ -39,7 +41,27 @@ const config: PyramidConfig = {
 };
 const OUT = `demo/tiles/${name}`;
 
-const files = file.split(",");
+/** `path@c2+1@first` -> path and a point filter (all points when no filter is given). */
+function parseSpec(spec: string): { path: string; keep: (cls: number, returns: number) => boolean } {
+  const [path, ...filters] = spec.split("@");
+  let classes: Set<number> | undefined;
+  let which: "first" | "last" | undefined;
+  for (const f of filters) {
+    if (f.startsWith("c")) classes = new Set(f.slice(1).split("+").map(Number));
+    else if (f === "first" || f === "last") which = f;
+    else throw new Error(`unknown filter @${f}; use @c<class>[+<class>...], @first or @last`);
+  }
+  return {
+    path: path!,
+    keep: (cls, returns) => {
+      if (classes && !classes.has(cls)) return false;
+      const n = returns & 7, of = (returns >> 3) & 7;
+      return which === undefined || (which === "first" ? n === 1 : n === of);
+    },
+  };
+}
+const specs = file.split(",").map(parseSpec);
+const files = specs.map((s) => s.path);
 const heads = files.map((f) => {
   const fd = openSync(f, "r");
   const head = new Uint8Array(375);
@@ -86,7 +108,9 @@ for (const [fi, f] of files.entries()) {
       if (r === 0) throw new Error(`${f} ended after ${fileDone} records`);
       got += r;
     }
-    forEachLasRecord(buf, header, n, (x, y, z, _c, r, g, b) => {
+    const keep = specs[fi]!.keep;
+    forEachLasRecord(buf, header, n, (x, y, z, c, r, g, b, returns) => {
+      if (!keep(c, returns)) return;
       const lx = x - e0, ly = y - n0;
       const cr = (r >> 8) / 255, cg = (g >> 8) / 255, cb = (b >> 8) / 255;
       for (const a of list) a.add(lx, ly, z, cr, cg, cb);
