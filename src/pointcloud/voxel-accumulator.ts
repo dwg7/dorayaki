@@ -131,6 +131,36 @@ export class VoxelAccumulator {
     return ids.sort((a, b) => key(a, 2) - key(b, 2) || key(a, 1) - key(b, 1) || key(a, 0) - key(b, 0));
   }
 
+  /**
+   * Call `fn` for every occupied voxel, in the deterministic order (z, y, x
+   * of the cell index), with its cell index, point count, mean position, point
+   * covariance (xx, xy, xz, yy, yz, zz) and mean colour.
+   */
+  forEachVoxel(
+    fn: (
+      ix: number, iy: number, iz: number, n: number,
+      mean: [number, number, number],
+      cov: [number, number, number, number, number, number],
+      colour: [number, number, number],
+    ) => void,
+  ): void {
+    for (const id of this.sortedIds()) {
+      const s = this.sums[id >> CHUNK_BITS]!;
+      const o = (id & CHUNK_MASK) * STRIDE;
+      const n = s[o]!;
+      const k = this.keys[id >> CHUNK_BITS]!;
+      const ko = (id & CHUNK_MASK) * 3;
+      const mdx = s[o + 1]! / n, mdy = s[o + 2]! / n, mdz = s[o + 3]! / n;
+      fn(
+        k[ko]!, k[ko + 1]!, k[ko + 2]!, n,
+        [k[ko]! * this.size + mdx, k[ko + 1]! * this.size + mdy, k[ko + 2]! * this.size + mdz],
+        [s[o + 4]! / n - mdx * mdx, s[o + 5]! / n - mdx * mdy, s[o + 6]! / n - mdx * mdz,
+          s[o + 7]! / n - mdy * mdy, s[o + 8]! / n - mdy * mdz, s[o + 9]! / n - mdz * mdz],
+        [s[o + 10]! / n, s[o + 11]! / n, s[o + 12]! / n],
+      );
+    }
+  }
+
   /** One Gaussian per occupied voxel, in the order fitVoxelGaussians returns them. */
   toGaussians(fit: AccumulatorFit = {}): Gaussian[] {
     const minPoints = fit.minPoints ?? 1;

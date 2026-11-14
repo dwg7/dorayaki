@@ -8,6 +8,11 @@
  * Output: demo/tiles/<name>/z/x/y.mlt, tilejson.json, manifest.json and
  * demo/tiles/dorayaki-<name>.pmtiles. One level per tile (no refinement);
  * the finest cells are tile width / 512 at the maxzoom (the `coarse` rule).
+ * Adaptive merging of the maxzoom Gaussians (E005, src/pointcloud/adaptive.ts),
+ * when DORAYAKI_ADAPTIVE_LEVELS is set: that many merge levels (cells double);
+ * DORAYAKI_ADAPTIVE_REFINE (default 0) starts from cells 2^refine times finer
+ * than the maxzoom's; DORAYAKI_ADAPTIVE_THICKNESS (metres, default 0.05) and
+ * DORAYAKI_ADAPTIVE_COLOUR (default 0.1) are the merge limits.
  * Local frame as in build-numazu-demo.ts: east/north from the header centre,
  * up = LAS Z (orthometric height).
  */
@@ -18,6 +23,7 @@ import { gzipSync } from "node:zlib";
 import { encodeDemoTile } from "../demo/src/demo-tile.js";
 import { jprcsToLatLng } from "../src/geodesy/jprcs.js";
 import { PmtilesCompression, PmtilesTileType, writePmtiles } from "../src/pmtiles.js";
+import { adaptiveGaussians } from "../src/pointcloud/adaptive.js";
 import { forEachLasRecord, parseLasHeader } from "../src/pointcloud/las.js";
 import { buildPyramidFrom, pyramidVoxelSizes, type PyramidConfig } from "../src/pointcloud/pyramid.js";
 import { VoxelAccumulator } from "../src/pointcloud/voxel-accumulator.js";
@@ -41,8 +47,18 @@ const origin = jprcsToLatLng(Number(zoneArg), n0, e0);
 
 const sizes = pyramidVoxelSizes(origin, config);
 const accs = new Map(sizes.map((s) => [s, new VoxelAccumulator(s)]));
-const list = [...accs.values()];
+const finestSize = sizes[sizes.length - 1]!;
+const adaptive = process.env.DORAYAKI_ADAPTIVE_LEVELS === undefined ? undefined : {
+  maxLevel: Number(process.env.DORAYAKI_ADAPTIVE_LEVELS),
+  thickness: Number(process.env.DORAYAKI_ADAPTIVE_THICKNESS ?? 0.05),
+  colourTolerance: Number(process.env.DORAYAKI_ADAPTIVE_COLOUR ?? 0.1),
+};
+const baseSize = finestSize / 2 ** Number(process.env.DORAYAKI_ADAPTIVE_REFINE ?? 0);
+const baseAcc = adaptive ? (accs.get(baseSize) ?? new VoxelAccumulator(baseSize)) : undefined;
+if (baseAcc) accs.set(baseSize, baseAcc);
+let adaptiveLevels: number[] | undefined;
 
+const list = [...accs.values()];
 const CHUNK_RECORDS = Math.floor(64_000_000 / header.recordLength);
 const buf = new Uint8Array(CHUNK_RECORDS * header.recordLength);
 const t0 = Date.now();
@@ -67,7 +83,14 @@ closeSync(fd);
 const tAccumulated = (Date.now() - t0) / 1000;
 
 const pyramid = buildPyramidFrom(
-  (voxel) => accs.get(voxel)!.toGaussians({ minPoints: 1, minScale: 0.001, degenerateScale: voxel / 4 }),
+  (voxel) => {
+    if (adaptive && baseAcc && voxel === finestSize) {
+      const r = adaptiveGaussians(baseAcc, adaptive);
+      adaptiveLevels = r.perLevel;
+      return r.gaussians;
+    }
+    return accs.get(voxel)!.toGaussians({ minPoints: 1, minScale: 0.001, degenerateScale: voxel / 4 });
+  },
   origin, config,
 );
 
@@ -95,7 +118,7 @@ const minY = ys.reduce((a, b) => Math.min(a, b)), maxY = ys.reduce((a, b) => Mat
 const o = { z: config.maxzoom, x: minX, y: minY };
 const bounds: [number, number, number, number] = [tileLongitude(o, 0), tileLatitude(o, maxY - minY + 1), tileLongitude(o, maxX - minX + 1), tileLatitude(o, 0)];
 const stats = {
-  file, points: done, config, voxelMetres: sizes, perZoom,
+  file, points: done, config, voxelMetres: sizes, perZoom, adaptive, baseVoxelMetres: adaptive ? baseSize : undefined, adaptiveLevels,
   tileBytes: manifestTiles.reduce((n, t) => n + t.bytes, 0),
   tiles: manifestTiles.length, maxzoomTiles: top.length,
   accumulateSeconds: tAccumulated, totalSeconds: (Date.now() - t0) / 1000,
