@@ -23,10 +23,10 @@ export interface TileBlock {
   rows: number;
 }
 
-export interface TileSurfels {
+export interface TileSurfels<T extends Surfel = Surfel> {
   tile: TileAddress;
   /** Surfels in tile-local coordinates, in their original relative order. */
-  surfels: Surfel[];
+  surfels: T[];
 }
 
 function checkBlock(b: TileBlock): void {
@@ -47,12 +47,13 @@ export function blockTiles(b: TileBlock): TileAddress[] {
 
 /**
  * Split block-local surfels into per-tile, tile-local surfels by the
- * centre-ownership rule. Returns every tile of the block, in blockTiles
+ * centre-ownership rule. Extra properties of the input objects are kept.
+ * Returns every tile of the block, in blockTiles
  * order, including tiles that receive no surfels. Throws if a centre lies
  * outside the block.
  */
-export function splitByTile(surfels: readonly Surfel[], b: TileBlock): TileSurfels[] {
-  const tiles = blockTiles(b).map((tile) => ({ tile, surfels: [] as Surfel[] }));
+export function splitByTile<T extends Surfel>(surfels: readonly T[], b: TileBlock): TileSurfels<T>[] {
+  const tiles = blockTiles(b).map((tile) => ({ tile, surfels: [] as T[] }));
   surfels.forEach((s, n) => {
     const i = Math.floor(s.x);
     const j = Math.floor(s.y);
@@ -61,7 +62,7 @@ export function splitByTile(surfels: readonly Surfel[], b: TileBlock): TileSurfe
     }
     // Exact for float32 inputs: subtracting an integer from a value in
     // [i, i + 1) is representable, so tile-local values stay float32-exact.
-    (tiles[j * b.cols + i] as TileSurfels).surfels.push({ ...s, x: s.x - i, y: s.y - j });
+    (tiles[j * b.cols + i] as TileSurfels<T>).surfels.push({ ...s, x: s.x - i, y: s.y - j });
   });
   return tiles;
 }

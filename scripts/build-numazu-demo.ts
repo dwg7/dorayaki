@@ -30,11 +30,13 @@ import { TOY_GS_PROPERTIES } from "../src/fixtures/toy-gaussians.js";
 import { jprcsToLatLng } from "../src/geodesy/jprcs.js";
 import { writePlyFloat32 } from "../src/gaussian/ply.js";
 import { gaussianToDisc, placeDiscs } from "../src/gaussian/to-surfels.js";
-import { BASE_CELLS, orderByRefinement, prefixCount } from "../src/progressive.js";
+import { BASE_CELLS, omitWeakRefinements, orderByRefinement, prefixCount } from "../src/progressive.js";
 import { readLas } from "../src/pointcloud/las.js";
 import { fitVoxelGaussians, gaussiansToPlyRows } from "../src/pointcloud/voxel-gaussians.js";
 import { tileLatitude, tileLongitude, tileWidthMetres, type TileAddress } from "../src/tile-geometry.js";
 import { splitByTile } from "../src/tiling.js";
+import { PmtilesCompression, PmtilesTileType, writePmtiles } from "../src/pmtiles.js";
+import { gzipSync } from "node:zlib";
 
 const MESH = "08NE2701";
 const DIR = `data/virtual-shizuoka/2019-mms-${MESH}`;
@@ -46,6 +48,13 @@ const AGGREGATED_ZOOMS = [18, 19];
 const MAXZOOM = 20;
 /** Levels in a maxzoom tile: z20, z21, z22 cell sizes. */
 const LEVELS = 3;
+/**
+ * Refinement levels (1 and later) keep only Gaussians fitted to at least
+ * this many points; level 0 is kept whole (E002 in EXPERIMENTS.md). At 6,
+ * the whole z18–z20 pyramid is smaller than the COPC of the same points.
+ * Override with DORAYAKI_MIN_SUPPORT=1 to keep everything.
+ */
+const MIN_REFINEMENT_SUPPORT = Number(process.env.DORAYAKI_MIN_SUPPORT ?? 6);
 const OUT = "demo/tiles/numazu";
 
 const las = readLas(new Uint8Array(readFileSync(LAS_PATH)));
@@ -74,17 +83,24 @@ const widthAt = (z: number): number => {
   const y = Math.floor(((1 - Math.asinh(Math.tan((origin.lat * Math.PI) / 180)) / Math.PI) / 2) * n);
   return tileWidthMetres({ z, x: 0, y });
 };
-/** One Gaussian per occupied voxel; a lone point gets scales of a quarter voxel. */
-const fit = (voxel: number) => fitVoxelGaussians(points, { voxelSize: voxel, minPoints: 1, minScale: voxel / 4 });
+/**
+ * One Gaussian per occupied voxel. Voxels with fewer than 3 points get
+ * scales of a quarter voxel; others are floored at 1 mm only, so planar
+ * voxels keep their thin axis (E003).
+ */
+const fit = (voxel: number) =>
+  fitVoxelGaussians(points, { voxelSize: voxel, minPoints: 1, minScale: 0.001, degenerateScale: voxel / 4 });
 
 mkdirSync(OUT, { recursive: true });
 interface ManifestTile extends TileAddress { levels: number[]; bytes: number; levelBytes: number[] }
 const manifestTiles: ManifestTile[] = [];
+const archiveTiles: Array<{ z: number; x: number; y: number; data: Uint8Array }> = [];
 const write = (tile: TileAddress, surfels: Parameters<typeof encodeDemoTile>[0], levels: number[]) => {
   const path = `${OUT}/${tile.z}/${tile.x}/${tile.y}.mlt`;
   mkdirSync(dirname(path), { recursive: true });
   const data = encodeDemoTile(surfels, levels);
   writeFileSync(path, data);
+  archiveTiles.push({ ...tile, data });
   // Bytes needed for each prefix of whole levels (frame overhead included in the last entry only).
   const levelBytes = levels.map((_, k) => 16 + 4 * levels.length + 32 * prefixCount(levels, k + 1));
   manifestTiles.push({ ...tile, levels, bytes: data.byteLength, levelBytes });
@@ -107,10 +123,16 @@ const ply = writePlyFloat32(TOY_GS_PROPERTIES, gaussiansToPlyRows(finest));
 writeFileSync(plyPath, ply);
 const finestDiscs = finest.map(gaussianToDisc);
 {
-  const { block, surfels } = placeDiscs(finestDiscs, origin, MAXZOOM);
+  const { block, surfels: placed } = placeDiscs(finestDiscs, origin, MAXZOOM);
+  // Carry each Gaussian's point support with its surfel (placeDiscs keeps order;
+  // splitByTile and orderByRefinement keep the objects).
+  const surfels = placed.map((s, i) => ({ ...s, support: finestDiscs[i]!.support ?? 0 }));
   for (const t of splitByTile(surfels, block)) {
     if (t.surfels.length === 0) continue;
-    const ordered = orderByRefinement(t.surfels, tileWidthMetres(t.tile), LEVELS);
+    const ordered = omitWeakRefinements(
+      orderByRefinement(t.surfels, tileWidthMetres(t.tile), LEVELS),
+      (q) => q.support >= MIN_REFINEMENT_SUPPORT,
+    );
     write(t.tile, ordered.surfels, ordered.levels);
   }
 }
@@ -131,6 +153,8 @@ const stats = {
   lowestGroundElevation: ground,
   finestVoxelMetres: finestVoxel,
   finestGaussians: finestDiscs.length,
+  minRefinementSupport: MIN_REFINEMENT_SUPPORT,
+  maxzoomGaussiansKept: manifestTiles.filter((t) => t.z === MAXZOOM).reduce((a, t) => a + t.levels.reduce((x, y) => x + y, 0), 0),
   finestFlatShare: finestDiscs.filter((d) => d.flatness < 0.3).length / finestDiscs.length,
   finestRadiusP50: quantile(finestDiscs.map((d) => d.radius), 0.5),
   perZoom,
@@ -140,7 +164,7 @@ const stats = {
 
 const all = manifestTiles;
 const manifest = {
-  name: `VIRTUAL SHIZUOKA MMS ${MESH} (Numazu): aggregated z${AGGREGATED_ZOOMS.join(",")}, progressive z${MAXZOOM} (${LEVELS} levels)`,
+  name: `VIRTUAL SHIZUOKA MMS ${MESH} (Numazu): aggregated z${AGGREGATED_ZOOMS.join(",")}, progressive z${MAXZOOM} (${LEVELS} levels, refinement support >= ${MIN_REFINEMENT_SUPPORT})`,
   attribution: "点群: 静岡県 VIRTUAL SHIZUOKA (CC BY) を加工して作成",
   verticalDatum: "orthometric height (標高), metres, as in the source LAS",
   centre: [origin.lng, origin.lat],
@@ -155,5 +179,37 @@ const manifest = {
   stats,
 };
 writeFileSync(`${OUT}/manifest.json`, JSON.stringify(manifest, null, 2) + "\n");
-console.log(`wrote ${plyPath} (${ply.byteLength} bytes) and ${OUT}/manifest.json`);
+// TileJSON for the demo's local dev server, with the same fields Martin
+// returns for a PMTiles source (tiles relative to this file).
+const tilejson = {
+  tilejson: "3.0.0",
+  name: manifest.name,
+  attribution: manifest.attribution,
+  tiles: ["{z}/{x}/{y}.mlt"],
+  minzoom: Math.min(...AGGREGATED_ZOOMS),
+  maxzoom: MAXZOOM,
+  bounds: manifest.bounds,
+  center: [origin.lng, origin.lat, MAXZOOM],
+};
+writeFileSync(`${OUT}/tilejson.json`, JSON.stringify(tilejson, null, 2) + "\n");
+
+// The same tiles as one PMTiles archive (MLT tile type), with the manifest
+// in its metadata, for hosting on a Range-capable server (README).
+// File name as hosted on stars (source id = file stem).
+const archivePath = "demo/tiles/dorayaki-numazu.pmtiles";
+const archive = writePmtiles(archiveTiles, {
+  tileType: PmtilesTileType.Mlt,
+  bounds: manifest.bounds as [number, number, number, number],
+  center: [origin.lng, origin.lat, MAXZOOM],
+  // Same shape as stars' existing MLT archives: gzip directories, raw tiles.
+  internal: { compression: PmtilesCompression.Gzip, compress: (b) => new Uint8Array(gzipSync(b)) },
+  metadata: {
+    name: manifest.name,
+    attribution: manifest.attribution,
+    description: "Dorayaki experimental surfel tiles (Surfel Block in an experimental MLT frame, tag 0xD0). Not a standard.",
+    dorayaki: manifest,
+  },
+});
+writeFileSync(archivePath, archive);
+console.log(`wrote ${plyPath} (${ply.byteLength} bytes), ${OUT}/manifest.json, and ${archivePath} (${archive.byteLength} bytes)`);
 console.log(JSON.stringify(stats, null, 2));

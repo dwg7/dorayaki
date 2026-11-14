@@ -156,7 +156,10 @@ Built with `npm run demo:numazu`. The patch straddles two z20 tiles.
   up. Selection should use per-tile screen-space error from the camera
   distance, as in 3D Tiles.
 - **Finest Gaussians have no shape.** At 1.5 cm voxels there are about 1.9
-  points per Gaussian, and none of them is flat. Their normals are
+  points per Gaussian, and none of them is flat. (Correction 2026-11-14:
+  "none" was partly an artefact of a scale floor applied to every voxel;
+  with the floor limited to voxels of fewer than 3 points, 4.6 % are flat.
+  See EXPERIMENTS.md E003.) Their normals are
   arbitrary (the first eigen-axis), and from above many discs are seen
   edge-on, so canopy coverage shows gaps even with inflated radii. Two
   consequences: round Gaussians should be drawn camera-facing, and a

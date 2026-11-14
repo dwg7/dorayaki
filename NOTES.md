@@ -295,3 +295,48 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
 - Not yet verified on GitHub Pages itself: the live URL and the
   Content-Type served for `.mlt` (read as an ArrayBuffer, so it should not
   matter).
+
+## 2026-11-14 — Numazu: omission at maxzoom; EXPERIMENTS.md
+
+- Pages is live at https://dwg7.unopengis.org/dorayaki/. The worker is
+  served as `text/javascript` (200) and `.mlt` tiles as
+  `application/octet-stream` (200). Numazu was missing because the site
+  build excluded it (17.6 MB).
+- Omission measured in `EXPERIMENTS.md` E002. Keeping level 0 whole and
+  dropping refinement surfels with support below 6 brings the whole
+  Numazu pyramid to 5,140,841 B (0.99× COPC xyz+rgb), with all level-0
+  cells covered.
+- The large-array spread trap struck again, in a measurement script
+  (`push(...keep)` with about 170 k elements). Fixed with a loop.
+- `splitByTile` and `orderByRefinement` are now generic, so per-surfel
+  producer data (here `support`) survives tiling and ordering.
+- Browser timings (GPU upload, frame time) could not be taken: the
+  session's browser pane was hidden, so MapLibre never fired `load`. The
+  demo now carries the instrumentation (`dorayaki.report()`,
+  `dorayaki.measureFrames()`).
+
+## 2026-11-14 — Numazu as PMTiles on stars; scale-floor artefact
+
+- Decision (hfu): the Numazu tiles are not committed to `docs/`. They are
+  packed into one PMTiles archive, `dorayaki-numazu.pmtiles`, for stars,
+  where Martin decodes the archive and serves z/x/y. `src/pmtiles.ts`
+  writes PMTiles v3: tile type 6 (MLT), raw tiles, and gzip directories
+  and metadata, the same shape as stars' existing MLT archives. Tile IDs
+  match the pmtiles reference implementation exhaustively at z4 and at
+  sample tiles up to z26. The pmtiles 4.5.0 reader reads back the header,
+  metadata and every tile.
+- stars' answer (stars session): files go to `/home/stars/data/` on the
+  stars host, uploaded under a hidden name and then moved into place.
+  Martin 1.14.0 registers them without a restart and serves them as
+  `application/vnd.maplibre-tile`. CORS echoes the requesting origin.
+  Missing in-range tiles are 204. Placement needs hfu's direct instruction
+  to the stars session; this session does not upload.
+- The demo now reads external tilesets from TileJSON (local
+  `tiles/numazu/tilejson.json`, or Martin's), and lists tiles from bounds
+  and zoom range. East and south edges count as exclusive, so pyramid
+  bounds do not pull in neighbour tiles. The site build lists Numazu only
+  when `DORAYAKI_NUMAZU_TILEJSON` is set.
+- Artefact found: the voxel fit floored every Gaussian's scales at a
+  quarter voxel (since v3). This erased the thin axis of planar voxels.
+  Fixed: the floor applies only to voxels with fewer than 3 points. It
+  corrects the 2026-11-13 "0 % flat" finding (EXPERIMENTS.md E003).

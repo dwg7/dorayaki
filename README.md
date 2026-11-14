@@ -131,8 +131,12 @@ content hashes. Besides the page, only MapLibre's Web Worker
 `import.meta.url`, which bundling turns into the page URL. The build
 therefore defines the worker's page-relative path and the demo passes it
 to `setWorkerUrl`, so it resolves under `/dorayaki/`. The build fails if the
-worker is not self-contained. The Numazu point-cloud tileset (about
-17.6 MB of derived tiles) is not published.
+worker is not self-contained. The Numazu point-cloud tileset is not
+copied into `docs/`. It is hosted as a PMTiles archive on stars (see
+below) and listed on the site only when the build is given its TileJSON:
+`DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site`.
+In the page's console, `dorayaki.report()` and `await
+dorayaki.measureFrames()` give load, upload and frame timings.
 
 ## Numazu point cloud
 
@@ -149,7 +153,12 @@ npm run demo:numazu
 
 The zip is 14,113,240 bytes (SHA-256 `0af0a8ac…e1ca126d`). `npm run
 demo:numazu` writes the finest Gaussians as a reference-3DGS PLY next to
-the LAS, and a tile pyramid to `demo/tiles/numazu/`. The pyramid holds
+the LAS, a tile pyramid with a `tilejson.json` to `demo/tiles/numazu/`, and
+the same tiles as one PMTiles archive, `demo/tiles/dorayaki-numazu.pmtiles`
+(tile type MLT, gzip directories). That archive is what goes to stars, where
+Martin serves it as `https://stars.optgeo.org/dorayaki-numazu/{z}/{x}/{y}`.
+Placement on stars follows the stars project's procedure and needs hfu's
+instruction to the stars session. The pyramid holds
 aggregated z18 and z19 tiles and z20 maxzoom tiles in a 3-level
 progressive order (`documents/progressive-maxzoom.md`). The demo draws the
 tiles and levels that match the map zoom. Open <http://127.0.0.1:8000/demo/?fixture=numazu>

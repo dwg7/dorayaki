@@ -40,6 +40,8 @@ export interface Gaussian {
   colour: [number, number, number];
   /** [0, 1]. */
   opacity: number;
+  /** Number of source points behind this Gaussian, when known (point-cloud fits). */
+  support?: number;
 }
 
 const REQUIRED = ["x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2", "opacity",
@@ -93,6 +95,8 @@ export interface Disc {
   anisotropy: number;
   /** Shortest scale / geometric mean of the in-plane scales; near 0 means flat. */
   flatness: number;
+  /** Source points behind the Gaussian, when known. */
+  support?: number;
 }
 
 export function gaussianToDisc(g: Gaussian): Disc {
@@ -110,6 +114,7 @@ export function gaussianToDisc(g: Gaussian): Disc {
     opacity: g.opacity,
     anisotropy: sb / sa,
     flatness: g.scales[n]! / inPlane,
+    ...(g.support !== undefined ? { support: g.support } : {}),
   };
 }
 

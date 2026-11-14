@@ -34,4 +34,5 @@ export {
   type BoundaryOptions,
   type BoundaryParts,
 } from "./fixtures/boundary.js";
-export { BASE_CELLS, orderByRefinement, prefixCount, type RefinementOrder } from "./progressive.js";
+export { BASE_CELLS, omitWeakRefinements, orderByRefinement, prefixCount, type RefinementOrder } from "./progressive.js";
+export { PmtilesCompression, PmtilesTileType, writePmtiles, zxyToTileId, type PmtilesOptions, type PmtilesTile } from "./pmtiles.js";

@@ -26,6 +26,13 @@ export interface VoxelOptions {
   minPoints?: number;
   /** Lower bound on a Gaussian's scale (metres); avoids log(0) for planar voxels. */
   minScale?: number;
+  /**
+   * Scale (metres) given to all three axes of a voxel with fewer than 3
+   * points, whose covariance cannot define a shape. Defaults to minScale.
+   * Applying a large floor to every voxel instead would flatten nothing:
+   * it erases the thin axis of planar voxels (E003).
+   */
+  degenerateScale?: number;
   opacity?: number;
 }
 
@@ -92,6 +99,7 @@ export function fitVoxelGaussians(points: LocalPoints, options: VoxelOptions): G
   if (!(size > 0)) throw new RangeError("voxelSize must be positive");
   const minPoints = options.minPoints ?? 4;
   const minScale = options.minScale ?? 0.001;
+  const degenerateScale = options.degenerateScale ?? minScale;
   const opacity = options.opacity ?? 0.95;
 
   // Accumulate sums per voxel: count, Σx (3), Σxxᵀ (6), Σrgb (3).
@@ -127,10 +135,11 @@ export function fitVoxelGaussians(points: LocalPoints, options: VoxelOptions): G
     if (det < 0) c2 = c2.map((v) => -v);
     out.push({
       position: [mx, my, mz],
-      scales: values.map((ev) => Math.max(minScale, Math.sqrt(Math.max(0, ev)))) as [number, number, number],
+      scales: values.map((ev) => Math.max(n < 3 ? degenerateScale : minScale, Math.sqrt(Math.max(0, ev)))) as [number, number, number],
       rotation: quaternionFromAxes(c0, c1, c2),
       colour: [s[10]! / n, s[11]! / n, s[12]! / n],
       opacity,
+      support: n,
     });
   }
   return out;

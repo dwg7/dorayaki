@@ -211,6 +211,10 @@ npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
 npm run demo:numazu # build demo/tiles/numazu/ from data/ (download: README)
 npm run site        # rebuild the GitHub Pages site in docs/ (commit the output)
 npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size table
+npm run measure:omission  # E002: omission strategies on the Numazu data
+npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
+npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
+DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  # list Numazu on the site
 ```
 
 Current repository structure:
@@ -221,6 +225,7 @@ src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/tiling.ts                centre-ownership split of a tile block into tiles
 src/progressive.ts           nested refinement order for maxzoom tiles (v3 level table)
+src/pmtiles.ts               minimal PMTiles v3 writer (no leaf directories)
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/fixtures/overhang.ts     deterministic overhang fixture generator
@@ -237,14 +242,18 @@ src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
 scripts/generate-demo-tile.ts  writes one demo tile per tileset
 demo/index.html              demo page (MapLibre GL JS via import map)
-demo/src/                    demo modules: load, decode, tile selection, placement, GPU, layer
-NOTES.md                     observed experimental findings
+demo/src/                    demo modules: load, TileJSON, decode, tile selection, placement, GPU, layer
+NOTES.md                     observed experimental findings (chronological)
+EXPERIMENTS.md               experiments E001, E002, ...: question, measurements, decision
 docs/                        built GitHub Pages site only (npm run site; do not edit by hand)
 scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline), worker, synthetic tiles
 documents/surfel-block-format.md  byte layout of the naive Surfel Block
 documents/mlt-frame.md            experimental MLT frame envelope
 documents/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
 scripts/measure-numazu.ts    density and size measurements on the Numazu data
+scripts/measure-omission.ts  E002 omission measurements
+scripts/measure-codec.ts     codec timing in Node
+scripts/measure-coarse.ts    E003 coarse Gaussian measurements
 ```
 
 Do not invent commands that are not present in package.json.
