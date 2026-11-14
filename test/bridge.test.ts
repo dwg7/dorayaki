@@ -29,7 +29,7 @@ const generateBridgeParts = () => generateBridgePartsAt({ tileWidthMetres: WIDTH
  * SHA-256 of encodeSurfelBlock(generateBridge().map(surfelToSplat)) on a 128 m tile. If this changes, the
  * fixture or the wire format changed; update it deliberately.
  */
-const BRIDGE_SHA256 = "fdde0c1998093173d6a282ffc5fc34fcb476a318fbef7771c11d49ba066979fc";
+const BRIDGE_SHA256 = "a459838755a621b5c085c3d26551c89096cbece71487ae857ca18377ab3dc92d";
 
 const C = 1 / 16;
 const centre = (k: number): number => (k + 0.5) * C;

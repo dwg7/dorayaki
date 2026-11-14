@@ -70,7 +70,10 @@ export interface Splat {
 
 /** ASCII "DSRF". */
 export const SURFEL_BLOCK_MAGIC = Uint8Array.of(0x44, 0x53, 0x52, 0x46);
-export const SURFEL_BLOCK_VERSION = 4;
+/** Version written by the encoder: records stored as byte planes. */
+export const SURFEL_BLOCK_VERSION = 5;
+/** Version 4 (whole 16-byte records, Array of Structures) is still read. */
+export const SURFEL_BLOCK_VERSION_AOS = 4;
 /** Fixed part of the header; the level table (4 bytes per level) follows it. */
 export const SURFEL_BLOCK_HEADER_BYTES = 32;
 export const SURFEL_RECORD_BYTES = 16;
@@ -280,24 +283,26 @@ export function encodeSurfelBlock(splats: readonly Splat[], levels: readonly num
   view.setFloat64(24, zStep, LITTLE_ENDIAN);
   levels.forEach((n, k) => view.setUint32(SURFEL_BLOCK_HEADER_BYTES + 4 * k, n, LITTLE_ENDIAN));
 
-  let o = SURFEL_BLOCK_HEADER_BYTES + 4 * levels.length;
-  for (const s of splats) {
-    view.setUint16(o + 0, Math.min(65535, Math.round(s.x * 65536)), LITTLE_ENDIAN);
-    view.setUint16(o + 2, Math.min(65535, Math.round(s.y * 65536)), LITTLE_ENDIAN);
-    view.setUint16(o + 4, Math.min(65535, Math.round((s.z - zMin) / zStep)), LITTLE_ENDIAN);
-    view.setUint8(o + 6, encodeScale(s.sx));
-    view.setUint8(o + 7, encodeScale(s.sy));
-    view.setUint8(o + 8, encodeScale(s.sz));
+  // Records are stored as byte planes: plane b holds byte b of every record
+  // (version 5), so that general-purpose compression sees like bytes together.
+  const base = SURFEL_BLOCK_HEADER_BYTES + 4 * levels.length;
+  const put = (plane: number, i: number, v: number): void => {
+    bytes[base + plane * count + i] = v;
+  };
+  splats.forEach((s, i) => {
+    const x = Math.min(65535, Math.round(s.x * 65536));
+    const y = Math.min(65535, Math.round(s.y * 65536));
+    const z = Math.min(65535, Math.round((s.z - zMin) / zStep));
+    put(0, i, x & 0xff); put(1, i, x >> 8);
+    put(2, i, y & 0xff); put(3, i, y >> 8);
+    put(4, i, z & 0xff); put(5, i, z >> 8);
+    put(6, i, encodeScale(s.sx));
+    put(7, i, encodeScale(s.sy));
+    put(8, i, encodeScale(s.sz));
     const q = packQuaternion(s.qw, s.qx, s.qy, s.qz);
-    view.setUint8(o + 9, q & 0xff);
-    view.setUint8(o + 10, (q >> 8) & 0xff);
-    view.setUint8(o + 11, (q >> 16) & 0xff);
-    view.setUint8(o + 12, s.r);
-    view.setUint8(o + 13, s.g);
-    view.setUint8(o + 14, s.b);
-    view.setUint8(o + 15, s.a);
-    o += SURFEL_RECORD_BYTES;
-  }
+    put(9, i, q & 0xff); put(10, i, (q >> 8) & 0xff); put(11, i, (q >> 16) & 0xff);
+    put(12, i, s.r); put(13, i, s.g); put(14, i, s.b); put(15, i, s.a);
+  });
   return bytes;
 }
 
@@ -328,8 +333,8 @@ export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
     }
   }
   const version = view.getUint16(4, LITTLE_ENDIAN);
-  if (version !== SURFEL_BLOCK_VERSION) {
-    throw new SurfelBlockError("UNSUPPORTED_VERSION", `version ${version}, expected ${SURFEL_BLOCK_VERSION}`);
+  if (version !== SURFEL_BLOCK_VERSION && version !== SURFEL_BLOCK_VERSION_AOS) {
+    throw new SurfelBlockError("UNSUPPORTED_VERSION", `version ${version}, expected ${SURFEL_BLOCK_VERSION_AOS} or ${SURFEL_BLOCK_VERSION}`);
   }
   const recordBytes = view.getUint16(6, LITTLE_ENDIAN);
   if (recordBytes !== SURFEL_RECORD_BYTES) {
@@ -366,24 +371,26 @@ export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
   checkLevels(levels, count);
 
   const splats: Splat[] = new Array(count);
-  let o = tableEnd;
+  const planar = version === SURFEL_BLOCK_VERSION;
+  const get = planar
+    ? (plane: number, i: number): number => bytes[tableEnd + plane * count + i]!
+    : (plane: number, i: number): number => bytes[tableEnd + i * SURFEL_RECORD_BYTES + plane]!;
   for (let i = 0; i < count; i++) {
-    const packed = view.getUint8(o + 9) | (view.getUint8(o + 10) << 8) | (view.getUint8(o + 11) << 16);
+    const packed = get(9, i) | (get(10, i) << 8) | (get(11, i) << 16);
     const [qw, qx, qy, qz] = unpackQuaternion(packed);
     splats[i] = {
-      x: view.getUint16(o + 0, LITTLE_ENDIAN) / 65536,
-      y: view.getUint16(o + 2, LITTLE_ENDIAN) / 65536,
-      z: Math.fround(zOrigin + view.getUint16(o + 4, LITTLE_ENDIAN) * zStep),
-      sx: decodeScale(view.getUint8(o + 6)),
-      sy: decodeScale(view.getUint8(o + 7)),
-      sz: decodeScale(view.getUint8(o + 8)),
+      x: (get(0, i) | (get(1, i) << 8)) / 65536,
+      y: (get(2, i) | (get(3, i) << 8)) / 65536,
+      z: Math.fround(zOrigin + (get(4, i) | (get(5, i) << 8)) * zStep),
+      sx: decodeScale(get(6, i)),
+      sy: decodeScale(get(7, i)),
+      sz: decodeScale(get(8, i)),
       qw, qx, qy, qz,
-      r: view.getUint8(o + 12),
-      g: view.getUint8(o + 13),
-      b: view.getUint8(o + 14),
-      a: view.getUint8(o + 15),
+      r: get(12, i),
+      g: get(13, i),
+      b: get(14, i),
+      a: get(15, i),
     };
-    o += SURFEL_RECORD_BYTES;
   }
   return { splats, levels };
 }

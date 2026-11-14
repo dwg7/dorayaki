@@ -76,3 +76,15 @@ test("rejects a bad maxLevel", () => {
   assert.throws(() => adaptiveGaussians(new VoxelAccumulator(1), { ...OPTIONS, maxLevel: -1 }), RangeError);
   assert.throws(() => adaptiveGaussians(new VoxelAccumulator(1), { ...OPTIONS, maxLevel: 1.5 }), RangeError);
 });
+
+test("the sparse rule merges lightly supported voxels whatever their shape", () => {
+  const acc = new VoxelAccumulator(0.5, 4);
+  let seed = 11;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+  for (let i = 0; i < 300; i++) acc.add(rnd() * 4, rnd() * 4, rnd() * 4, 0.5, 0.5, 0.5); // ~1 point per voxel
+  const strict = { maxLevel: 3, thickness: 0.01, colourTolerance: 0.01 };
+  const without = adaptiveGaussians(acc, strict).gaussians;
+  const withSparse = adaptiveGaussians(acc, { ...strict, sparseSupport: 6 }).gaussians;
+  assert.ok(withSparse.length < without.length / 2, `${withSparse.length} against ${without.length}`);
+  assert.equal(totalSupport(withSparse), 300);
+});

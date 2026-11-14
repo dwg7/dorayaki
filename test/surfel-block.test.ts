@@ -50,7 +50,7 @@ function rawBlock(opts: {
   const bytes = new Uint8Array(SURFEL_BLOCK_HEADER_BYTES + 4 * levels.length + opts.recordBytes);
   const view = new DataView(bytes.buffer);
   bytes.set(new TextEncoder().encode(opts.magic ?? "DSRF"), 0);
-  view.setUint16(4, opts.version ?? 4, true);
+  view.setUint16(4, opts.version ?? 5, true);
   view.setUint16(6, opts.recordSize ?? SURFEL_RECORD_BYTES, true);
   view.setUint32(8, opts.count, true);
   view.setUint32(12, opts.levelCount ?? levels.length, true);
@@ -83,7 +83,7 @@ describe("encode/decode", () => {
     const bytes = encodeSurfelBlock([]);
     assert.equal(
       hex(bytes),
-      "44535246" + "0400" + "1000" + "00000000" + "01000000" + "0000000000000000" + Z_STEP_HEX + "00000000",
+      "44535246" + "0500" + "1000" + "00000000" + "01000000" + "0000000000000000" + Z_STEP_HEX + "00000000",
     );
     assert.deepEqual(decodeSurfelBlock(bytes), []);
   });
@@ -93,7 +93,7 @@ describe("encode/decode", () => {
     assert.equal(bytes.byteLength, 32 + 4 + 16);
     assert.equal(
       hex(bytes),
-      "44535246" + "0400" + "1000" + "01000000" + "01000000" +
+      "44535246" + "0500" + "1000" + "01000000" + "01000000" +
         "0000000000005940" + // z origin = 100 (float64)
         Z_STEP_HEX + // z step = 0.001
         "01000000" + // level 0 holds 1 splat
@@ -232,8 +232,8 @@ describe("decoder rejects malformed input", () => {
   });
 
   test("unsupported version", () => {
-    // Versions 1-3 used a 12- or 16-byte header and 32-byte records.
-    for (const version of [0, 1, 2, 3, 5]) assertRejects(rawBlock({ version, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
+    // Versions 1-3 used a 12- or 16-byte header and 32-byte records; 4 stored whole records, 5 stores byte planes.
+    for (const version of [0, 1, 2, 3, 6]) assertRejects(rawBlock({ version, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
   });
 
   test("unexpected record size", () => {
@@ -313,4 +313,17 @@ describe("level table", () => {
     const full = encodeSurfelBlock([ONE, ONE], [1, 1]);
     assertRejects(full.subarray(0, SURFEL_BLOCK_HEADER_BYTES + 4), "TRUNCATED_HEADER");
   });
+});
+
+test("version 4 blocks (whole records) are still decoded", () => {
+  const splats: Splat[] = Array.from({ length: 5 }, (_, i) => ({
+    x: 0.1 * i + 0.01, y: 0.9 - 0.1 * i, z: 10 + i * 0.37, sx: 0.05 + 0.01 * i, sy: 0.1, sz: 0.02,
+    qw: 1, qx: 0, qy: 0, qz: 0, r: 10 * i, g: 255 - 10 * i, b: 7 * i, a: 240,
+  }));
+  const v5 = encodeSurfelBlock(splats);
+  const v4 = new Uint8Array(v5);
+  const base = SURFEL_BLOCK_HEADER_BYTES + 4;
+  for (let i = 0; i < splats.length; i++) for (let b = 0; b < SURFEL_RECORD_BYTES; b++) v4[base + i * SURFEL_RECORD_BYTES + b] = v5[base + b * splats.length + i]!;
+  new DataView(v4.buffer).setUint16(4, 4, true);
+  assert.deepEqual(decodeSurfelBlock(v4), decodeSurfelBlock(v5));
 });

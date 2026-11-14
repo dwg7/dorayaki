@@ -1,10 +1,13 @@
-# Surfel Block format (experimental, version 4)
+# Surfel Block format (experimental, version 5)
 
 Status: implemented in `src/surfel-block.ts`. This is an experimental
 layout for the Dorayaki proof of concept, not a specification. It may
 change without backward compatibility; any such change will be stated
 explicitly and will bump `version`. Version numbers are expected to rise
 freely while the format is explored.
+
+Version 5 (2026-11-15) changes only how the records are laid out: byte planes
+instead of whole records (see "Splat records"). A reader still accepts version 4.
 
 Version 4 changes what a record holds. Versions 1–3 stored a circular disc
 (position, normal, radius) in 32 bytes. Version 4 stores an anisotropic
@@ -21,7 +24,7 @@ All multi-byte fields are **little-endian**.
 offset      size          content
 0           32            header
 32          4 * L         level table (L = level_count)
-32 + 4L     16 * count    splat records, Array of Structures
+32 + 4L     16 * count    splat records, as 16 byte planes (version 5)
 ```
 
 The total byte length must be exactly `32 + 4·L + 16·count`. Shorter input
@@ -62,9 +65,28 @@ come first, then level 1, and so on.
 `L` is capped at 64 so that a reader never allocates a large table from
 untrusted input. This is a local limit, not a structural need.
 
-## Splat record (16 bytes)
+## Splat records (16 bytes each, stored as byte planes)
 
-Offsets are relative to the start of the record.
+A record has 16 bytes (below). **Version 5** stores the records as 16 *planes*:
+plane `b` is `count` bytes long and holds byte `b` of record 0, 1, ..., count-1;
+the planes follow each other, plane 0 first. Byte `b` of record `i` is at
+`32 + 4·L + b·count + i`. Nothing else changes: it is a transposition, and the
+fields and their quantization are as before. The reason is compression: a
+general-purpose compressor (gzip, brotli) finds like bytes together. On the
+largest Kawazu tiles (E008, EXPERIMENTS.md), gzip -9 of the whole-record layout
+leaves 87 to 90 % of the bytes; byte planes leave 64 to 69 %; brotli on planes
+about 59 to 65 %. With `count` = 1 the layouts are identical.
+
+**Version 4** stored whole records one after another (Array of Structures);
+the decoder still reads it (the encoder writes version 5 only).
+
+A consequence: with the planes, the first N records are not a contiguous byte
+range, so the level table can no longer be used to fetch only the first levels
+with a byte-range request. Nothing uses that today (every tileset has one
+level); if progressive fetching returns, planes would have to be stored per
+level.
+
+Offsets below are relative to the start of a record, that is, the plane index.
 
 | offset | size | type      | field    | meaning                                                  |
 | -----: | ---: | --------- | -------- | -------------------------------------------------------- |
@@ -134,7 +156,7 @@ x and y are in `[0, 1)`; scales are `> 0`; the quaternion is non-zero;
 colour channels are integers in `0..255`; the level table has 1 to 64
 entries summing to `count`.
 
-Decoder: version 4, `record_bytes` 16, `level_count` in `1..64`, finite
+Decoder: version 4 or 5, `record_bytes` 16, `level_count` in `1..64`, finite
 `z_origin`, finite positive `z_step`, exact total length, a level table
 that sums to `count`, reserved rotation bit 0, no code 127. Any violation
 throws `SurfelBlockError`; the decoder never reads outside its input.
@@ -179,6 +201,12 @@ duplicated nor clipped at tile edges. Geometry spanning several tiles is
 sampled once on a grid that is continuous across seams, then split.
 
 ## Compatibility
+
+**Version 5** (2026-11-15) stores the records as byte planes (above). The header,
+the level table and the record fields are unchanged. The decoder reads versions
+4 and 5; the encoder writes 5. Tilesets written as version 4 (the Numazu tiles
+on stars at the time) still decode; fixtures and test vectors were regenerated
+(four pinned SHA-256 values changed, the decoded splats did not).
 
 **Version 4** (2026-11-15) replaces the 32-byte disc record with the
 16-byte splat record and widens the header to 32 bytes (z origin and
