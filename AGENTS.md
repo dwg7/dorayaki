@@ -215,15 +215,15 @@ npm run measure:omission  # E002: omission strategies on the Numazu data
 npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
 npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
 npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
-npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOUR enable E005 merging
+npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOUR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=none keeps PMTiles tiles raw (default gzip)
 npm run measure:adaptive -- <file.las> <zone> <base cell metres> <levels>  # E005: splat counts for a grid of merge limits
-DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  # list Numazu on the site
+DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  # list Numazu on the site (DORAYAKI_KAWAZU_TILEJSON likewise for Kawazu)
 ```
 
 Current repository structure:
 
 ```text
-src/surfel-block.ts          Surfel Block encoder/decoder (v4: 16-byte quantized splats)
+src/surfel-block.ts          Surfel Block encoder/decoder (v5: 16-byte quantized splats as byte planes; reads v4)
 src/splat.ts                 splat geometry: rotations, disc <-> splat conversions
 src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
@@ -260,6 +260,7 @@ documents/progressive-maxzoom.md  maxzoom and progressive order: design, v3 stat
 documents/large-point-clouds.md   streaming build, Virtual Shizuoka data, Kawazu
 documents/adaptive-merging.md     E005 merging and E006 gap coverage
 documents/size-and-scale.md       tile and prefecture size arithmetic, browser memory
+documents/kawazu-demo.md          the Kawazu tileset: recipe, size, hosting plan
 scripts/measure-numazu.ts    density and size measurements on the Numazu data
 scripts/measure-omission.ts  E002 omission measurements
 scripts/measure-codec.ts     codec timing in Node

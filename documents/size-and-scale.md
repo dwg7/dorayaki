@@ -74,6 +74,12 @@ Reading, not a decision:
 - Adaptive merging at the same base saves about a fifth on this mixed
   ground-and-road set at a loose limit, less than on the road alone.
 
+Added since (E008): the sparse merge rule keeps vegetation as coarse blobs: MMS +
+all airborne returns is 20.0 MB (z16 + z17) instead of 73.4 MB, about 165 B/m2,
+an order of 1.3 TB for the prefecture if it looked like this slope. Byte planes
+and gzip (Surfel Block v5) take the stored 23.4 MB of the z15 to z17 tiles to
+16.0 MB. Neither is measured outside this mesh.
+
 Not measured: first-return plus ground (a canopy-top shell with the ground
 below), adaptive merging of the canopy sets (that build, MMS + all returns from
 a 24.5 cm base, was stopped after 13 minutes without finishing; the merge holds

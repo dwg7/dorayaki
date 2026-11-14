@@ -44,8 +44,11 @@ scales, a rotation and a colour. Here it is quantized into **16 bytes**.
   [EXPERIMENTS.md](EXPERIMENTS.md).
 - **Real data, large (local only).** A 196.6-million-point mesh (Kawazu loop
   bridge, 6.7 GB of LAS) is aggregated in 22 s with 0.8 GB of memory and
-  becomes a 6.3 MB tileset at 49 cm cells or 26 MB at 24.5 cm. These sets are
-  built and viewed locally; they are not hosted yet. See
+  becomes a 6.3 MB tileset at 49 cm cells (or 26 MB at 24.5 cm). Merged with
+  an airborne laser mesh of the same area (all returns, vegetation kept as
+  coarse blobs) it is a 16 MB PMTiles archive of 1.46 million splats, built
+  and viewed locally and not hosted yet. See
+  [documents/kawazu-demo.md](documents/kawazu-demo.md),
   [documents/large-point-clouds.md](documents/large-point-clouds.md) and
   [documents/size-and-scale.md](documents/size-and-scale.md).
 - **Ordinary delivery.** The Numazu tiles are served from a normal HTTP tile
@@ -59,7 +62,7 @@ scales, a rotation and a colour. Here it is quantized into **16 bytes**.
 2. Gaussians are assigned to the one tile containing their centre. Zoom
    levels below the maximum hold coarser aggregates; the level of detail is
    the ordinary tile zoom hierarchy.
-3. Each tile's splats are packed into a **Surfel Block** (`DSRF`, version 4)
+3. Each tile's splats are packed into a **Surfel Block** (`DSRF`, version 5)
    and wrapped in an **experimental MapLibre Tile frame**.
 4. The browser fetches `z/x/y`, unwraps the frame, decodes the block, and
    draws instanced ellipses (round splats face the camera).
@@ -73,7 +76,7 @@ malformed lengths; the renderer only sees decoded splats.
 Please read this before depending on anything here.
 
 - **Not a specification.** The byte layout changes without notice and
-  version numbers rise freely (it is at version 4; breaking changes are
+  version numbers rise freely (it is at version 5; breaking changes are
   stated in the format document).
 - **Not an MLT assignment.** Frame tag `0xD0` is a local, unassigned value
   chosen for the experiment. The upstream MapLibre Tile implementation is
@@ -106,6 +109,7 @@ in [EXPERIMENTS.md](EXPERIMENTS.md).
 | [documents/large-point-clouds.md](documents/large-point-clouds.md) | streaming build of big LAS files; Virtual Shizuoka data and Kawazu |
 | [documents/adaptive-merging.md](documents/adaptive-merging.md) | merging coplanar splats; covering gaps (`?extent=`) |
 | [documents/size-and-scale.md](documents/size-and-scale.md) | what a tile and a prefecture cost; browser memory |
+| [documents/kawazu-demo.md](documents/kawazu-demo.md) | the Kawazu tileset: recipe, size, hosting plan |
 | [AGENTS.md](AGENTS.md) | project goals and working method |
 
 ## Development

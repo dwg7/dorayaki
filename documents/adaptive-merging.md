@@ -27,10 +27,17 @@ A parent that fails keeps its children and blocks every larger ancestor, so
 splats of different sizes never overlap. A parent with one child passes
 upwards unchanged so that it can still merge with neighbours later.
 
+A third rule, the **sparse rule** (E008): a parent is also merged when every
+child is supported by fewer than `sparseSupport` points, whatever the
+thickness and colour. A voxel supported by a handful of points carries little
+more than the points; this is how vegetation volume is kept small (at 24
+points, MMS + all airborne returns of Kawazu fall from 73.4 MB uniform to
+20.0 MB). Merging applies to every zoom of the pyramid.
+
 Environment variables of `npm run build:tileset`: `DORAYAKI_ADAPTIVE_LEVELS`
 (merge levels; enables the feature), `DORAYAKI_ADAPTIVE_REFINE` (start from
 cells 2^refine times finer than the maxzoom's), `DORAYAKI_ADAPTIVE_THICKNESS`
-(metres, default 0.05), `DORAYAKI_ADAPTIVE_COLOUR` (default 0.1).
+(metres, default 0.05), `DORAYAKI_ADAPTIVE_COLOUR` (default 0.1), `DORAYAKI_ADAPTIVE_SPARSE` (default 0 = off).
 `npm run measure:adaptive -- <file.las> <zone> <base cell metres> <levels>`
 prints splat counts for a grid of limits without writing tiles.
 

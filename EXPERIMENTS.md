@@ -551,3 +551,99 @@ the adaptive build of MMS + all returns was stopped after 13 minutes.
 - Whether airborne colours (taken from imagery?) look right next to the
   MMS colours; they were not compared.
 - Any area other than this mesh; airborne data of a city or a plain.
+
+## E008: Encoding low-hanging fruit, and what to do with vegetation
+
+### Question
+
+Before publishing a PMTiles archive: is there an easy gain in the encoding,
+and can vegetation be kept at a much smaller size instead of dropping it?
+
+### Encoding: how the tile bytes compress
+
+The largest z17 tiles of two Kawazu sets (49 cm uniform MMS + airborne ground
+class: 473,211 splats, 7.57 MB; MMS + all airborne returns with the E008
+rules below: 395,810 splats, 6.33 MB). Compressed size as a share of the
+stored tile, Node zlib gzip level 9, brotli quality 11:
+
+| layout | uniform tile | merged tile |
+| --- | ---: | ---: |
+| whole records (version 4), gzip | 84.6 % | 89.7 % |
+| whole records, brotli | 75.9 % | 83.0 % |
+| byte planes (version 5), gzip | 63.6 % | 68.7 % |
+| byte planes, brotli | 59.0 % | 65.3 % |
+| Morton-sorted, byte planes, gzip / brotli | 62.9 % / 59.0 % | 68.3 % / 65.0 % |
+| Morton-sorted, delta of x, y, z, byte planes, brotli | 60.1 % | 65.5 % |
+
+Brotli compressed bytes by field (merged tile, 395,810 splats): x 436 kB,
+y 460 kB, z 565 kB, three scales 259 + 258 + 267 kB, rotation 925 kB, colour
+and opacity 940 kB. Rotation and colour are 44 % of the compressed bytes;
+positions are about one byte each, close to noise at 16 bits.
+
+- Transposing the records into byte planes is the low-hanging fruit: gzip
+  leaves 69 to 64 % instead of 90 to 85 %, a 23 to 25 % saving, with the same
+  fields and quantization. Adopted as Surfel Block version 5; version 4 is
+  still decoded.
+- Morton ordering and delta coding of the positions gave nothing on top: the
+  records already come in a coherent (z, y, x) order from the voxel grid.
+- gint (a 64-bit integer of coordinate, Morton index and a rendering rank,
+  for line vertices) was read; it does not carry over as an encoding. Its
+  Morton order did not help here (above); its rank is a zoom-dependent
+  culling order, which would be a second mandatory level-of-detail mechanism
+  next to the tile hierarchy, ruled out in AGENTS.md; its reclaimed low bits
+  have no counterpart, since the coordinates are kept at 16 bits. The
+  spare-bits idea (a bit of the record carrying intent) stays an open option.
+- Not tried: lowering the precision of rotation (24 bits) and positions
+  (16 bits); both are the largest compressed fields.
+
+### Vegetation: voxels supported by few points
+
+On the airborne data at 49 cm cells (3,366,967 voxels, all returns), as shares of
+all voxels: sparse (fewer than 5 points) 67 %, planar 15 %, linear 1 %, round
+11 %, other 6 %. Class 1 alone: 70, 12, 1, 11, 6 %; ground class alone: 64, 28,
+2, 4, 2 %. (Shape from the eigenvalues of each voxel's covariance for n >= 5:
+round if the smallest/largest standard deviation exceeds 0.5.)
+Classification codes do not separate vegetation from structures
+(the MMS has classes 2 to 5, the airborne class 1 holds canopy and
+structures), so a rule on shape and support was tried instead of one on class.
+
+`adaptiveGaussians` got a sparse rule (`sparseSupport`, E005 code): a parent is
+also merged when every child has fewer than that many points, whatever the
+thickness and colour. Merging now applies to every zoom. LP = the airborne
+data, all returns, 49 cm base, 3 merge levels (cells up to 3.9 m), thickness
+20 cm, colour 0.2; z16 + z17 tiles (the uniform all-returns set is 70.1 MB):
+
+| sparse support | LP all returns | MMS + LP all returns |
+| ---: | ---: | ---: |
+| off (thickness and colour rules only) | 36.0 MB | – |
+| 6 | 29.9 MB | – |
+| 12 | 23.3 MB | 26.8 MB |
+| 24 | 16.5 MB | 20.0 MB |
+
+(For reference: LP ground class only, uniform: 11.6 MB; MMS + LP ground,
+uniform: 17.5 MB; MMS + LP all returns, uniform: 73.4 MB.)
+
+### Observations
+
+- MMS + LP all returns with support 24 is 20.0 MB, 27 % of the uniform
+  all-returns set and 15 % more than ground-plus-MMS at uniform cells, so
+  keeping the vegetation as coarse blobs costs about 2.5 MB on this mesh.
+- Viewed at zoom 17.6 and 19 (`?extent=1.3`, terrain): the forest on the slope
+  is a continuous canopy of blobs, the loop bridge, its piers and the road with
+  its centre line are intact. Tree detail is gone; that is the intent.
+- The z15 to z17 archive built with this recipe: 1,459,754 splats, 23.36 MB of
+  tiles, 15.95 MB as a gzip-tile PMTiles archive.
+
+### Decision
+
+Keep vegetation, merged by the sparse rule (support 24), and gzip the tiles of
+the archive. Dropping vegetation (ground only) would save a few MB more but the
+canopy is what makes the scene read as a place.
+
+### Not yet shown
+
+- Whether support 24 is right elsewhere (a city, a plain, a dense forest at
+  another density); the value is tied to 121 points/m2 and 49 cm cells.
+- Whether Martin serves gzip-compressed MLT tiles with the right headers
+  (raw tiles were verified for Numazu).
+- A measure of how much the canopy loses against the original points.
