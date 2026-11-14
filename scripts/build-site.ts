@@ -21,7 +21,8 @@
  * The Numazu point-cloud tileset (VIRTUAL SHIZUOKA, CC BY) is not copied
  * into docs/. It is hosted as dorayaki-numazu.pmtiles on stars, where Martin
  * serves it as z/x/y. Set DORAYAKI_NUMAZU_TILEJSON to its TileJSON URL
- * (https://stars.optgeo.org/dorayaki-numazu) to list it on the site; without
+ * (https://stars.optgeo.org/dorayaki-numazu) to list it on the site, and
+ * DORAYAKI_KAWAZU_TILEJSON likewise for Kawazu; without
  * it the site omits Numazu and hides its link.
  */
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -36,8 +37,13 @@ const MAPLIBRE_DIST = "node_modules/maplibre-gl/dist";
 const WORKER = "maplibre-gl-worker.mjs";
 
 const numazuTileJson = process.env.DORAYAKI_NUMAZU_TILEJSON;
-const externals: Record<string, string> = numazuTileJson ? { numazu: numazuTileJson } : {};
+const kawazuTileJson = process.env.DORAYAKI_KAWAZU_TILEJSON;
+const externals: Record<string, string> = {
+  ...(numazuTileJson ? { numazu: numazuTileJson } : {}),
+  ...(kawazuTileJson ? { kawazu: kawazuTileJson } : {}),
+};
 console.log(numazuTileJson ? `Numazu from ${numazuTileJson}` : "DORAYAKI_NUMAZU_TILEJSON not set: the site omits Numazu");
+console.log(kawazuTileJson ? `Kawazu from ${kawazuTileJson}` : "DORAYAKI_KAWAZU_TILEJSON not set: the site omits Kawazu");
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });

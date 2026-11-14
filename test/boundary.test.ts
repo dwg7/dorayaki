@@ -26,7 +26,7 @@ const BLOCK = { origin: { z: 18, x: 1000, y: 2000 }, cols: BOUNDARY_COLS, rows: 
  * order, on 128 m tiles. If this changes, the fixture, the ownership rule,
  * or the wire format changed; update it deliberately.
  */
-const BOUNDARY_SHA256 = "afd1859ff70664cd63ad5bb308f913a65693a005bf42eefb023da15dc97ad009";
+const BOUNDARY_SHA256 = "4eeaa389b330bdb2f9f5dd2cf4125ce192fbed772c283bd37ab25f7e8a2d202f";
 
 const tiles = () => splitByTile(generateBoundary(), BLOCK);
 

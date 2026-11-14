@@ -37,10 +37,36 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         numazu: "tiles/numazu/tilejson.json",
         "numazu-medium": "tiles/numazu-medium/tilejson.json",
         "numazu-fine": "tiles/numazu-fine/tilejson.json",
+        kawazu: "tiles/kawazu/tilejson.json",
+        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu",
+        "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
+        "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
+        "kawazu-ad-t20-c20": "tiles/kawazu-ad-t20-c20/tilejson.json",
+        "kawazu-ad-t10-c20": "tiles/kawazu-ad-t10-c20/tilejson.json",
+        "kawazu-lp-c2-50cm": "tiles/kawazu-lp-c2-50cm/tilejson.json",
+        "kawazu-mix-c2-50cm": "tiles/kawazu-mix-c2-50cm/tilejson.json",
+        "kawazu-mix-c2-ad-t20": "tiles/kawazu-mix-c2-ad-t20/tilejson.json",
+        "kawazu-mix-first-50cm": "tiles/kawazu-mix-first-50cm/tilejson.json",
+        "kawazu-lp-sp24": "tiles/kawazu-lp-sp24/tilejson.json",
+        "kawazu-mix-sp12": "tiles/kawazu-mix-sp12/tilejson.json",
+        "kawazu-mix-sp24": "tiles/kawazu-mix-sp24/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
 const isExternal = (name: string): name is ExternalTileset => Object.hasOwn(EXTERNAL_TILESETS, name);
+
+/**
+ * Per-tileset defaults for the query flags below, overridden by the URL.
+ * Kawazu lies 130 to 360 m above sea level, where the camera of a map without
+ * terrain is far above the data (NOTES.md), so terrain is on by default; the
+ * splat scale 1.3 closes the gaps between neighbours (documents/adaptive-merging.md).
+ */
+const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  kawazu: { terrain: "1", extent: "1.3" },
+};
+/** A query flag: the URL's value, else the tileset's default. */
+const flag = (name: string, tileset: string): string | null =>
+  new URLSearchParams(location.search).get(name) ?? TILESET_DEFAULTS[tileset]?.[name] ?? null;
 
 /** Tileset from `?fixture=`, defaulting to the bridge. */
 const requested = new URLSearchParams(location.search).get("fixture") ?? "bridge";
@@ -77,7 +103,7 @@ const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-starlight";
 const map = new MapLibreMap({
   container: "map",
   center: external ? external.center : tileToLngLat(tiles[0] as TileAddress, 0.5, 0.5),
-  zoom: external ? 20.5 : 18.3,
+  zoom: external ? Math.max(...tiles.map((t) => t.z)) + 1.5 : 18.3, // numazu: 19 + 1.5 = 20.5
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
@@ -109,6 +135,12 @@ const tilesPromise = fetchTilesBytes(urls, undefined, { allowMissing: external !
 });
 
 map.on("load", () => {
+  // Debug (`?terrain=1`): MapLibre terrain from stars' Terrarium DEM, to see how the custom layer behaves with it.
+  const terrain = Number(flag("terrain", tileset));
+  if (terrain > 0) {
+    map.addSource("dem", { type: "raster-dem", url: "https://stars.optgeo.org/mapterhorn-japan-bridge", encoding: "terrarium", tileSize: 512 });
+    map.setTerrain({ source: "dem", exaggeration: terrain });
+  }
   // Debug overlay on top of the basemap: the demo tile's boundary.
   map.addSource("tile-outline", {
     type: "geojson",
@@ -123,8 +155,12 @@ map.on("load", () => {
   tilesPromise.then(
     (loaded) => {
       const layer = new SurfelLayer("surfels", loaded);
-      const lod = Number(new URLSearchParams(location.search).get("lod"));
+      const lod = Number(flag("lod", tileset));
       if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+      const extent = Number(flag("extent", tileset));
+      if (extent > 0) layer.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
+      const dz = Number(flag("dz", tileset));
+      if (dz) layer.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
       map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
       depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
       const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);
@@ -164,11 +200,33 @@ map.on("load", () => {
           map.on("render", onRender);
           map.triggerRepaint();
         });
+      /**
+       * Share of near-white (background) pixels in a screen rectangle given as
+       * fractions of the canvas, read back inside a render event. Used by E006
+       * to compare how many gaps different `?extent=` values leave on a road.
+       */
+      const holeFraction = (rect: [number, number, number, number] = [0.35, 0.55, 0.65, 0.9]): Promise<number> =>
+        new Promise((resolve) => {
+          const onRender = () => {
+            map.off("render", onRender);
+            const gl = map.getCanvas().getContext("webgl2") as WebGL2RenderingContext;
+            const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+            const x0 = Math.floor(rect[0] * w), x1 = Math.floor(rect[2] * w);
+            const y0 = Math.floor((1 - rect[3]) * h), y1 = Math.floor((1 - rect[1]) * h);
+            const px = new Uint8Array((x1 - x0) * (y1 - y0) * 4);
+            gl.readPixels(x0, y0, x1 - x0, y1 - y0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+            let white = 0;
+            for (let i = 0; i < px.length; i += 4) if (px[i]! > 235 && px[i + 1]! > 235 && px[i + 2]! > 235) white++;
+            resolve(white / (px.length / 4));
+          };
+          map.on("render", onRender);
+          map.triggerRepaint();
+        });
       const report = () => ({
         tileset, tiles: loaded.length, surfels: count, encodedBytes: bytes,
         fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
       });
-      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded, timings, report, measureFrames };
+      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded, timings, report, measureFrames, holeFraction };
     },
     (err: unknown) => {
       setStatus(`failed: ${err instanceof Error ? err.message : String(err)}`);

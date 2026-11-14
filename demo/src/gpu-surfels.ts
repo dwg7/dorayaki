@@ -18,6 +18,7 @@ precision highp float;
 uniform mat4 u_matrix;      // local metric frame (metres; east, south, up) -> clip
 uniform float u_tile_width; // metres per tile-local unit
 uniform float u_min_radius; // metres; semi-axis floor when drawing a progressive prefix
+uniform float u_extent;     // factor on every semi-axis (1 = the 2-sigma ellipse); covers gaps between neighbours
 uniform vec3 u_light;       // local metric frame, normalized
 uniform vec3 u_right;       // camera right in the local metric frame, normalized
 uniform vec3 u_up;          // camera up in the local metric frame, normalized
@@ -36,15 +37,15 @@ void main() {
   vec3 v = a_axis_v;
   float shade;
   if (a_round > 0.5) {
-    float r = max(length(a_axis_u), u_min_radius);
+    float r = max(length(a_axis_u) * u_extent, u_min_radius);
     u = u_right * r;
     v = u_up * r;
     shade = 0.8;
   } else {
     float lu = max(length(u), 1e-9);
     float lv = max(length(v), 1e-9);
-    u *= max(1.0, u_min_radius / lu);
-    v *= max(1.0, u_min_radius / lv);
+    u *= u_extent * max(1.0, u_min_radius / (lu * u_extent));
+    v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
     shade = 0.35 + 0.65 * abs(dot(normalize(a_normal), u_light));
   }
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
@@ -71,6 +72,7 @@ export interface SurfelProgram {
   uMatrix: WebGLUniformLocation;
   uTileWidth: WebGLUniformLocation;
   uMinRadius: WebGLUniformLocation;
+  uExtent: WebGLUniformLocation;
   uLight: WebGLUniformLocation;
   uRight: WebGLUniformLocation;
   uUp: WebGLUniformLocation;
@@ -133,6 +135,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
     uMatrix: uniform("u_matrix"),
     uTileWidth: uniform("u_tile_width"),
     uMinRadius: uniform("u_min_radius"),
+    uExtent: uniform("u_extent"),
     uLight: uniform("u_light"),
     uRight: uniform("u_right"),
     uUp: uniform("u_up"),
@@ -179,6 +182,8 @@ export interface DrawOptions {
   count?: number;
   /** Semi-axis floor in metres (default 0). */
   minRadius?: number;
+  /** Factor on every semi-axis (default 1: the 2-sigma ellipse). */
+  extent?: number;
   depthTest: boolean;
 }
 
@@ -190,6 +195,7 @@ export function drawSurfels(
   gl.uniformMatrix4fv(p.uMatrix, false, opts.matrix);
   gl.uniform1f(p.uTileWidth, opts.tileWidthMetres);
   gl.uniform1f(p.uMinRadius, opts.minRadius ?? 0);
+  gl.uniform1f(p.uExtent, opts.extent ?? 1);
   gl.uniform3fv(p.uLight, LIGHT);
   gl.uniform3fv(p.uRight, right);
   gl.uniform3fv(p.uUp, up);

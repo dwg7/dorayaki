@@ -322,3 +322,329 @@ according to need afterwards. `medium` (2,204,268 B,
 matters, and `fine` stays as a profile for reference and for datasets dense
 enough to need progressive levels. The default profile of
 `npm run demo:numazu` is therefore `coarse`.
+
+## E005: Adaptive merging of voxel Gaussians (Kawazu MMS, 50 cm class)
+
+### Question
+
+A uniform 49 cm grid (`kawazu-50cm`: 318,817 splats at z17, 6.33 MB with
+z16) spends the same number of splats on a flat road as on a tree crown.
+Can the splat count at that size be cut, or the detail raised at the same
+count, by merging neighbouring Gaussians that are nearly coplanar and of the
+same colour?
+
+### Method
+
+`src/pointcloud/adaptive.ts` (`adaptiveGaussians`) starts from the occupied
+voxels of a streaming accumulator. For each merge level (cells double,
+`size · 2^k`) the occupied children of a parent cell are combined exactly
+(parallel-axis moments) and replaced by one Gaussian when (a) the smallest
+standard deviation of the merged points is at most `thickness` and (b) every
+child's mean colour is within `colour` of the merged mean, per channel.
+A parent that fails blocks all larger ancestors, so sizes never overlap. The
+result is a flat list of mixed-size Gaussians in one level, not an LOD.
+Aggregated zooms (z16) are unchanged. Counts: `npm run measure:adaptive`;
+tiles: `DORAYAKI_ADAPTIVE_*` with `npm run build:tileset`. Data: the Kawazu
+MMS mesh 08OF4060 (196.6 M points).
+
+### Measurements (splats at the maxzoom, share of the base voxel count)
+
+Base 49 cm (318,875 voxels), 4 levels (up to 7.8 m cells):
+
+| thickness | colour 0.1 | colour 0.3 | colour off |
+| ---: | ---: | ---: | ---: |
+| 3 cm | 91 % | 88 % | 87 % |
+| 5 cm | 89 % | 84 % | 83 % |
+| 10 cm | 83 % | 75 % | 74 % |
+| 20 cm | 68 % | 55 % | 52 % |
+
+Base 24.5 cm (1,232,448 voxels), 5 levels (up to 7.8 m cells):
+
+| thickness | colour 0.1 | colour 0.2 | colour 0.3 | colour off |
+| ---: | ---: | ---: | ---: | ---: |
+| 3 cm | 85 % | 82 % | 80 % | 79 % |
+| 5 cm | 80 % | 76 % | 74 % | 72 % |
+| 10 cm | 66 % | 59 % | 56 % | 53 % |
+| 20 cm | 39 % | 25 % | 20 % | 15 % |
+
+Tiles built and viewed (zoom 18.6, pitch 55, `?terrain=1`):
+
+| set | base | thickness, colour | splats at z17 | all tiles |
+| --- | --- | --- | ---: | ---: |
+| `kawazu-50cm` | 49 cm uniform | – | 318,817 | 6.33 MB |
+| `kawazu-ad-t20-c20` | 24.5 cm adaptive | 20 cm, 0.2 | 311,871 | 6.22 MB |
+| `kawazu-ad-t10-c20` | 24.5 cm adaptive | 10 cm, 0.2 | 725,736 | 12.84 MB |
+
+### Observations
+
+- With strict limits (5 cm) merging removes only 11 to 20 % of the
+  splats: on this scene most 50 cm and 25 cm voxels are not flat to 5 cm
+  (trees, railings, walls, MMS noise).
+- A uniform 49 cm cell has a thickness of up to 14 cm (cell / sqrt(12)),
+  so 20 cm is no looser than the uniform grid already is.
+  At 20 cm / 0.2 from the 25 cm base, the count equals the uniform 50 cm
+  set (311,871 against 318,817), while the picture shows more detail: the
+  lane markings on the loop road are visible, which the uniform 50 cm set
+  blurs. Judged by eye in one browser view; no image metric.
+- 10 cm / 0.2 at 726k splats looks like the 25 cm set (1.23 M).
+- The thickness limit is the dominant parameter; the colour limit moves
+  the count by 10 to 25 points of share, mostly at 20 cm.
+- Browser load of these 6 MB sets was slow (tens of seconds) in this
+  session; not measured or investigated.
+
+### Oblique check, 20 cm / 0.2 (`kawazu-ad-t20-c20`) against `kawazu-50cm` and `kawazu-25cm`
+
+Same views for each set, `?terrain=1`, in the browser pane; by eye, no image
+metric. The camera cannot get closer to the ground than the terrain allows,
+so the requested pitch 70 at zoom 20.4 was clamped to 64.
+
+- Road, zoom 19.4, bearing -30, pitch 70: all three show the road and the
+  yellow centre line. `kawazu-50cm` and the adaptive set both show a regular
+  pattern of white gaps on the road (the quads' ellipses do not cover the
+  cell corners); `kawazu-25cm` has fewer, smaller gaps. The adaptive set is
+  not worse than the uniform 50 cm one here.
+- Road close-up, zoom 20.5, bearing -30, pitch 60: the adaptive road is made
+  of larger ellipses with diamond-shaped gaps and a centre line that reads
+  as a nearly continuous line; the uniform 50 cm road is round discs with
+  round gaps and a dotted centre line. The gaps in the adaptive set are
+  larger and more angular.
+- Under the loop and in the trees, zoom 19.8, bearing 120, pitch 72: the
+  adaptive set shows large flat dark ellipses on shadowed ground and trunks
+  in the foreground, where the uniform 50 cm set shows round discs and the
+  25 cm set small ones. Shapes are recognisable in all three; the adaptive
+  one looks smoother on trunks and blobbier on foliage.
+- Not reached: a railing close-up and roof edges (no building in the views).
+  The loop's deck edge was only seen from zoom 19.2 and farther.
+
+Reading: at 20 cm, no failure that the uniform 50 cm set does not already
+have was found in these four views, and the centre line improves. The gaps
+between large ellipses are the visible cost. Whether it is a real regression
+needs a metric or a larger set of views.
+
+### Not yet shown
+
+- Whether `thickness = 20 cm` creates visible errors on thin structures
+  (railings, wires) or at roof edges: not reached by the views below.
+- Behaviour on airborne laser data and on merged MMS + airborne data.
+- Whether the renderer's overdraw at large merged splats costs frame time.
+- A merge rule that adapts thickness to the cell size.
+- Size effect of compressing the result (not tried).
+
+## E006: Covering the gaps between splats (`?extent=`)
+
+### Question
+
+Oblique views of a road show a regular pattern of white gaps between splats
+(E005). Does drawing every splat larger than its 2-sigma ellipse close them,
+and at what factor?
+
+### Method
+
+The demo's shader scales every semi-axis by `u_extent` (`?extent=<factor>`;
+round splats scale their radius). `dorayaki.holeFraction(rect)` reads the
+canvas back inside a render event and returns the share of near-white pixels
+(each of R, G, B above 235, the basemap's background) in a screen rectangle.
+Sets: `kawazu-50cm` (uniform 49 cm) and `kawazu-ad-t20-c20` (E005). Views at
+`?terrain=1`, centre of the loop road: `close` zoom 20.5, bearing -30,
+pitch 60, rectangle (x 0.35 to 0.65, y 0.55 to 0.9 of the canvas); `close2`
+zoom 20.3, bearing 150, pitch 50 and `close3` zoom 20.0, bearing 60, pitch 45,
+both rectangle (0.3 to 0.7, 0.5 to 0.95). The pane was visible.
+
+### Measurements (share of near-white pixels)
+
+| view | extent | uniform 49 cm | adaptive |
+| --- | ---: | ---: | ---: |
+| close | 1.0 | 5.05 % | 5.42 % |
+| close | 1.2 | 1.24 % | 1.67 % |
+| close | 1.3 | 0.97 % | 1.37 % |
+| close | 1.5 | 0.62 % | 0.88 % |
+| close2 | 1.0 | 3.99 % | 4.44 % |
+| close2 | 1.3 | 1.30 % | 1.49 % |
+| close2 | 1.5 | 0.98 % | 1.11 % |
+| close3 | 1.0 | 6.03 % | 4.20 % |
+| close3 | 1.3 | 4.73 % | 2.07 % |
+| close3 | 1.5 | 4.15 % | 1.65 % |
+
+### Observations
+
+- A factor of 1.2 removes about three quarters of the gaps in `close` and
+  `close2`; 1.3 and 1.5 remove a little more. 1.22 is the factor at which a
+  square lattice of 2-sigma ellipses of an evenly filled cell would just
+  cover the cell's corners (adaptive-merging.md).
+- In `close3` the rectangle contains foliage and sky, so a floor of real
+  gaps remains; the direction is the same.
+- In the screenshot at 1.3 the adaptive road is continuous and its centre
+  line is one stripe. No view with thin structures (railings) was checked
+  at 1.3; the factor also thickens them and widens overlaps at edges.
+- The metric counts any near-white pixel, including real gaps and bright
+  road paint; it is a relative measure between factors in one view, not a
+  coverage measurement.
+
+### Not yet shown
+
+- The cost on thin structures and silhouettes.
+- Whether the factor should depend on the splat (round discs, merged cells).
+- A default: the flag is off (1.0).
+
+## E007: Merging airborne (LP) and MMS data on the Kawazu mesh, and what a surface costs
+
+### Question
+
+The goal is areal data: mobile mapping (MMS) where the airborne survey is
+shadowed, airborne laser elsewhere. Is the size of the merged tileset
+realistic, and which points are worth keeping?
+
+### Data and method
+
+Mesh 08OF4060 (300 m x 400 m). MMS: 196,608,664 points. Airborne LP
+("Ground" product, 2019): 14,551,545 points, 121 points/m2, of which
+2,492,669 are class 2 (ground) and 12,058,876 class 1; z range per
+1 m x 1 m cell has a median of 16 m. `npm run build:tileset` with several
+LAS files merges them into the same voxels; `@c2` / `@first` filters choose
+points. Uniform 49 cm cells, z16 + z17 (the 50 cm class); the adaptive rows
+start from 24.5 cm cells with the E005 rule. Bytes per m2 use the 120,526
+one-metre cells that hold airborne points.
+
+Heights: on 1,119 cells where the LP surface is locally flat (z range under
+0.5 m), LP minus MMS ground has median -0.175 m (quartiles -0.19, -0.14).
+
+### Measurements
+
+| set | z17 splats | all tiles | per m2 | largest z17 tile |
+| --- | ---: | ---: | ---: | ---: |
+| `kawazu-50cm` MMS only | 318,817 | 6.33 MB | 55.7 (box) | 3.51 MB |
+| `kawazu-lp-c2-50cm` | 549,337 | 11.56 MB | 96 | 4.31 MB |
+| `kawazu-lp-first-50cm` | 1,641,048 | 35.03 MB | 291 | 12.44 MB |
+| `kawazu-lp-50cm` (all returns) | 3,367,215 | 70.10 MB | 582 | 25.92 MB |
+| `kawazu-mix-c2-50cm` | 848,755 | 17.46 MB | 145 | 7.57 MB |
+| `kawazu-mix-first-50cm` | 1,855,785 | 39.08 MB | 324 | 14.87 MB |
+| `kawazu-mix-50cm` (all) | 3,546,675 | 73.42 MB | 609 | 27.94 MB |
+| `kawazu-mix-c2-ad-t20` (24.5 cm base, 20 cm, 0.2) | 641,362 | 14.14 MB | 117 | 6.66 MB |
+| `kawazu-mix-c2-ad-t10` (24.5 cm base, 10 cm, 0.2) | 1,134,654 | 22.03 MB | 183 | 12.25 MB |
+
+Build times 7 s to 90 s on an Apple M1 (the adaptive builds 54 and 80 s);
+the adaptive build of MMS + all returns was stopped after 13 minutes.
+
+### Observations
+
+- MMS plus airborne ground (`kawazu-mix-c2-50cm`) shows the hillside as a
+  continuous surface around the road and the loop bridge (viewed once,
+  zoom 17.3, pitch 50, `?extent=1.3`; no other check).
+- The airborne "Ground" file is not ground only. Keeping every return makes a
+  tile of 1.6 million splats (6.2 layers over the 262,144 columns) and 582
+  bytes per m2, nine times the ground class. First returns halve that.
+- Adding MMS to the airborne ground adds 5.9 MB, close to what MMS alone
+  costs (6.3 MB): little overlap.
+- Adaptive merging saves 19 % at a loose limit (14.14 against 17.46 MB) on
+  this mixed set, and none at 10 cm in this encoding (22.03 MB, more than
+  uniform 49 cm, because the base is 24.5 cm).
+- Taking this mesh as a scale for a 7,800 km2 prefecture (it is a forested
+  slope, which inflates counts): ground only about 0.75 TB, MMS + ground
+  about 1.1 TB, first returns about 2.3 TB, all returns about 4.5 TB
+  (size-and-scale.md).
+
+### Not yet shown
+
+- First returns plus ground as a canopy shell, or a column rule (keep the
+  highest and the lowest point per column).
+- Adaptive merging on the canopy sets (memory and time of the merge).
+- Whether airborne colours (taken from imagery?) look right next to the
+  MMS colours; they were not compared.
+- Any area other than this mesh; airborne data of a city or a plain.
+
+## E008: Encoding low-hanging fruit, and what to do with vegetation
+
+### Question
+
+Before publishing a PMTiles archive: is there an easy gain in the encoding,
+and can vegetation be kept at a much smaller size instead of dropping it?
+
+### Encoding: how the tile bytes compress
+
+The largest z17 tiles of two Kawazu sets (49 cm uniform MMS + airborne ground
+class: 473,211 splats, 7.57 MB; MMS + all airborne returns with the E008
+rules below: 395,810 splats, 6.33 MB). Compressed size as a share of the
+stored tile, Node zlib gzip level 9, brotli quality 11:
+
+| layout | uniform tile | merged tile |
+| --- | ---: | ---: |
+| whole records (version 4), gzip | 84.6 % | 89.7 % |
+| whole records, brotli | 75.9 % | 83.0 % |
+| byte planes (version 5), gzip | 63.6 % | 68.7 % |
+| byte planes, brotli | 59.0 % | 65.3 % |
+| Morton-sorted, byte planes, gzip / brotli | 62.9 % / 59.0 % | 68.3 % / 65.0 % |
+| Morton-sorted, delta of x, y, z, byte planes, brotli | 60.1 % | 65.5 % |
+
+Brotli compressed bytes by field (merged tile, 395,810 splats): x 436 kB,
+y 460 kB, z 565 kB, three scales 259 + 258 + 267 kB, rotation 925 kB, colour
+and opacity 940 kB. Rotation and colour are 44 % of the compressed bytes;
+positions are about one byte each, close to noise at 16 bits.
+
+- Transposing the records into byte planes is the low-hanging fruit: gzip
+  leaves 69 to 64 % instead of 90 to 85 %, a 23 to 25 % saving, with the same
+  fields and quantization. Adopted as Surfel Block version 5; version 4 is
+  still decoded.
+- Morton ordering and delta coding of the positions gave nothing on top: the
+  records already come in a coherent (z, y, x) order from the voxel grid.
+- gint (a 64-bit integer of coordinate, Morton index and a rendering rank,
+  for line vertices) was read; it does not carry over as an encoding. Its
+  Morton order did not help here (above); its rank is a zoom-dependent
+  culling order, which would be a second mandatory level-of-detail mechanism
+  next to the tile hierarchy, ruled out in AGENTS.md; its reclaimed low bits
+  have no counterpart, since the coordinates are kept at 16 bits. The
+  spare-bits idea (a bit of the record carrying intent) stays an open option.
+- Not tried: lowering the precision of rotation (24 bits) and positions
+  (16 bits); both are the largest compressed fields.
+
+### Vegetation: voxels supported by few points
+
+On the airborne data at 49 cm cells (3,366,967 voxels, all returns), as shares of
+all voxels: sparse (fewer than 5 points) 67 %, planar 15 %, linear 1 %, round
+11 %, other 6 %. Class 1 alone: 70, 12, 1, 11, 6 %; ground class alone: 64, 28,
+2, 4, 2 %. (Shape from the eigenvalues of each voxel's covariance for n >= 5:
+round if the smallest/largest standard deviation exceeds 0.5.)
+Classification codes do not separate vegetation from structures
+(the MMS has classes 2 to 5, the airborne class 1 holds canopy and
+structures), so a rule on shape and support was tried instead of one on class.
+
+`adaptiveGaussians` got a sparse rule (`sparseSupport`, E005 code): a parent is
+also merged when every child has fewer than that many points, whatever the
+thickness and colour. Merging now applies to every zoom. LP = the airborne
+data, all returns, 49 cm base, 3 merge levels (cells up to 3.9 m), thickness
+20 cm, colour 0.2; z16 + z17 tiles (the uniform all-returns set is 70.1 MB):
+
+| sparse support | LP all returns | MMS + LP all returns |
+| ---: | ---: | ---: |
+| off (thickness and colour rules only) | 36.0 MB | – |
+| 6 | 29.9 MB | – |
+| 12 | 23.3 MB | 26.8 MB |
+| 24 | 16.5 MB | 20.0 MB |
+
+(For reference: LP ground class only, uniform: 11.6 MB; MMS + LP ground,
+uniform: 17.5 MB; MMS + LP all returns, uniform: 73.4 MB.)
+
+### Observations
+
+- MMS + LP all returns with support 24 is 20.0 MB, 27 % of the uniform
+  all-returns set and 15 % more than ground-plus-MMS at uniform cells, so
+  keeping the vegetation as coarse blobs costs about 2.5 MB on this mesh.
+- Viewed at zoom 17.6 and 19 (`?extent=1.3`, terrain): the forest on the slope
+  is a continuous canopy of blobs, the loop bridge, its piers and the road with
+  its centre line are intact. Tree detail is gone; that is the intent.
+- The z15 to z17 archive built with this recipe: 1,459,754 splats, 23.36 MB of
+  tiles, 15.95 MB as a gzip-tile PMTiles archive.
+
+### Decision
+
+Keep vegetation, merged by the sparse rule (support 24), and gzip the tiles of
+the archive. Dropping vegetation (ground only) would save a few MB more but the
+canopy is what makes the scene read as a place.
+
+### Not yet shown
+
+- Whether support 24 is right elsewhere (a city, a plain, a dense forest at
+  another density); the value is tied to 121 points/m2 and 49 cm cells.
+- ~~Whether Martin serves gzip-compressed MLT tiles~~: it does not (Martin 1.14.0:
+  `Format Mlt and compression Gzip are not yet supported`); the hosted archive has
+  raw tiles (documents/kawazu-demo.md), so the gzip saving is not realised on stars yet.
+- A measure of how much the canopy loses against the original points.

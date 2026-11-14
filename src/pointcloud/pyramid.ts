@@ -59,7 +59,24 @@ function widthAt(origin: GeoOrigin, z: number): number {
 export const fitVoxels = (points: LocalPoints, voxel: number) =>
   fitVoxelGaussians(points, { voxelSize: voxel, minPoints: 1, minScale: 0.001, degenerateScale: voxel / 4 });
 
+/** Voxel size in metres of each aggregated zoom (in config order), then of the finest level at the maxzoom. */
+export function pyramidVoxelSizes(origin: GeoOrigin, config: PyramidConfig): number[] {
+  return [
+    ...config.aggregatedZooms.map((z) => widthAt(origin, z) / BASE_CELLS),
+    widthAt(origin, config.maxzoom) / (BASE_CELLS * 2 ** (config.levels - 1)),
+  ];
+}
+
 export function buildPyramid(points: LocalPoints, origin: GeoOrigin, config: PyramidConfig): Pyramid {
+  return buildPyramidFrom((voxel) => fitVoxels(points, voxel), origin, config);
+}
+
+/**
+ * The same pyramid, with the Gaussians of each voxel size supplied by `fit`
+ * (for example from streaming accumulators, one per size in
+ * pyramidVoxelSizes). Called once per size.
+ */
+export function buildPyramidFrom(fit: (voxelMetres: number) => Gaussian[], origin: GeoOrigin, config: PyramidConfig): Pyramid {
   if (!Number.isInteger(config.levels) || config.levels < 1) throw new RangeError("levels must be a positive integer");
   for (const z of config.aggregatedZooms) {
     if (!(z < config.maxzoom)) throw new RangeError(`aggregated zoom ${z} must be below the maxzoom ${config.maxzoom}`);
@@ -68,7 +85,7 @@ export function buildPyramid(points: LocalPoints, origin: GeoOrigin, config: Pyr
   const gaussiansPerZoom: Record<number, number> = {};
 
   for (const z of config.aggregatedZooms) {
-    const gaussians = fitVoxels(points, widthAt(origin, z) / BASE_CELLS);
+    const gaussians = fit(widthAt(origin, z) / BASE_CELLS);
     gaussiansPerZoom[z] = gaussians.length;
     const { block, splats } = placeGaussians(gaussians, origin, z);
     for (const t of splitByTile(splats, block)) {
@@ -77,7 +94,7 @@ export function buildPyramid(points: LocalPoints, origin: GeoOrigin, config: Pyr
   }
 
   const finestVoxelMetres = widthAt(origin, config.maxzoom) / (BASE_CELLS * 2 ** (config.levels - 1));
-  const finest = fitVoxels(points, finestVoxelMetres);
+  const finest = fit(finestVoxelMetres);
   gaussiansPerZoom[config.maxzoom] = finest.length;
   const { block, splats } = placeGaussians(finest, origin, config.maxzoom);
   for (const t of splitByTile(splats, block)) {

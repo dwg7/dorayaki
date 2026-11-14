@@ -62,6 +62,8 @@ export class SurfelLayer implements CustomLayerInterface {
    * does not follow the camera's distance to the data (NOTES.md).
    */
   zoomOverride: number | undefined;
+  /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
+  extent = 1;
 
   private readonly tiles: TileState[];
   private map: MapLibreMap | undefined;
@@ -113,6 +115,7 @@ export class SurfelLayer implements CustomLayerInterface {
         tileWidthMetres: t.widthMetres,
         count: plan.count,
         minRadius: plan.minRadius,
+        extent: this.extent,
         depthTest: this.depthTest,
       });
       drawn++;
@@ -130,6 +133,15 @@ export class SurfelLayer implements CustomLayerInterface {
     if (this.program) deleteSurfelProgram(gl, this.program);
     this.program = undefined;
     this.map = undefined;
+  }
+
+  /** Debug aid (`?dz=`): raise every tile by `metres`, to test data at high elevation. */
+  setZOffset(metres: number): void {
+    for (const t of this.tiles) {
+      t.model = metricToMercatorMatrix(t.tile, t.widthMetres);
+      t.model[14] = metres * t.model[10]!; // z translation in Mercator units: s metres
+    }
+    this.map?.triggerRepaint();
   }
 
   setDepthTest(enabled: boolean): void {

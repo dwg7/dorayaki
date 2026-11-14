@@ -462,3 +462,173 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   loads Numazu from stars: 2 tiles, 602,188 B, 37,628 splats. Fetch from
   stars 235 ms, decode 14.7 ms, upload 13.5 ms (Apple M1, local page, remote
   data), with no console errors.
+
+## 2026-11-15 — high elevation: the camera is relative to sea level; Virtual Shizuoka survey
+
+Observed with a debug offset (`?dz=<metres>` raises every tile; demo only,
+`SurfelLayer.setZOffset`) on the local Numazu tileset at zoom 17.6, pitch 0
+and 60. The splats disappear at +300 m and above (and from +200 m at pitch
+60, where they move off the top of the screen). Reading
+`defaultProjectionData.mainMatrix` in the page, the clip-space `w` of a point
+over the tile centre falls linearly with its height, from 985.5 at z = 0 to
+0 at about z = 318 m, and is negative above that. So MapLibre places the
+camera about 318 m above sea level at this zoom, and any splat higher than
+that is behind it. The camera altitude scales with 2^(−zoom): roughly 950 m
+at zoom 16, 120 m at zoom 19, 60 m at zoom 20 (extrapolated, not measured).
+Cause: MapLibre's camera is positioned above z = 0 of the (flat) basemap;
+it does not know that the data is hundreds of metres higher. Consequences
+for high ground (a dam at several hundred metres): the data vanishes or is
+magnified wildly when the camera is close, and it floats that many metres
+above the flat basemap. Not yet tried: subtracting a per-tileset base
+elevation in the layer (for a flat basemap), or MapLibre terrain.
+
+Virtual Shizuoka bucket (`virtual-shizuoka.s3.ap-northeast-1.amazonaws.com`,
+public listing): `2019`–`2022`, `2025`; per year some of `ALB` (airborne
+laser bathymetry), `LP` (airborne laser), `MMS`, `Backpack`, `UAV`, `MISC`.
+2019 MMS ground points cover mesh zone 08 only: 1,795 zips, 1.56 TB. Mesh
+codes `08NE2701` decode as: 50 km-class cell `NE` (30 km north-south,
+40 km east-west; zone VIII, row `A` starts at X = +300 km, column `A` at
+Y = −160 km), then a 5000-scale cell `27` (3 km × 4 km, row then column from
+the north-west), then a 300 m × 400 m sub-cell `01`. This reproduces the
+Numazu mesh. By this rule the Kawazu loop bridge (34.7917 N, 138.9390 E;
+plane coordinates X = −133,954, Y = 40,173) is in `08OF4060`: the 2019 MMS
+zip is 2,940 MB, 14–15 bytes per point at Numazu's zip ratio suggests
+on the order of 200 million points (estimate, not read). The current LAS
+reader loads a whole file, which that size rules out. ALB 2019 covers
+`08NE`, `NF`, `OE`, `OF`, `PE`; none of the survey data has been downloaded
+beyond Numazu's `08NE2701`.
+
+## 2026-11-15 — MapLibre terrain and the custom layer (mapterhorn-japan-bridge)
+
+Debug flag `?terrain=<exaggeration>` in the demo adds a `raster-dem` source
+from `https://stars.optgeo.org/mapterhorn-japan-bridge` (Terrarium, WebP,
+minzoom 0, maxzoom 16, GSI DEM tiers) and calls `map.setTerrain`. Observed
+with MapLibre GL JS 6.16.0, local Numazu tileset, mostly zoom 18–21:
+
+- The custom layer still draws and its matrix is still in true elevation.
+  With terrain on, the camera follows the terrain under the map centre. In
+  the page, the clip `w` of a point at ground level was 985–1020 at zoom 18
+  and 20, pitch 60, whether the ground was at 7.6 m (Numazu) or 3,770 m
+  (Mt Fuji summit); a point at sea level was far away (`w` 8,735 at the
+  summit, zoom 18). Without terrain the camera was relative to 0 m (see the
+  entry above). So terrain does the job of a base elevation, and a splat's
+  z needs no offset when it is on the terrain.
+- The DEM and the point cloud agree here: the terrain elevation at the data's
+  centre is 7.59 m; the splats' ground is at about 7.5 m. Splats and the
+  basemap (draped on the terrain) line up with no visible gap at pitch up
+  to 82°.
+- Terrain exaggeration is not applied to splats. At exaggeration 3 the
+  terrain at the data was 22.8 m, the splats stayed at 7.5 m, and they were
+  hidden inside the terrain.
+- That burying is a depth test against the terrain mesh, not the
+  background colour: making the basemap's `background` colour transparent
+  (`rgba(0,0,0,0)`) left the splats hidden, and switching the layer's depth
+  test off made them visible. (Only the `background` layer's colour was
+  tried, not other fills.)
+- Unexplained: with terrain on there were rows of blue-tinted dots near the
+  building (top of the view at zoom 21, pitch 70), also with depth test off.
+  They were not seen without terrain. Not investigated.
+
+Not checked: stability while panning and zooming over steep terrain with
+real data at high elevation (there is none locally), the cost of terrain on
+frame time, and globe projection.
+
+## 2026-11-15 — Kawazu loop mesh `08OF4060` downloaded and its header read
+
+Downloaded `08OF4060.zip` (2,939,949,911 B, SHA-256 `3c1403f1…4f9c24`, from
+`2019/MMS/Ground/08/OF/40/` of the Virtual Shizuoka bucket) into `data/`
+(not committed). It holds one file, `08OF4060.las` (6,684,694,805 B).
+Header, read by streaming the first 375 bytes out of the zip (not extracted):
+LAS 1.2, point format 3 (RGB + GPS time, 34 bytes per record), producer
+Aero Asahi Corp., **196,608,664 points** (the 200 million estimated from the
+zip size). Scale 1 mm. Plane rectangular zone VIII bounds: easting
+40,001.8–40,380.4 m, northing −134,100.0 to −133,800.0 m (379 m × 300 m, so
+the mesh is nearly full and the loop bridge, X = −133,954 / Y = 40,173, is
+inside), height 177.1–245.2 m (68 m of relief). Mean density about 1,700
+points per m², one fifth of Numazu's 8,700 per m² but 200 times the points.
+Not yet read: colour content, classification, the actual distribution of
+points over the loop bridge.
+
+## 2026-11-15 — streaming voxelisation of the Kawazu mesh (196.6 million points)
+
+`VoxelAccumulator` (`src/pointcloud/voxel-accumulator.ts`) feeds points one at
+a time into a typed-array hash table; `npm run measure:stream` reads a LAS
+file in 64 MB chunks. Checks and measurements (Apple M1, Node 22):
+
+- On Numazu (`08NE2701`) it reproduces the in-memory counts exactly:
+  29,989 voxels at z19 (12.2 cm) and 7,639 at z18, the same as the demo
+  draws. A unit test compares it with `fitVoxelGaussians` on synthetic points
+  (positions to 1e-9, scales and colours to 1e-6, same supports).
+- On `08OF4060` (196,608,664 points, 6.68 GB LAS) one pass with both grids
+  took 22.2 s (8.8 million points per second), peak RSS 0.81 GB.
+  Occupied voxels: 1,232,293 at z18 (24.5 cm, 160 points per voxel) and
+  4,384,382 at z19 (12.3 cm, 45 points per voxel).
+- So the coarse profile for this mesh would hold about 4.4 million splats at
+  z19, about 70 MB of 16-byte records before tile overhead, plus 1.2 million
+  at z18. Against COPC the ratio is not measured here; Numazu's COPC was 5.3
+  bytes per point, which would put this mesh's COPC near 1 GB (extrapolation,
+  not a measurement), so the ratio would be of the order of 0.07.
+- The accumulator is not the limit; what comes after it is. 4.4 million
+  Gaussians as JavaScript objects, then placed splats and tile splitting, are
+  a few GB of heap. Next: fit and write one tile at a time.
+
+## Kawazu mesh 08OF4060 at 50 cm and 25 cm (2026-11-15)
+
+`npm run build:tileset` (scripts/build-tileset.ts) streams a LAS file into one
+accumulator per voxel size and builds the pyramid from them
+(`buildPyramidFrom`); one level per tile, cells = tile width / 512 at each zoom.
+Run on the 196.6 M-point Kawazu MMS mesh (zone 8), built and viewed with
+`?terrain=1`:
+
+| set | zooms | cell at maxzoom | splats at maxzoom | all tiles | build time, RSS |
+| --- | --- | --- | --- | --- | --- |
+| `kawazu-50cm` | z16, z17 | 49 cm | 318,817 | 6.33 MB (6 tiles) | 20 s, 0.68 GB |
+| `kawazu-25cm` | z16, z17, z18 | 24.5 cm | 1,232,293 | 26.0 MB (13 tiles) | 36 s, 1.46 GB |
+
+- The 50 cm estimate (about 6 MB for the finest level) matched: z17 is 5.1 MB.
+  Against the extrapolated COPC of about 1 GB these are about 0.006 and 0.026
+  (the COPC size is itself an extrapolation, not measured).
+- On Numazu the streaming builder gives the same splat count per tile and the
+  same x, y. About 6 % (z18) to 12 % (z19) of the records differ in the
+  last bit of z (1 mm), a colour level or the rotation code, from a different
+  summation order. It is not byte-identical.
+- Looked at at zoom 17.3 and 18.6, pitch 45–55: both show the loop, the
+  pillars and the trees. 50 cm is visibly coarser: lane markings and the
+  railings blur into patches, tree crowns become blocks. 25 cm keeps the road
+  surface and the pillar shapes. Judged by eye in one browser; no frame time
+  or image metric was taken.
+
+## 2026-11-15 — Slow loading in the browser pane was the hidden pane
+
+While comparing Kawazu sets the demo page sat on "loading..." for 30 to 60 s.
+`performance.getEntriesByType("resource")` showed all requests to the local
+server and to stars finished within 0.2 s, then nothing until the DEM TileJSON
+request (made in `map.on("load")`) started at 60.3 s. The page's own timings
+(`dorayaki.report()`) were small: fetch 97 ms, decode 669 ms, upload 103 ms for
+388,755 splats (6.2 MB). The Browser pane was hidden (`tabs_context` said so);
+a hidden page runs as a background page and its animation frames are throttled,
+and MapLibre's `load` waits for a rendered frame. After showing the pane and
+reloading, `load` fired at 447 ms, and fetch 132 ms, decode 90 ms, upload
+84 ms, the page ready within about 10 s (the check happened after a 10 s wait).
+So the slowness was a property of measuring in a hidden pane, not of the demo.
+What it does not show: behaviour on a slower GPU or phone, or with tile counts
+far above 6; the demo still fetches and uploads every tile at start.
+
+## 2026-11-15 — dorayaki-kawazu.pmtiles on stars; Martin 1.14 does not read gzip MLT tiles
+
+- The first archive (Surfel Block v5, gzip tiles, 15,952,873 B) was uploaded
+  with hfu authenticating. Martin did not register it: its log
+  (`systemctl --user status martin`; `/home/stars/martin.log` is old) said
+  `reload apply failed; retaining baseline for retry error=PmtilesError(
+  InvalidMetadata("Format Mlt and compression Gzip are not yet supported"))`, and
+  `/dorayaki-kawazu` was 404 (Martin's catalog lists a source only when it
+  loads). The file was replaced by a raw-tile archive (23,357,992 B, SHA-256
+  `042e4dce...b3dbc`), which Martin registered within seconds.
+- Served tiles equal the local files byte for byte; Cloudflare does not
+  compress them in transit (6,333,031 B for the largest tile with
+  `Accept-Encoding: gzip, br`).
+- The Pages site was rebuilt with both tilesets listed from stars. Numazu is
+  still a version 4 archive on stars; the version 5 decoder reads it (37,628
+  splats). Kawazu loads with terrain and splat scale 1.3 by default.
+- A browser pane that has been hidden again between steps stalls MapLibre's
+  `load` (no basemap or DEM request is made); show the pane and reload.
