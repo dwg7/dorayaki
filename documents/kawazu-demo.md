@@ -20,24 +20,23 @@ lowered by 2 m ([adaptive-merging.md](adaptive-merging.md), E010).
 | --- | --- |
 | input | 476,004,940 points: LP 148.2 million in 9 files, MMS 327.8 million in 4 files (LAS 1.2 format 3) |
 | zooms | z15 (4 tiles), z16 (12), z17 (30): 46 tiles |
-| splats | z15 391,166; z16 1,688,254; z17 6,172,195; total 8,251,615 |
-| archive | **132,030,481 bytes**, raw tiles, gzip directories; SHA-256 `5ff8eafcb0f9f70996b57b7f0c70460c34c8585857d26a2ea1a4edec4dd85733` |
-| per area | 122 B/m2 (z17 alone 91 B/m2) |
-| tiles | median 3.6 MB at z17, largest 7.2 MB (z17) |
+| splats | z15 84,477; z16 678,826; z17 6,172,195; total 6,935,498 |
+| archive | **110,972,600 bytes**, raw tiles, gzip directories; SHA-256 `90afb84fdbf5465cc466e36b87723403aa3479d9668370719498e8100a25db2f` |
+| per area | 103 B/m2 (z17 alone 91 B/m2) |
+| tiles | median 3.6 MB at z17, largest 7.2 MB (z17); largest z16 tile 2.65 MB |
 | bounds | 138.93585, 34.78674, 138.95233, 34.79802 (west, south, east, north); centre 138.93930, 34.79176 |
 | served | `https://stars.optgeo.org/dorayaki-kawazu` (TileJSON, zoom 15 to 17), `.../{z}/{x}/{y}` |
 
-The archive's own metadata still names it `kawazu-area: merged kawazu-m08OF4050, ...`
+The archive's own metadata still names it `kawazu-v2: merged kawazu-m08OF4060, ...`
 (the name it was built under); the name stars serves is the file name.
 
-## Next archive (not hosted yet)
+## Per-zoom threshold factor 10 (hosted 2026-11-16)
 
 E011 raised the per-zoom threshold factor from 4 to 10
 (`DORAYAKI_ADAPTIVE_SPARSE_SCALE=10`): nine meshes give 111.0 MB (z15 1.4, z16 10.9,
-z17 98.8 MB) instead of 132.0 MB, and the showcase view fetches 10.8 MB instead of
-26.9 MB. It is built locally as `kawazu-v2` (`demo/tiles/dorayaki-kawazu-v2.pmtiles`,
-110,972,600 bytes); the hosted archive below is still the factor-4 build. Replacing it
-needs the steps under "Hosting on stars" and a new `?v=` on the TileJSON URL.
+z17 98.8 MB) instead of 132.0 MB (the earlier factor-4 archive, SHA-256 `5ff8eafc...`),
+and the showcase view fetches 10.8 MB instead of 26.9 MB. It replaced the factor-4
+file on stars on 2026-11-16, with the TileJSON URL moved to `?v=20261117`.
 
 ## Recipe
 
@@ -47,7 +46,7 @@ voxel and this machine has 8 GB of RAM; the tilesets are then merged
 Cells are tile width / 512 at each zoom (z17: 49 cm). Merging
 ([adaptive-merging.md](adaptive-merging.md)) at every zoom: thickness 20 cm, colour
 tolerance 0.2, three merge levels, the sparse rule at 24 points at z17 multiplied
-by 4 for each zoom below (z16: 96, z15: 384).
+by 10 for each zoom below (z16: 240, z15: 2,400).
 
 ```sh
 export DORAYAKI_ADAPTIVE_REFINE=0 DORAYAKI_ADAPTIVE_LEVELS=3 \
@@ -97,6 +96,9 @@ History (stars holds only one Kawazu archive):
   the local files. The single-mesh archive survives locally as
   `demo/tiles/dorayaki-kawazu-single.pmtiles` (SHA-256 `042e4dce409b5d03...`) and as the
   dev tileset `kawazu-single`.
+- 2026-11-16 (later): the factor-10 area archive (110,972,600 B, SHA-256 matched on
+  the host) replaced the factor-4 file the same way (`rm`, 8 s pause, `mv -n`); the
+  TileJSON URL became `?v=20261117` because of the stale edge cache below.
 - **Not compressed in transit.** With `Accept-Encoding: gzip, br`, the 6.33 MB tile
   of the single mesh still crossed the wire as 6,333,031 bytes (Cloudflare does not
   compress this content type), so the saving of gzip tiles is not realised until
@@ -115,8 +117,8 @@ the same name, the live site (origin `dwg7.unopengis.org`) was still served old 
 for up to four hours: 20 of the 46 tiles had the old single-mesh content or a
 cached 404 (checked with `curl -sI -H 'Origin: ...'`; a different origin or a
 `?cb=` query saw the new files). Martin copies a query of the TileJSON request into
-its tile template, so requesting `https://stars.optgeo.org/dorayaki-kawazu?v=20261116`
-gives tile URLs ending in `?v=20261116`, which miss the stale entries (the four tiles
+its tile template, so requesting `https://stars.optgeo.org/dorayaki-kawazu?v=20261117`
+gives tile URLs ending in `?v=20261117`, which miss the stale entries (the four tiles
 and the formerly cached 404 tested were served with the new sizes). The site is built
 with a versioned URL; bump `v` whenever the archive behind a name is replaced.
 
@@ -124,7 +126,7 @@ The site is rebuilt with:
 
 ```sh
 DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu \
-DORAYAKI_KAWAZU_TILEJSON='https://stars.optgeo.org/dorayaki-kawazu?v=20261116' npm run site
+DORAYAKI_KAWAZU_TILEJSON='https://stars.optgeo.org/dorayaki-kawazu?v=20261117' npm run site
 ```
 
 The demo opens Kawazu with terrain on (lowered by 2 m) and splat scale 1.3 by
