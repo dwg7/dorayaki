@@ -215,7 +215,8 @@ npm run measure:omission  # E002: omission strategies on the Numazu data
 npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
 npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
 npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
-npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOUR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=none keeps PMTiles tiles raw (default gzip)
+npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOUR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=gzip gzips PMTiles tiles (default raw; Martin 1.14 cannot read gzip MLT tiles)
+npm run merge:tilesets -- <name> <dir name> [<dir name> ...]  # merge tilesets of demo/tiles/<dir>/ (tiles with one address are concatenated)
 npm run measure:adaptive -- <file.las> <zone> <base cell metres> <levels>  # E005: splat counts for a grid of merge limits
 DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  # list Numazu on the site (DORAYAKI_KAWAZU_TILEJSON likewise for Kawazu)
 ```
@@ -268,6 +269,7 @@ scripts/measure-coarse.ts    E003 coarse Gaussian measurements
 scripts/measure-stream.ts    streaming voxelisation of a LAS file (chunked read)
 scripts/build-tileset.ts     streaming tileset builder for a LAS file of any size (one level per tile)
 scripts/measure-adaptive.ts  E005 splat counts for a grid of merge limits
+scripts/merge-tilesets.ts    merge tilesets built apart (one per mesh) into one
 ```
 
 Do not invent commands that are not present in package.json.

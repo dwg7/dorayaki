@@ -16,6 +16,10 @@ not to the number of points.
 # demo/tiles/dorayaki-<name>.pmtiles
 npm run build:tileset -- <file.las[,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]
 
+# an area too large for one process (the voxel accumulators need about 100 bytes per
+# voxel; this machine has 8 GB): build each mesh alone, then merge the tilesets
+npm run merge:tilesets -- <name> <dir name> [<dir name> ...]
+
 # counts only (no tiles): voxel counts, time, memory per zoom
 npm run measure:stream -- <file.las> <zone> [zoom ...]
 ```
@@ -108,6 +112,26 @@ offset; the airborne ground sits about 17 cm below the MMS road surface.
 Other things checked, not used: `2019/ALB` covers meshes `08NE`, `NF`, `OE`,
 `OF`, `PE` (bathymetry). The 2019 MMS ground-and-structures data of zone 08
 is 1,795 zips, 1.56 TB in all.
+
+## Merging tilesets built apart
+
+`scripts/merge-tilesets.ts` (`npm run merge:tilesets`) joins tilesets of
+`demo/tiles/<dir>/`: tiles with the same address are decoded, concatenated and
+re-encoded as one level; the rest are copied; it writes `demo/tiles/<name>/`
+and `dorayaki-<name>.pmtiles` (raw tiles unless `DORAYAKI_TILE_COMPRESSION=gzip`).
+Seams are not reconciled: a voxel cut by the edge between two meshes is fitted in
+each, so splats may overlap there, and a re-encoded tile has been quantized twice
+(about 0.5 mm in z, a fraction of a degree in rotation).
+
+## The 3 x 3 block around Kawazu
+
+Meshes `08OF4050` to `08OF4072` (rows 5 to 7, columns 0 to 2): LP "Ground" for all
+nine (266 to 361 MB each), MMS for 4050 (860 MB), 4070 (52 MB), 4071 (1,058 MB)
+and the 4060 already used. Downloaded on 2026-11-15 (11 files, 4.8 GB, eleven
+connections at once; two large zips finished with five range requests each,
+since one connection gave only 0.3 to 0.4 MB/s), each zip checked against its
+listed size, unzipped and deleted; 13 LAS files, 476,004,940 points. Sizes and
+results: E009 in [EXPERIMENTS.md](../EXPERIMENTS.md).
 
 ## Not yet done
 

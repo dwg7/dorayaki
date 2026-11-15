@@ -42,14 +42,12 @@ scales, a rotation and a colour. Here it is quantized into **16 bytes**.
   a lossless copy; finer profiles are 0.43× and 0.50× COPC. See
   [documents/numazu-demo.md](documents/numazu-demo.md) and
   [EXPERIMENTS.md](EXPERIMENTS.md).
-- **Real data, large (local only).** A 196.6-million-point mesh (Kawazu loop
-  bridge, 6.7 GB of LAS) is aggregated in 22 s with 0.8 GB of memory and
-  becomes a 6.3 MB tileset at 49 cm cells (or 26 MB at 24.5 cm). Merged with
-  an airborne laser mesh of the same area (all returns, vegetation kept as
-  coarse blobs) it is a 23 MB PMTiles archive of 1.46 million splats (16 MB
-  with gzip tiles, which stars' Martin cannot serve yet), served from stars and
-  shown in the demo with `?fixture=kawazu`. See
-  [documents/kawazu-demo.md](documents/kawazu-demo.md),
+- **Real data, large.** The Kawazu loop bridge and the valley below it: 476
+  million points (mobile mapping and airborne laser, 1.08 km2, nine survey
+  meshes) become a 132 MB PMTiles archive of 8.25 million splats (about 122 bytes
+  per square metre), served from stars. The demo loads only the tiles in view.
+  Vegetation is kept as coarse blobs; flat, evenly coloured ground as large
+  splats. See [documents/kawazu-demo.md](documents/kawazu-demo.md),
   [documents/large-point-clouds.md](documents/large-point-clouds.md) and
   [documents/size-and-scale.md](documents/size-and-scale.md).
 - **Ordinary delivery.** The Numazu tiles are served from a normal HTTP tile

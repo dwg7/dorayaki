@@ -1,9 +1,9 @@
 /**
  * External tilesets described by TileJSON: a local tilejson.json written by
  * `npm run demo:numazu`, or a server such as Martin on stars.optgeo.org that
- * serves a PMTiles archive as z/x/y. Tile selection here is static: every
- * tile covering the bounds at every zoom from minzoom to maxzoom (selection
- * by viewport is not implemented), capped to stay small.
+ * serves a PMTiles archive as z/x/y. The list here is static: every tile
+ * covering the bounds at every zoom from minzoom to maxzoom, capped to stay
+ * small. Which of them are fetched is decided by the viewport (tile-streamer.ts).
  */
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 
@@ -15,7 +15,7 @@ export interface TileSource {
   attribution: string;
 }
 
-/** Upper bound on tiles fetched from one TileJSON (no viewport selection yet). */
+/** Upper bound on the tiles listed from one TileJSON. */
 export const MAX_TILES = 64;
 
 interface TileJson {

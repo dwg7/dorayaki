@@ -32,7 +32,11 @@ child is supported by fewer than `sparseSupport` points, whatever the
 thickness and colour. A voxel supported by a handful of points carries little
 more than the points; this is how vegetation volume is kept small (at 24
 points, MMS + all airborne returns of Kawazu fall from 73.4 MB uniform to
-20.0 MB). Merging applies to every zoom of the pyramid.
+20.0 MB). Merging applies to every zoom of the pyramid. A coarser zoom has cells of 4 times
+the area, which hold about 4 times the points, so the threshold is multiplied by
+`DORAYAKI_ADAPTIVE_SPARSE_SCALE` (4 in the recipe) for each zoom below the
+maxzoom: without it, the zooms below z17 held nearly as many splats as z17 (E009);
+with it, the whole pyramid is 0.34 times the z17 size instead of 1.2 times.
 
 Environment variables of `npm run build:tileset`: `DORAYAKI_ADAPTIVE_LEVELS`
 (merge levels; enables the feature), `DORAYAKI_ADAPTIVE_REFINE` (start from
