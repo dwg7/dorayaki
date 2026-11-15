@@ -44,7 +44,7 @@ scales, a rotation and a colour. Here it is quantized into **16 bytes**.
   [EXPERIMENTS.md](EXPERIMENTS.md).
 - **Real data, large.** The Kawazu loop bridge and the valley below it: 476
   million points (mobile mapping and airborne laser, 1.08 km2, nine survey
-  meshes) become a 132 MB PMTiles archive of 8.25 million splats (about 122 bytes
+  meshes) become a 111 MB PMTiles archive of 6.94 million splats (about 103 bytes
   per square metre), served from stars. The demo loads only the tiles in view.
   Vegetation is kept as coarse blobs; flat, evenly coloured ground as large
   splats. See [documents/kawazu-demo.md](documents/kawazu-demo.md),
@@ -80,15 +80,19 @@ Please read this before depending on anything here.
 - **Not an MLT assignment.** Frame tag `0xD0` is a local, unassigned value
   chosen for the experiment. The upstream MapLibre Tile implementation is
   unmodified.
-- **One small real dataset.** Conclusions about size come from a single
-  point cloud.
+- **Two real datasets, one valley.** Numazu (one mesh) and Kawazu (nine
+  meshes, 1.08 km2). Size figures for a whole prefecture are extrapolations
+  from Kawazu alone.
 - **Tile selection follows map zoom**, not the camera's distance to the
   data, so tilted views at close range can pick the wrong detail.
-- **Frame time is unmeasured**, and browser decoding is slower than in
-  Node (about 3 µs per splat vs 0.28 µs).
-- **Mercator only**: no globe. Terrain works through a debug flag
-  (`?terrain=1`) and is needed for data far above sea level (the camera is
-  otherwise relative to 0 m). Heights are orthometric (標高); the geoid
+- **Frame time** was 16 to 17 ms (the display rate) at the Kawazu views
+  tried on one Apple M1, which says little about weaker GPUs. Browser
+  decoding measured about 0.23 µs per splat on a warm 389,000-splat tile
+  (E011, [size-and-scale.md](documents/size-and-scale.md)); a first,
+  cold call on a small tile was about 3 µs (NOTES.md).
+- **Mercator only**: no globe. Terrain is needed for data far above sea
+  level (the camera is otherwise relative to 0 m): the Kawazu demo turns it
+  on by default (lowered by 2 m); elsewhere it is the `?terrain=1` flag. Heights are orthometric (標高); the geoid
   model is not recorded in the block.
 - No compression beyond quantization, no spherical harmonics, no
   source-point storage.
@@ -108,7 +112,7 @@ in [EXPERIMENTS.md](EXPERIMENTS.md).
 | [documents/large-point-clouds.md](documents/large-point-clouds.md) | streaming build of big LAS files; Virtual Shizuoka data and Kawazu |
 | [documents/adaptive-merging.md](documents/adaptive-merging.md) | merging coplanar splats; covering gaps (`?extent=`) |
 | [documents/size-and-scale.md](documents/size-and-scale.md) | what a tile and a prefecture cost; browser memory |
-| [documents/kawazu-demo.md](documents/kawazu-demo.md) | the Kawazu tileset: recipe, size, hosting plan |
+| [documents/kawazu-demo.md](documents/kawazu-demo.md) | the Kawazu tileset: recipe, size, hosting |
 | [AGENTS.md](AGENTS.md) | project goals and working method |
 
 ## Development
@@ -140,6 +144,9 @@ Source layout: `src/surfel-block.ts` (codec), `src/mlt-frame.ts` (frame),
 オーバーハング、樹冠のように、同じ水平位置に複数の高さがあるものも保持できます。
 沼津の MMS 点群(976,195点)は、既定の `coarse` で 603 KB の PMTiles
 (同じ点の COPC の 0.12 倍。粗い表現であり可逆ではありません)になります。
+河津ループ橋と谷(1.08 km²、4.76 億点、航空レーザーと MMS)は、111 MB の PMTiles
+(約 103 B/m²)で、stars から配信しています。表示範囲のタイルだけを読み込みます。
+サイズの県全体への換算は、この谷 1 か所からの外挿です。
 [ブラウザで試す](https://dwg7.unopengis.org/dorayaki/)。
 
 ## License

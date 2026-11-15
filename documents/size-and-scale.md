@@ -90,12 +90,15 @@ area other than this mesh.
 ## Widened to nine meshes (E009)
 
 On 3 x 3 meshes (1.08 km2, 476 million points) with the same recipe: 220.0 MB
-(204 B/m2) when the sparse threshold is the same at every zoom, **132.0 MB
-(122 B/m2)** when it is multiplied by 4 per zoom step. The size follows the area
-(12.0 to 16.7 MB per mesh); the largest tile is 7.2 MB (z17), 6.5 MB (z16). As a
-scale for the prefecture: about 0.95 TB (122 B/m2), 0.71 TB for z17 alone.
-Loading all 46 tiles (8.25 million splats) at once took 0.8 s to fetch, 3.2 s to
-decode and 2.1 s to upload on an Apple M1.
+(204 B/m2) when the sparse threshold is the same at every zoom, 132.0 MB
+(122 B/m2) when it is multiplied by 4 per zoom step, and **111.0 MB (103 B/m2)**
+when it is multiplied by 10 (E011; the hosted archive). The size follows the area
+(10 to 14 MB per mesh); the largest tile is 7.2 MB (z17), 2.65 MB (z16 with factor 10).
+As a scale for the prefecture, extrapolated from this one valley: about 0.95 TB at
+122 B/m2, about 0.8 TB at 103 B/m2; 0.71 TB for z17 alone (z17 is the same in both).
+Loading all 46 tiles of the factor-4 build (8.25 million splats) at once took 0.8 s
+to fetch, 3.2 s to decode and 2.1 s to upload on an Apple M1; it was not repeated for
+the factor-10 build.
 
 ## Browser memory, and tiles of 10 MB
 
