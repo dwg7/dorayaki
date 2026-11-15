@@ -648,3 +648,11 @@ far above 6; the demo still fetches and uploads every tile at start.
   baseShift).
 - `map.once('idle')` never fired on the demo page (the custom layer keeps repainting
   or the terrain keeps loading), so a script that awaits it hangs; use a timeout.
+- Later on 2026-11-16, at hfu's request, stars was left with one Kawazu archive:
+  `dorayaki-kawazu.pmtiles` (single mesh, 23,357,992 B) was removed and
+  `dorayaki-kawazu-area.pmtiles` renamed over it (`rm`, 8 s, `mv -n`). The new source
+  appeared within the first poll, its tiles equal the local files, and
+  `dorayaki-kawazu-area` returns 404 (TileJSON and tile). The local copies were renamed
+  alike: `demo/tiles/kawazu` is the area, `kawazu-single` the first version. Until the
+  PR that changes the demo is merged, the live site (which fetches every tile of a
+  TileJSON) loads the 132 MB archive in full.
