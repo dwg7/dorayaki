@@ -42,7 +42,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         kawazu: "tiles/kawazu/tilejson.json",
         "kawazu-single": "tiles/kawazu-single/tilejson.json",
         "kawazu-sc4": "tiles/kawazu-sc4/tilejson.json",
-        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu",
+        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu?v=20261116",
         "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
         "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
         "kawazu-ad-t20-c20": "tiles/kawazu-ad-t20-c20/tilejson.json",
