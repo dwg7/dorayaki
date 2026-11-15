@@ -38,6 +38,8 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "numazu-medium": "tiles/numazu-medium/tilejson.json",
         "numazu-fine": "tiles/numazu-fine/tilejson.json",
         kawazu: "tiles/kawazu/tilejson.json",
+        "kawazu-sc4": "tiles/kawazu-sc4/tilejson.json",
+        "kawazu-area": "tiles/kawazu-area/tilejson.json",
         "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu",
         "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
         "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
@@ -63,6 +65,8 @@ const isExternal = (name: string): name is ExternalTileset => Object.hasOwn(EXTE
  */
 const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   kawazu: { terrain: "1", extent: "1.3" },
+  "kawazu-sc4": { terrain: "1", extent: "1.3" },
+  "kawazu-area": { terrain: "1", extent: "1.3" },
 };
 /** A query flag: the URL's value, else the tileset's default. */
 const flag = (name: string, tileset: string): string | null =>

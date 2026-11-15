@@ -123,6 +123,16 @@ Seams are not reconciled: a voxel cut by the edge between two meshes is fitted i
 each, so splats may overlap there, and a re-encoded tile has been quantized twice
 (about 0.5 mm in z, a fraction of a degree in rotation).
 
+## The 3 x 3 block around Kawazu
+
+Meshes `08OF4050` to `08OF4072` (rows 5 to 7, columns 0 to 2): LP "Ground" for all
+nine (266 to 361 MB each), MMS for 4050 (860 MB), 4070 (52 MB), 4071 (1,058 MB)
+and the 4060 already used. Downloaded on 2026-11-15 (11 files, 4.8 GB, eleven
+connections at once; two large zips finished with five range requests each,
+since one connection gave only 0.3 to 0.4 MB/s), each zip checked against its
+listed size, unzipped and deleted; 13 LAS files, 476,004,940 points. Sizes and
+results: E009 in [EXPERIMENTS.md](../EXPERIMENTS.md).
+
 ## Not yet done
 
 - A tile-by-tile fit for meshes of tens of millions of voxels.

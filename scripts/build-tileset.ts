@@ -19,7 +19,8 @@
  * than the maxzoom's; DORAYAKI_ADAPTIVE_THICKNESS (metres, default 0.05) and
  * DORAYAKI_ADAPTIVE_COLOUR (default 0.1) are the merge limits;
  * DORAYAKI_ADAPTIVE_SPARSE (default 0 = off) also merges children that all have
- * fewer points than that (E008).
+ * fewer points than that (E008); DORAYAKI_ADAPTIVE_SPARSE_SCALE (default 1) multiplies that
+ * threshold for each zoom below the maxzoom (E009).
  * Local frame as in build-numazu-demo.ts: east/north from the header centre,
  * up = LAS Z (orthometric height).
  */
@@ -88,6 +89,10 @@ const adaptive = process.env.DORAYAKI_ADAPTIVE_LEVELS === undefined ? undefined 
   colourTolerance: Number(process.env.DORAYAKI_ADAPTIVE_COLOUR ?? 0.1),
   sparseSupport: Number(process.env.DORAYAKI_ADAPTIVE_SPARSE ?? 0),
 };
+// The sparse threshold is multiplied by this for each zoom below the maxzoom (cells there are 4 times
+// the area, so they hold about 4 times the points); 1 keeps one threshold for every zoom (E009).
+const sparseScale = Number(process.env.DORAYAKI_ADAPTIVE_SPARSE_SCALE ?? 1);
+const zoomOfSize = new Map(sizes.map((v, i) => [v, i < config.aggregatedZooms.length ? config.aggregatedZooms[i]! : config.maxzoom]));
 const baseSize = finestSize / 2 ** Number(process.env.DORAYAKI_ADAPTIVE_REFINE ?? 0);
 const baseAcc = adaptive ? (accs.get(baseSize) ?? new VoxelAccumulator(baseSize)) : undefined;
 if (baseAcc) accs.set(baseSize, baseAcc);
@@ -129,7 +134,8 @@ const pyramid = buildPyramidFrom(
   (voxel) => {
     if (adaptive) {
       // Every zoom is merged by the same rule; only the maxzoom may start from finer cells.
-      const r = adaptiveGaussians(voxel === finestSize ? baseAcc! : accs.get(voxel)!, adaptive);
+      const sparseSupport = adaptive.sparseSupport * sparseScale ** (config.maxzoom - (zoomOfSize.get(voxel) ?? config.maxzoom));
+      const r = adaptiveGaussians(voxel === finestSize ? baseAcc! : accs.get(voxel)!, { ...adaptive, sparseSupport });
       if (voxel === finestSize) adaptiveLevels = r.perLevel;
       return r.gaussians;
     }

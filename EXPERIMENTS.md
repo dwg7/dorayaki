@@ -648,3 +648,85 @@ canopy is what makes the scene read as a place.
   `Format Mlt and compression Gzip are not yet supported`); the hosted archive has
   raw tiles (documents/kawazu-demo.md), so the gzip saving is not realised on stars yet.
 - A measure of how much the canopy loses against the original points.
+
+## E009: The Kawazu area widened to 3 x 3 meshes, and a sparse threshold that follows the zoom
+
+### Question
+
+Does the size per area stay put when the area grows, and what does a prefecture
+cost at that rate? (hfu: if the size hits a wall, change the algorithm.)
+
+### Data and method
+
+Nine meshes of 300 m x 400 m, 08OF4050 to 08OF4072 (rows 5 to 7, columns 0 to 2,
+900 m x 1,200 m = 1.08 km2). Airborne LP "Ground" (all returns) for all nine,
+MMS for four (4050, 4060, 4070, 4071); 476,004,940 points in 13 files
+(documents/large-point-clouds.md). Each mesh was built alone with the E008 recipe
+(49 cm cells at z17, three merge levels, thickness 20 cm, colour 0.2, sparse
+threshold 24; z15 to z17) and the tilesets were joined by `npm run merge:tilesets`
+(8 GB of RAM do not hold the voxels of nine meshes at once). Peak memory per mesh
+build 1.23 GB, 20 to 50 s each, 269 s in all. Mesh seams are not reconciled.
+
+### Measurements
+
+Same threshold at every zoom (24):
+
+| zoom | tiles | size | per m2 | median tile | largest tile | splats |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| z15 | 4 | 31.9 MB | 29.5 B | 15.55 MB | 16.15 MB | 1,992,374 |
+| z16 | 12 | 89.3 MB | 82.7 B | 4.55 MB | 22.57 MB | 5,582,386 |
+| z17 | 30 | 98.8 MB | 91.4 B | 3.59 MB | 7.17 MB | 6,172,195 |
+| all | 46 | **220.0 MB** | **203.7 B** | | | 13,746,955 |
+
+The zoom levels below z17 held almost as many splats as z17 (z16: 0.9 times,
+z15: 0.32 times), not a quarter each. The sparse rule keeps a Gaussian that has
+at least 24 points; a coarser cell holds more points, so fewer voxels qualify
+for merging. The threshold was therefore multiplied by 4 for each zoom below the
+maxzoom (z16: 96, z15: 384; `DORAYAKI_ADAPTIVE_SPARSE_SCALE=4`), since a cell
+there has 4 times the area. On mesh 08OF4060 alone: scale 1: 23.36 MB; scale 2:
+18.83 MB; scale 4: 15.19 MB (z15 3.32 to 0.78 MB, z16 8.81 to 3.18 MB, z17 11.23 MB
+unchanged). Rebuilt for all nine meshes with scale 4:
+
+| zoom | tiles | size | per m2 | median tile | largest tile | splats |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| z15 | 4 | 6.3 MB | 5.8 B | 2.88 MB | 3.35 MB | 391,166 |
+| z16 | 12 | 27.0 MB | 25.0 B | 1.35 MB | 6.47 MB | 1,688,254 |
+| z17 | 30 | 98.8 MB | 91.4 B | 3.59 MB | 7.17 MB | 6,172,195 |
+| all | 46 | **132.0 MB** | **122.2 B** | | | 8,251,615 |
+
+Per mesh (scale 4): 12.0 to 16.7 MB (scale 1: 20.9 to 27.3 MB). The PMTiles archive
+with raw tiles is 132,030,481 bytes.
+
+### Observations
+
+- The size follows the area: about 25 MB per mesh before, about 15 MB per mesh
+  after, with a spread of a factor 1.4 between meshes (a forested slope, a road
+  corridor, a village in the valley); one mesh (4060) was 195 B/m2 against
+  204 B/m2 for nine.
+- Scaling the threshold with the zoom cuts the total by 40 %, the pyramid cost
+  from 1.2 times the z17 size to 0.34 times, and the largest tile from
+  22.6 MB to 7.2 MB.
+- Viewed at zoom 16.35 and 16.63 (`?terrain=1`, `?extent=1.3`): the widened area
+  is a continuous forested valley, the loop bridge stays readable in the z16
+  tiles of scale 4; no mesh seam was seen in these views.
+- Taken as a scale for the prefecture (7,800 km2, this slope as the model, which
+  it is not): 122 B/m2 is about 0.95 TB with all three zooms and 91 B/m2, about
+  0.71 TB, for z17 alone.
+- Loading everything at once costs: the 46-tile, 8.25 million-splat set took
+  fetch 0.8 s, decode 3.2 s, upload 2.1 s on an Apple M1 (local server). Only
+  the z16 tiles (1.69 million splats) were drawn at the view above. Loading
+  tiles on demand is needed at this size.
+
+### Decision
+
+Keep the E008 recipe with the sparse threshold multiplied by 4 per zoom step.
+At this rate a prefecture is near the 1 TB the owner named; there is no wall
+yet, and the next lever is z17 (91 B/m2), not the pyramid.
+
+### Not yet shown
+
+- Anything outside this valley: a town, a plain, an airborne-only area.
+- How the mesh seams look in close views.
+- Whether a threshold of 384 at z15 and 96 at z16 loses anything the eye
+  misses at those zooms (compared in two views only).
+- Tile-on-demand loading in the demo.
