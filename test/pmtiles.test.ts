@@ -5,7 +5,7 @@ import { PMTiles, TileType, zxyToTileId as referenceTileId, type RangeResponse, 
 
 import { gzipSync } from "node:zlib";
 
-import { PmtilesCompression, PmtilesTileType, writePmtiles, zxyToTileId } from "../src/pmtiles.js";
+import { PmtilesCompression, PmtilesTileType, writePmtiles, zxyToTileId, type PmtilesTile } from "../src/pmtiles.js";
 
 /** A pmtiles Source over bytes in memory, as a Range-capable server would serve them. */
 class BytesSource implements Source {
@@ -83,3 +83,33 @@ test("gzip-compressed directory and metadata read back with the reference reader
   assert.equal(((await archive.getMetadata()) as { attribution: string }).attribution, "点群: 静岡県 VIRTUAL SHIZUOKA (CC BY)");
   for (const t of tiles) assert.deepEqual(new Uint8Array((await archive.getZxy(t.z, t.x, t.y))!.data), t.data);
 });
+
+for (const gzip of [false, true]) {
+  test(`an archive too large for the root directory gets leaf directories and reads back (${gzip ? "gzip" : "uncompressed"} directories)`, async () => {
+    // 200 x 200 tiles at zoom 17 = 40,000 entries; a root directory of that size cannot fit in 16 KiB.
+    const tiles: PmtilesTile[] = [];
+    for (let x = 0; x < 200; x++) for (let y = 0; y < 200; y++) {
+      const data = new Uint8Array(1 + ((x * 31 + y * 17 + ((x * y) % 7)) % 23)).fill((x * 7 + y) & 255); // varying lengths, so the directory does not compress to nothing
+      tiles.push({ z: 17, x: 116000 + x, y: 52000 + y, data });
+    }
+    tiles.push({ z: 15, x: 29030, y: 13002, data: Uint8Array.from([1, 2, 3, 4, 5]) });
+    const bytes = writePmtiles(tiles, {
+      tileType: PmtilesTileType.Mlt, bounds: [138, 35, 139, 36], center: [138.5, 35.5, 17], metadata: { name: "many" },
+      ...(gzip ? { internal: { compression: PmtilesCompression.Gzip, compress: (b: Uint8Array) => new Uint8Array(gzipSync(b)) } } : {}),
+    });
+    const source = new BytesSource(bytes);
+    const archive = new PMTiles(source);
+    const header = await archive.getHeader();
+    assert.ok((header.leafDirectoryLength ?? 0) > 0, "leaf directories expected");
+    assert.ok(header.rootDirectoryOffset + header.rootDirectoryLength <= 16384, "root directory inside the first 16 KiB");
+    assert.equal(header.numAddressedTiles, tiles.length);
+    for (const i of [0, 1, 199, 200, 12345, 19999, 20000, 39999, 40000]) {
+      const t = tiles[i]!;
+      const got = await archive.getZxy(t.z, t.x, t.y);
+      assert.ok(got, `${t.z}/${t.x}/${t.y} missing`);
+      assert.deepEqual(new Uint8Array(got.data), t.data, `${t.z}/${t.x}/${t.y}`);
+    }
+    assert.equal(await archive.getZxy(17, 116000, 52200), undefined);
+    assert.equal(await archive.getZxy(17, 115999, 52000), undefined);
+  });
+}

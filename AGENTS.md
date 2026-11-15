@@ -230,7 +230,7 @@ src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/tiling.ts                centre-ownership split of a tile block into tiles
 src/progressive.ts           nested refinement order for maxzoom tiles (v3 level table)
-src/pmtiles.ts               minimal PMTiles v3 writer (no leaf directories)
+src/pmtiles.ts               minimal PMTiles v3 writer (leaf directories when the root exceeds 16 KiB; archive built in memory)
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/fixtures/overhang.ts     deterministic overhang fixture generator

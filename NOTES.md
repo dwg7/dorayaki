@@ -688,3 +688,13 @@ with `curl -sI -H 'Origin: https://dwg7.unopengis.org' <tile>` and bump `?v=`.
 (110,972,600 B, SHA-256 `90afb84f...`, matched on the host). Tiles 15/29030/13002 and
 17/116123/52009 returned 200 with the Pages origin; the first is byte-identical to the
 local file. The TileJSON URL is versioned `?v=20261117` (new edge-cache key).
+
+## 2026-11-16: PMTiles writer gets leaf directories
+
+The writer used to throw when the root directory did not fit in the first 16 KiB. It
+now moves entries into equal leaf directories (starting at 4,096 entries, growing by 20 %
+until the root fits); small archives are byte-identical to before. A test writes 40,001
+tiles (uncompressed and gzip directories) and reads samples back with the reference
+`pmtiles` reader. Not tried: stars' Martin reading such an archive. The writer still builds
+the whole archive in one `Uint8Array`, so an archive of tens of gigabytes needs a
+streaming writer (found while doing this; not done).

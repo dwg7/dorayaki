@@ -2,11 +2,12 @@
  * Minimal PMTiles v3 writer (https://github.com/protomaps/PMTiles, spec v3).
  *
  * Writes a single-file archive of z/x/y tiles: 127-byte header, root
- * directory, JSON metadata, tile data. Scope: no leaf directories (the root
- * directory must fit in the first 16 KiB), no deduplication, uncompressed
- * directories and metadata, tiles stored as given and clustered in tile-ID
- * order. Readers fetch the header, then directory and tiles with HTTP Range
- * requests. No DOM or Node dependency.
+ * directory, JSON metadata, leaf directories (only when the root directory
+ * would not fit in the first 16 KiB), tile data. Scope: no deduplication,
+ * tiles stored as given and clustered in tile-ID order. Directories and
+ * metadata are uncompressed unless `internal` is given. Readers fetch the
+ * header, then directories and tiles with HTTP Range requests. No DOM or Node
+ * dependency. The archive is built in memory as one Uint8Array.
  */
 
 export enum PmtilesCompression {
@@ -106,6 +107,59 @@ function setU64(v: DataView, offset: number, value: number): void {
   v.setUint32(offset + 4, Math.floor(value / 2 ** 32), true);
 }
 
+interface DirEntry {
+  tileId: number;
+  /** Tile entries: offset into the tile data section. Leaf entries (runLength 0): offset into the leaf directory section. */
+  offset: number;
+  length: number;
+  /** 0 marks an entry that points at a leaf directory. */
+  runLength: number;
+}
+
+/** Serialize one directory: count, tile ID deltas, run lengths, lengths, offsets (0 = contiguous with the previous entry, else offset + 1). */
+function serializeDirectory(entries: readonly DirEntry[]): Uint8Array {
+  const dir: number[] = [];
+  writeVarint(dir, entries.length);
+  let last = 0;
+  for (const e of entries) { writeVarint(dir, e.tileId - last); last = e.tileId; }
+  for (const e of entries) writeVarint(dir, e.runLength);
+  for (const e of entries) writeVarint(dir, e.length);
+  entries.forEach((e, i) => {
+    const prev = entries[i - 1];
+    writeVarint(dir, prev && e.offset === prev.offset + prev.length ? 0 : e.offset + 1);
+  });
+  return Uint8Array.from(dir);
+}
+
+/**
+ * The root directory, and the concatenated leaf directories when the entries
+ * do not fit in the first 16 KiB. Leaves hold equal runs of entries; the run
+ * grows until the root (one entry per leaf) fits.
+ */
+function buildDirectories(entries: readonly DirEntry[], pack: (bytes: Uint8Array) => Uint8Array): { root: Uint8Array; leaves: Uint8Array } {
+  const whole = pack(serializeDirectory(entries));
+  if (HEADER_BYTES + whole.byteLength <= ROOT_LIMIT) return { root: whole, leaves: new Uint8Array(0) };
+  for (let leafSize = 4096; ; leafSize = Math.ceil(leafSize * 1.2)) {
+    const chunks: Uint8Array[] = [];
+    const rootEntries: DirEntry[] = [];
+    let leafBytes = 0;
+    for (let i = 0; i < entries.length; i += leafSize) {
+      const chunk = pack(serializeDirectory(entries.slice(i, i + leafSize)));
+      rootEntries.push({ tileId: entries[i]!.tileId, offset: leafBytes, length: chunk.byteLength, runLength: 0 });
+      chunks.push(chunk);
+      leafBytes += chunk.byteLength;
+    }
+    const root = pack(serializeDirectory(rootEntries));
+    if (HEADER_BYTES + root.byteLength <= ROOT_LIMIT) {
+      const leaves = new Uint8Array(leafBytes);
+      let o = 0;
+      for (const c of chunks) { leaves.set(c, o); o += c.byteLength; }
+      return { root, leaves };
+    }
+    if (rootEntries.length === 1) throw new RangeError(`root directory (${root.byteLength} bytes) does not fit in ${ROOT_LIMIT} bytes`);
+  }
+}
+
 export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOptions): Uint8Array {
   if (tiles.length === 0) throw new RangeError("no tiles");
   const entries = tiles
@@ -115,29 +169,20 @@ export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOpti
     if (entries[i]!.id === entries[i - 1]!.id) throw new RangeError(`duplicate tile ${entries[i]!.t.z}/${entries[i]!.t.x}/${entries[i]!.t.y}`);
   }
 
-  // Root directory: count, tile ID deltas, run lengths, lengths, offsets
-  // (0 = contiguous with the previous entry, else offset + 1).
-  const dir: number[] = [];
-  writeVarint(dir, entries.length);
-  let last = 0;
-  for (const e of entries) { writeVarint(dir, e.id - last); last = e.id; }
-  for (let i = 0; i < entries.length; i++) writeVarint(dir, 1);
-  for (const e of entries) writeVarint(dir, e.t.data.byteLength);
+  // Tile data offsets (contiguous, in tile-ID order).
+  const dataOffsets: number[] = [];
   let offset = 0;
-  entries.forEach((e, i) => {
-    writeVarint(dir, i === 0 ? offset + 1 : 0);
-    offset += e.t.data.byteLength;
-  });
+  for (const e of entries) { dataOffsets.push(offset); offset += e.t.data.byteLength; }
+  const dirEntries: DirEntry[] = entries.map((e, i) => ({ tileId: e.id, offset: dataOffsets[i]!, length: e.t.data.byteLength, runLength: 1 }));
+
   const pack = (bytes: Uint8Array) => (options.internal ? options.internal.compress(bytes) : bytes);
-  const root = pack(Uint8Array.from(dir));
-  if (HEADER_BYTES + root.byteLength > ROOT_LIMIT) {
-    throw new RangeError(`root directory (${root.byteLength} bytes) does not fit in ${ROOT_LIMIT} bytes; leaf directories are not supported`);
-  }
+  const { root, leaves } = buildDirectories(dirEntries, pack);
 
   const metadata = pack(utf8(JSON.stringify(options.metadata)));
   const rootOffset = HEADER_BYTES;
   const metadataOffset = rootOffset + root.byteLength;
-  const tileDataOffset = metadataOffset + metadata.byteLength;
+  const leafOffset = metadataOffset + metadata.byteLength;
+  const tileDataOffset = leafOffset + leaves.byteLength;
   const tileDataLength = offset;
   const out = new Uint8Array(tileDataOffset + tileDataLength);
   const v = new DataView(out.buffer);
@@ -148,8 +193,8 @@ export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOpti
   setU64(v, 16, root.byteLength);
   setU64(v, 24, metadataOffset);
   setU64(v, 32, metadata.byteLength);
-  setU64(v, 40, 0); // no leaf directories
-  setU64(v, 48, 0);
+  setU64(v, 40, leaves.byteLength > 0 ? leafOffset : 0);
+  setU64(v, 48, leaves.byteLength);
   setU64(v, 56, tileDataOffset);
   setU64(v, 64, tileDataLength);
   setU64(v, 72, entries.length); // addressed tiles
@@ -173,6 +218,7 @@ export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOpti
 
   out.set(root, rootOffset);
   out.set(metadata, metadataOffset);
+  out.set(leaves, leafOffset);
   let o = tileDataOffset;
   for (const e of entries) {
     out.set(e.t.data, o);
