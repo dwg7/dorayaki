@@ -656,3 +656,15 @@ far above 6; the demo still fetches and uploads every tile at start.
   alike: `demo/tiles/kawazu` is the area, `kawazu-single` the first version. Until the
   PR that changes the demo is merged, the live site (which fetches every tile of a
   TileJSON) loads the 132 MB archive in full.
+
+## 2026-11-16 — after the merge: stale tiles at the edge; the TileJSON URL is versioned
+
+Checked the live site (`dwg7.unopengis.org`) after PR #12 was merged: the page code was
+new, but it drew the old single mesh (4 tiles, 550,330 splats). Cloudflare served
+the old `dorayaki-kawazu` tiles (age about 1,770 s, `cf-cache-status: HIT`) for the
+live origin, and cached 404s for tiles that now exist: 20 of 46 tiles stale; other
+origins and `?cb=` saw the new files. The TileJSON itself had expired and was fresh.
+`https://stars.optgeo.org/dorayaki-kawazu?v=20261116` returns a tile template with
+`?v=20261116`; those URLs returned the new tiles (MISS). The site is built with that
+URL. Lesson: after replacing an archive under an existing name, check the live origin
+with `curl -sI -H 'Origin: https://dwg7.unopengis.org' <tile>` and bump `?v=`.

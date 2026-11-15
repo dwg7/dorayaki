@@ -99,11 +99,23 @@ The page loads only the tiles in view ([demo-and-site.md](demo-and-site.md)): at
 26.9 MB, 1,680,486 splats from stars (the slowest tile 3.1 s; decoding 2.1 s in all
 on an Apple M1).
 
+**The edge caches stale tiles: version the TileJSON URL.** stars answers with
+`cache-control: max-age=14400` and `vary: Origin`, and Cloudflare keeps the
+answers per origin, including 404s. After the single-mesh archive was replaced under
+the same name, the live site (origin `dwg7.unopengis.org`) was still served old tiles
+for up to four hours: 20 of the 46 tiles had the old single-mesh content or a
+cached 404 (checked with `curl -sI -H 'Origin: ...'`; a different origin or a
+`?cb=` query saw the new files). Martin copies a query of the TileJSON request into
+its tile template, so requesting `https://stars.optgeo.org/dorayaki-kawazu?v=20261116`
+gives tile URLs ending in `?v=20261116`, which miss the stale entries (the four tiles
+and the formerly cached 404 tested were served with the new sizes). The site is built
+with a versioned URL; bump `v` whenever the archive behind a name is replaced.
+
 The site is rebuilt with:
 
 ```sh
 DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu \
-DORAYAKI_KAWAZU_TILEJSON=https://stars.optgeo.org/dorayaki-kawazu npm run site
+DORAYAKI_KAWAZU_TILEJSON='https://stars.optgeo.org/dorayaki-kawazu?v=20261116' npm run site
 ```
 
 The demo opens Kawazu with terrain on (lowered by 2 m) and splat scale 1.3 by
