@@ -668,3 +668,23 @@ origins and `?cb=` saw the new files. The TileJSON itself had expired and was fr
 `?v=20261116`; those URLs returned the new tiles (MISS). The site is built with that
 URL. Lesson: after replacing an archive under an existing name, check the live origin
 with `curl -sI -H 'Origin: https://dwg7.unopengis.org' <tile>` and bump `?v=`.
+
+## 2026-11-16 — zoom-out instability: heap and lost contexts (E011)
+
+- Decoded `Splat` objects were retained after upload (about 280 bytes per splat: 739 MB at
+  z17, 1,058 MB right after z17 to z16). Now instance data (56 bytes per splat) is built at load
+  and dropped after upload: 420 MB fresh at z17, 229 to 383 MB over a zoom sequence.
+- After `WEBGL_lose_context` loseContext/restoreContext the `surfels` layer was gone from the style
+  and never came back (MapLibre 6.16.0 restores its own layers only); the demo now adds a new layer
+  on `webglcontextrestored` and reloads the tiles (1.9 s).
+- The per-zoom sparse threshold factor is 10 from now on (111.0 MB for nine meshes against
+  132.0 MB with 4; the z16 view of the showcase angle is 10.8 MB instead of 26.9 MB).
+- Tooling: a script run in the pane executes in the *fronted* tab; after the user clicks another tab
+  it silently runs there. Pass `tabId` to `javascript_tool` and `tabs_select` first.
+
+## 2026-11-16: factor-10 Kawazu archive hosted
+
+`dorayaki-kawazu.pmtiles` on stars was replaced by the factor-10 area build
+(110,972,600 B, SHA-256 `90afb84f...`, matched on the host). Tiles 15/29030/13002 and
+17/116123/52009 returned 200 with the Pages origin; the first is byte-identical to the
+local file. The TileJSON URL is versioned `?v=20261117` (new edge-cache key).

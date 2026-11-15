@@ -40,6 +40,12 @@ export class TileStreamer<T> {
     this.limit = opts.limit ?? 9;
   }
 
+  /** Forget everything held (the consumer lost its copies, e.g. after a lost WebGL context); the next update reloads. */
+  reset(): void {
+    this.held = new Map();
+    this.lastSignature = "";
+  }
+
   /** Ask for the tiles of the zoom selected for `displayZoom` that intersect `bounds`. */
   update(displayZoom: number, bounds: LngLatBoundsArray): void {
     const zoom = selectZoom(this.zooms, displayZoom);

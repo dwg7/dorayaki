@@ -18,16 +18,20 @@ import {
   deleteSurfelBuffers,
   deleteSurfelProgram,
   drawSurfels,
+  uploadInstances,
   uploadSplats,
   type SurfelBuffers,
   type SurfelProgram,
 } from "./gpu-surfels.js";
+import type { SplatInstances } from "./splat-instances.js";
 import { metricToMercatorMatrix, multiplyMat4, type Mat4 } from "./tile-matrix.js";
 import { drawPlan, selectZoom, type TileDraw } from "./tile-selection.js";
 
 export interface LayerTile {
   tile: TileAddress;
-  splats: readonly Splat[];
+  /** The tile's contents: decoded splats, or instance data already built from them (smaller to hold). */
+  splats?: readonly Splat[];
+  instances?: SplatInstances;
   /** Level table; omitted means one level holding every surfel. */
   levels?: readonly number[];
 }
@@ -102,14 +106,16 @@ export class SurfelLayer implements CustomLayerInterface {
     const t0 = performance.now();
     const address = (t: TileAddress): string => `${t.z}/${t.x}/${t.y}`;
     const have = new Map(this.tiles.map((t) => [address(t.tile), t]));
-    const states = next.map(({ tile, splats, levels }): TileState => {
+    const states = next.map(({ tile, splats, instances, levels }): TileState => {
       const kept = have.get(address(tile));
       if (kept) { have.delete(address(tile)); return kept; }
       const widthMetres = tileWidthMetres(tile);
       const model = metricToMercatorMatrix(tile, widthMetres);
       if (this.zOffset) model[14] = this.zOffset * model[10]!;
       // The decoded splats are only needed for the upload; the state keeps none.
-      return { tile, splats: [], levels: levels ?? [splats.length], widthMetres, model, buffers: uploadSplats(gl, splats) };
+      const count = instances ? instances.count : (splats ?? []).length;
+      const buffers = instances ? uploadInstances(gl, instances) : uploadSplats(gl, splats ?? []);
+      return { tile, splats: [], levels: levels ?? [count], widthMetres, model, buffers };
     });
     for (const gone of have.values()) if (gone.buffers) deleteSurfelBuffers(gl, gone.buffers);
     this.tiles = states;

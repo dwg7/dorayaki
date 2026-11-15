@@ -9,8 +9,8 @@ import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTiles
 import { fetchTilesBytes } from "./load-tile.js";
 import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
 import { SurfelLayer } from "./surfel-layer.js";
+import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
-import type { SurfelBlock } from "../../src/surfel-block.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
   return [tileLongitude(t, x), tileLatitude(t, y)];
@@ -42,7 +42,11 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         kawazu: "tiles/kawazu/tilejson.json",
         "kawazu-single": "tiles/kawazu-single/tilejson.json",
         "kawazu-sc4": "tiles/kawazu-sc4/tilejson.json",
-        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu?v=20261116",
+        "kawazu-v2": "tiles/kawazu-v2/tilejson.json",
+        "kawazu-s4": "tiles/kawazu-s4/tilejson.json",
+        "kawazu-s10": "tiles/kawazu-s10/tilejson.json",
+        "kawazu-s16": "tiles/kawazu-s16/tilejson.json",
+        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu?v=20261117",
         "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
         "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
         "kawazu-ad-t20-c20": "tiles/kawazu-ad-t20-c20/tilejson.json",
@@ -70,6 +74,10 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-single": { terrain: "1", extent: "1.3" },
   "kawazu-stars": { terrain: "1", extent: "1.3" },
   "kawazu-sc4": { terrain: "1", extent: "1.3" },
+  "kawazu-v2": { terrain: "1", extent: "1.3" },
+  "kawazu-s4": { terrain: "1", extent: "1.3" },
+  "kawazu-s10": { terrain: "1", extent: "1.3" },
+  "kawazu-s16": { terrain: "1", extent: "1.3" },
 };
 /** A query flag: the URL's value, else the tileset's default. */
 const flag = (name: string, tileset: string): string | null =>
@@ -136,8 +144,18 @@ map.addControl(new NavigationControl({ visualizePitch: true }));
 
 const urlOf = (t: TileAddress): string => (external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t));
 
-/** One loaded tile: its bytes (for the status) and the decoded splats with the level table. */
-type LoadedTile = { tile: TileAddress; bytes: Uint8Array } & SurfelBlock;
+/**
+ * One loaded tile. The decoded Splat objects (about 280 bytes each in the JS heap) are not kept: they are turned into
+ * instance data (56 bytes per splat) at once, and that is handed to the layer and dropped (E011).
+ */
+interface LoadedTile {
+  tile: TileAddress;
+  byteLength: number;
+  count: number;
+  levels: number[];
+  /** Until the layer has taken it. */
+  instances: SplatInstances | undefined;
+}
 
 /** Load-time measurements, summed over every tile loaded (E001 in EXPERIMENTS.md). */
 const timings = { fetchMs: 0, decodeMs: 0 };
@@ -149,8 +167,9 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   if (!bytes) return null;
   const t1 = performance.now();
   const decoded = decodeSurfelTileWithLevels(bytes);
+  const instances = splatInstances(decoded.splats); // the Splat objects become garbage here
   timings.decodeMs += performance.now() - t1;
-  return { tile, bytes, ...decoded };
+  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, instances };
 }
 
 map.on("load", () => {
@@ -186,14 +205,19 @@ map.on("load", () => {
     source: "tile-outline",
     paint: { "line-color": "#d03030", "line-width": 2, "line-dasharray": [2, 2] },
   });
-  const layer = new SurfelLayer("surfels");
   const lod = Number(flag("lod", tileset));
-  if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
   const extent = Number(flag("extent", tileset));
-  if (extent > 0) layer.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
   const dz = Number(flag("dz", tileset));
-  if (dz) layer.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
-  map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
+  const makeLayer = (): SurfelLayer => {
+    const l = new SurfelLayer("surfels");
+    if (lod > 0) l.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+    if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
+    if (dz) l.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
+    l.setDepthTest(depthEl.checked);
+    map.addLayer(l, "tile-outline"); // keep the 2D tile outlines visible on top
+    return l;
+  };
+  let layer = makeLayer();
   depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
 
   // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
@@ -208,9 +232,10 @@ map.on("load", () => {
     },
     onReady: (set, zoom) => {
       loaded = set.map((x) => x.data);
-      layer.setTiles(loaded);
-      const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);
-      const count = loaded.reduce((n, t) => n + t.splats.length, 0);
+      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
+      for (const t of loaded) t.instances = undefined; // the layer owns the data now; do not keep a second copy
+      const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
+      const count = loaded.reduce((n, t) => n + t.count, 0);
       summary = `${loaded.length} tile(s) of ${tileset} at z${zoom}: ${bytes} bytes, ${count} surfels.`;
       setStatus(summary);
     },
@@ -221,6 +246,18 @@ map.on("load", () => {
   };
   map.on("moveend", refresh);
   refresh();
+  // A lost WebGL context (the browser reclaims the GPU's memory) is restored by MapLibre for its own layers but not for
+  // this custom layer, and the tiles' GPU buffers are gone with the context: add a new layer and fetch the tiles again.
+  map.on("webglcontextrestored", () => {
+    const rebuild = (tries: number): void => {
+      if (!map.isStyleLoaded() && tries > 0) { setTimeout(() => rebuild(tries - 1), 250); return; }
+      if (map.getLayer("surfels")) map.removeLayer("surfels");
+      layer = makeLayer();
+      streamer.reset();
+      refresh();
+    };
+    rebuild(40);
+  });
   // After each frame, show what the zoom-based selection drew.
   map.on("render", () => {
     const d = layer.lastDraw;
@@ -277,11 +314,11 @@ map.on("load", () => {
       map.triggerRepaint();
     });
   const report = () => ({
-    tileset, tiles: loaded.length, surfels: loaded.reduce((n, t) => n + t.splats.length, 0),
-    encodedBytes: loaded.reduce((n, t) => n + t.bytes.byteLength, 0),
+    tileset, tiles: loaded.length, surfels: loaded.reduce((n, t) => n + t.count, 0),
+    encodedBytes: loaded.reduce((n, t) => n + t.byteLength, 0),
     fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
   });
   (window as unknown as { dorayaki: unknown }).dorayaki = {
-    map, layer, get loaded() { return loaded; }, timings, report, measureFrames, holeFraction, refresh,
+    map, get layer() { return layer; }, get loaded() { return loaded; }, timings, report, measureFrames, holeFraction, refresh,
   };
 });

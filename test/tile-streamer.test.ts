@@ -66,3 +66,21 @@ test("reports progress while tiles arrive", async () => {
   await tick();
   assert.deepEqual(seen, ["0/2", "1/2", "2/2", "ready"]);
 });
+
+test("reset forgets the held tiles so the next update loads them again", async () => {
+  const L = manualLoader();
+  const ready: number[] = [];
+  const s = new TileStreamer<string>({ candidates: [A], load: L.load, onReady: (set) => ready.push(set.length) });
+  s.update(17, around(A));
+  L.finish(A);
+  await tick();
+  assert.deepEqual(ready, [1]);
+  s.update(17, around(A)); // unchanged: nothing happens
+  assert.equal(L.calls.length, 1);
+  s.reset();
+  s.update(17, around(A)); // after a reset the same view loads again
+  assert.equal(L.calls.length, 2);
+  L.finish(A);
+  await tick();
+  assert.deepEqual(ready, [1, 1]);
+});
