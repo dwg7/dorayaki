@@ -103,6 +103,9 @@ PMTiles reads one tile with one range request, so 10 MB tiles are not
 practical to stream over the internet but are fine from a local file or a
 fast network. What limits the browser is memory and CPU, not the network:
 
+- Memory (E011): the decoded Splat objects were about 280 bytes each in the JS heap and were kept (739 MB at
+  2.65 million splats); the demo now keeps only the GPU copy (56 bytes per splat, about 150 MB at that size) and
+  the heap stays at 230 to 420 MB.
 - Decode time measured with the pane visible: 389,000 splats decoded in 90 ms
   (about 0.23 us each), uploaded in 84 ms; fetching the 6 MB set from the
   local server took 131 ms. A 700,000-splat tile is therefore a fraction of a

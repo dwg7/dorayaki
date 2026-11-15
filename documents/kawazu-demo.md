@@ -30,6 +30,15 @@ lowered by 2 m ([adaptive-merging.md](adaptive-merging.md), E010).
 The archive's own metadata still names it `kawazu-area: merged kawazu-m08OF4050, ...`
 (the name it was built under); the name stars serves is the file name.
 
+## Next archive (not hosted yet)
+
+E011 raised the per-zoom threshold factor from 4 to 10
+(`DORAYAKI_ADAPTIVE_SPARSE_SCALE=10`): nine meshes give 111.0 MB (z15 1.4, z16 10.9,
+z17 98.8 MB) instead of 132.0 MB, and the showcase view fetches 10.8 MB instead of
+26.9 MB. It is built locally as `kawazu-v2` (`demo/tiles/dorayaki-kawazu-v2.pmtiles`,
+110,972,600 bytes); the hosted archive below is still the factor-4 build. Replacing it
+needs the steps under "Hosting on stars" and a new `?v=` on the TileJSON URL.
+
 ## Recipe
 
 Each mesh is built alone, because the voxel accumulators need about 100 bytes per

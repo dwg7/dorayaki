@@ -794,3 +794,101 @@ different value.
   15.7 view used coarser tiles for some of the area).
 - Whether a 2 m offset is visible between draped basemap lines and the splats in
   close, low-pitch views.
+
+## E011: Instability when zooming out: JS memory, a lost WebGL context, and the per-zoom threshold
+
+### Question
+
+Zooming out made the demo unstable (the page seemed to be reset). Hypothesis (hfu):
+the zooms below z17 load too many points, so they need a much coarser
+simplification, perhaps ten times coarser per zoom step (forest is more than
+two-dimensional) instead of four.
+
+### Method
+
+The nine-mesh set served locally (`?fixture=kawazu`; pane visible; Chromium of the
+Claude desktop app on an Apple M1, 8 GB). The page jumped through zoom 17.5, 16.5, 16,
+15.5, 15, 14 at pitch 60, waited until no tile was loading, and recorded the tiles and
+splats held, `performance.memory.usedJSHeapSize`, the median frame interval over 15 to
+20 frames and the number of `webglcontextlost` events. The context was also lost on
+purpose (`WEBGL_lose_context.loseContext()`, then `restoreContext()`), which is what a
+browser does when it reclaims GPU memory. The per-zoom threshold factor was tried on mesh
+08OF4060 (4, 10, 16) and, for 10, on all nine meshes.
+
+### Measurements before the change
+
+| zoom | z drawn | tiles | splats | JS heap |
+| --- | --- | ---: | ---: | ---: |
+| 17.5 | z17 | 9 | 2,653,724 | 739 MB |
+| 16.5, 16 | z16 | 9 | 1,612,076 | 1,025, 1,058 MB |
+| 15.5 to 14 | z15 | 4 | 391,166 | 498 to 538 MB |
+
+The frame interval was 16 to 17 ms at every zoom (the display's rate) and no context was
+lost in normal use. After the simulated loss and restore, the `surfels` layer was no
+longer in the style (124 layers, no `surfels`), no splat was drawn again and the
+basemap rendered black.
+
+### Observations
+
+- The sets below z17 are smaller, not larger: 1.6 million splats at z16 and 0.39
+  million at z15 against 2.65 million at z17. The hypothesis that low zooms load too many
+  points is not supported by these counts.
+- The heap held 739 MB at z17 for 2.65 million splats: the decoded `Splat` objects
+  (about 280 bytes each) stayed in memory after the data had been uploaded. The peak was
+  1,058 MB right after switching from z17 to z16, when the old set, its garbage and the
+  new set coexisted. A tab limit (WebKit reloads a page that uses much memory) or an
+  8 GB machine under other load would explain a reset.
+- Loss of the WebGL context is not handled by MapLibre for a custom layer; it is a
+  second plausible reset.
+
+### The change
+
+- A tile is turned into instance data (56 bytes per splat) when it is loaded and the
+  Splat objects are dropped; the layer uploads that data and keeps nothing. Fresh load at
+  zoom 17.5: 739 to 420 MB; over the zoom sequence the heap stayed at 229 to 383 MB.
+- On `webglcontextrestored` the demo adds a new layer and `TileStreamer.reset()` makes
+  the next update load the tiles again. After the simulated loss, 9 tiles and 1,612,076
+  splats were drawn again after 1.9 s, with the basemap intact.
+
+### The per-zoom threshold factor
+
+Occupied voxels of the airborne cloud (all returns), uniform cells (E007): z16
+1,013,689 against z17 3,367,215, a ratio of 0.30 per zoom step: a dimension of about 1.7,
+below two, not above, at these cell sizes (the points are too sparse to fill a volume at
+49 cm).
+The sparse threshold is nevertheless worth raising for size and for load time. Mesh
+08OF4060, z15 / z16 / z17 splats and total size:
+
+| factor | z15 | z16 | z17 | total | z16 / z17 |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 4 | 48,452 | 198,878 | 702,139 | 15.19 MB | 0.28 |
+| 10 | 15,854 | 102,341 | 702,139 | 13.13 MB | 0.15 |
+| 16 | 10,405 | 76,969 | 702,139 | 12.63 MB | 0.11 |
+
+Viewed at zoom 16.1 (pitch 67), factors 4 and 10 look the same (the loop bridge and
+the forest). Nine meshes with factor 10 (`kawazu-v2`), against factor 4:
+
+| zoom | factor 4 | factor 10 |
+| --- | ---: | ---: |
+| z15 | 6.3 MB, 391,166 splats | 1.4 MB, 84,477 |
+| z16 | 27.0 MB, 1,688,254 | 10.9 MB, 678,826 |
+| z17 | 98.8 MB, 6,172,195 | 98.8 MB, 6,172,195 |
+| all | 132.0 MB (122 B/m2) | **111.0 MB (103 B/m2)** |
+
+The largest z16 tile fell from 6.47 to 2.65 MB. At the showcase view
+(`#map=16.63/34.790766/138.939214/128.7/67`) the page fetched 8 tiles, 26.9 MB before and
+10.8 MB with factor 10 (676,201 splats drawn, 121 MB of JS heap).
+
+### Decision
+
+Keep the memory change and the context restore. Use factor 10 for the zooms below the
+maxzoom (`DORAYAKI_ADAPTIVE_SPARSE_SCALE=10`). Prefecture scale at 103 B/m2: about
+0.8 TB (an extrapolation from one valley).
+
+### Not yet shown
+
+- A crash was not reproduced: the instability itself is explained, not observed (no
+  reload or context loss happened in normal use on this machine). hfu's browser and
+  symptom were not examined.
+- Zooms below 14: below z15 the demo draws the z15 tiles (four of them) at any zoom.
+- GPU memory was estimated (56 bytes per splat, about 150 MB at z17), not measured.
