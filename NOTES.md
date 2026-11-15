@@ -632,3 +632,19 @@ far above 6; the demo still fetches and uploads every tile at start.
   splats). Kawazu loads with terrain and splat scale 1.3 by default.
 - A browser pane that has been hidden again between steps stalls MapLibre's
   `load` (no basemap or DEM request is made); show the pane and reload.
+
+## 2026-11-16 — nine-mesh area on stars; the demo streams tiles; the terrain is lowered 2 m
+
+- `dorayaki-kawazu-area.pmtiles` (132,030,481 B, 46 tiles) is on stars. The first
+  `ssh spacex.optgeo.org` of the day timed out at 180 s while the Cloudflare Access
+  window waited for hfu; with `ConnectTimeout=300` it passed once he approved.
+- The demo now fetches only the tiles in view (nearest nine of the selected zoom)
+  and swaps the set when complete. Before it, `?fixture=kawazu-area` requested all 46
+  tiles (132 MB; fetch 0.8 s, decode 3.2 s, upload 2.1 s locally); after it, zoom 16.4
+  requested 9 tiles (25.8 MB) and the zoom 17.6 view 12 (59 MB, now capped at 9).
+- Terrain: the DEM is up to 2.4 m above the point cloud's ground (E010); the demo
+  lowers it by 2 m (`?terrainshift=`). MapLibre's `raster-dem` custom encoding takes
+  `baseShift` with the opposite sign to what the name suggests (elevation = decoded -
+  baseShift).
+- `map.once('idle')` never fired on the demo page (the custom layer keeps repainting
+  or the terrain keeps loading), so a script that awaits it hangs; use a timeout.

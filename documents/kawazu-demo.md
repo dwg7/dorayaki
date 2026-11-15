@@ -1,8 +1,9 @@
 # Kawazu tileset: recipe, size, hosting
 
-Status: built, verified, and hosted on stars (2026-11-15) as raw-tile PMTiles; the
-Pages site that lists it is built but not yet published (it goes live when the
-branch is merged to `main`).
+Status: two archives are hosted on stars as raw-tile PMTiles: the single mesh
+(2026-11-15) and the nine-mesh area (2026-11-16). The Pages site built from this
+branch lists the area one as `?fixture=kawazu`; it goes live when the branch is
+merged to `main`.
 Facts about the data are in [large-point-clouds.md](large-point-clouds.md); the
 experiments behind the choices are E005 to E008 in
 [EXPERIMENTS.md](../EXPERIMENTS.md).
@@ -95,3 +96,33 @@ The demo opens Kawazu with terrain on and splat scale 1.3 by default
 
 The source point clouds are Shizuoka Prefecture's VIRTUAL SHIZUOKA (CC BY);
 the archive's attribution says so.
+
+## The nine-mesh area (`dorayaki-kawazu-area`)
+
+Meshes 08OF4050 to 08OF4072 (3 x 3, 1.08 km2, 476,004,940 points), each built alone
+and merged ([large-point-clouds.md](large-point-clouds.md), E009), with the sparse
+threshold multiplied by 4 per zoom below z17 (`DORAYAKI_ADAPTIVE_SPARSE_SCALE=4`).
+
+| | |
+| --- | --- |
+| zooms | z15 (4 tiles), z16 (12), z17 (30): 46 tiles, 8,251,615 splats |
+| archive | **132,030,481 bytes**, raw tiles, SHA-256 `5ff8eafcb0f9f70996b57b7f0c70460c34c8585857d26a2ea1a4edec4dd85733` |
+| largest tile | 7.2 MB (z17) |
+| bounds | 138.93585, 34.78674, 138.95233, 34.79802 (west, south, east, north) |
+| served | `https://stars.optgeo.org/dorayaki-kawazu-area` (TileJSON), `.../{z}/{x}/{y}` |
+
+Uploaded on 2026-11-16 with the owner authenticating (the first `ssh` attempt timed
+out while the Cloudflare Access window waited; it passed with a 300 s connect
+timeout), size and SHA-256 compared on the host, `mv -n` into place; Martin
+registered it within seconds. Five tiles (z15, two z16, two z17) are byte-identical
+to the local files, content type `application/vnd.maplibre-tile`, no
+`Content-Encoding`. The archive was named apart from `dorayaki-kawazu` because the
+Pages site that was live at the time fetches every tile of a TileJSON; 132 MB would
+have been loaded by every visitor. The page built from this branch loads only the
+tiles in view ([demo-and-site.md](demo-and-site.md)): at the angle
+`?fixture=kawazu#map=16.63/34.790766/138.939214/128.7/67` it fetched 8 tiles,
+26.9 MB, 1,680,486 splats (the slowest tile took 3.1 s from stars; decoding 2.1 s
+in all on an Apple M1).
+
+The site is rebuilt with `DORAYAKI_KAWAZU_TILEJSON=https://stars.optgeo.org/dorayaki-kawazu-area`.
+`dorayaki-kawazu` (the single mesh) stays on stars until the new site is live.
