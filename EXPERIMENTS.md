@@ -730,3 +730,67 @@ yet, and the next lever is z17 (91 B/m2), not the pyramid.
 - Whether a threshold of 384 at z15 and 96 at z16 loses anything the eye
   misses at those zooms (compared in two views only).
 - Tile-on-demand loading in the demo.
+
+## E010: The terrain hides splats: how far is the DEM from the point cloud's ground?
+
+### Question
+
+With `?terrain=1` the MapLibre terrain mesh (stars' `mapterhorn-japan-bridge`
+DEM) hides splats of the ground and of the villages where it lies above them
+(white patches in the Kawazu area). Is the fix a large shift (hfu suggested about
+10 m, lowering the terrain or raising the data), or a small one?
+
+### Method
+
+360 airborne ground points (class 2) were sampled over the nine meshes (about 40
+per mesh, a fixed pseudo-random seed), converted to longitude and latitude, and
+compared with `map.queryTerrainElevation` on the page (`kawazu-area`, zoom 15.7,
+pitch 0, terrain on): DEM minus LP z. Then the DEM was lowered by 0, 1, 2, 3, 4
+and 10 m through the raster-dem source (`encoding: "custom"` with Terrarium
+factors and `baseShift`; MapLibre decodes red x redFactor + green x greenFactor +
+blue x blueFactor minus baseShift, so a lower terrain needs a larger baseShift,
+found by trying) and the share of near-white (background) pixels was read back in
+two screen rectangles of the village view (zoom 17.2, bearing -30, pitch 60), the
+village on the left and the road.
+
+### Measurements
+
+DEM minus LP ground (m): 5 % -0.86, 25 % -0.37, median -0.12, 75 % +0.12, 95 % +0.74,
+maximum +2.40, mean -0.12. Share of points where the DEM is above the ground by
+more than 0.5 m: 8.1 %; 1 m: 2.8 %; 2 m: 0.3 %; 5 m: 0 %. Below the ground by more
+than 2 m: 0.6 %; 5 m: 0 %.
+
+Near-white pixel share in the village view:
+
+| terrain lowered by | village | road |
+| ---: | ---: | ---: |
+| 0 m | 0.18 % | 0.38 % |
+| 1 m | 0.03 % | 0.04 % |
+| 2 m | 0.02 % | 0.01 % |
+| 3 m | 0.02 % | 0.01 % |
+
+### Observations
+
+- The DEM agrees with the airborne ground within about one metre for 97 % of the
+  samples; it is never more than 2.4 m above it. A 10 m shift is far larger than
+  the discrepancy and would lift the splats 10 m off the basemap's roads and
+  rivers; 1 to 2 m removes the white patches. Lowering the terrain by 3 m made
+  the village view show no patches (screenshot).
+- Lowering the terrain and raising the data (`?dz=`) give the same relative offset.
+  The terrain was lowered because the data then keeps its true orthometric heights
+  and the hack sits in the DEM, whose only job is to hang the basemap on.
+- A 2 m offset leaves the basemap (draped on the lowered terrain) 2 m below the
+  data: not visible at map scale; not examined in close views.
+
+### Decision
+
+The demo lowers the DEM by 2 m by default (`?terrainshift=<m>`; 0 keeps the DEM as
+it is). The samples are from one valley; other areas and a finer DEM may need a
+different value.
+
+### Not yet shown
+
+- Other areas (a plain, a town) and the DEM tiles at zoom 16 and above (the zoom
+  15.7 view used coarser tiles for some of the area).
+- Whether a 2 m offset is visible between draped basemap lines and the splats in
+  close, low-pitch views.

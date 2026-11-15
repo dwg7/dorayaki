@@ -113,6 +113,8 @@ fast network. What limits the browser is memory and CPU, not the network:
   ten of them about 390 MB. The wire record is 16 bytes. Uploading the 16-byte
   records and decoding in the vertex shader would cut this by 3.5 times; that
   is proposed, not implemented.
-- The demo fetches and uploads every tile of a tileset when the page opens.
-  Loading only the tiles in view is not implemented and is required before a
-  prefecture-sized archive can be used.
+- The demo used to fetch and upload every tile of a tileset when the page opened.
+  It now loads only the tiles in view (the nearest nine of the selected zoom,
+  documents/demo-and-site.md); a prefecture-sized archive additionally needs a
+  tile list that is not enumerated from the TileJSON bounds (the demo caps that
+  list at 64 tiles).

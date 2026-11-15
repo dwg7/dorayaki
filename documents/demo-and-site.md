@@ -41,6 +41,7 @@ All optional; the camera is in the fragment, the rest in the query.
 | --- | --- |
 | `?fixture=<name>` | tileset: `bridge`, `overhang`, `boundary`, `toy-gs`, or a real-data set listed in `EXTERNAL_TILESETS` of `demo/src/main.ts` (`numazu*`, `kawazu-*`; those under `demo/tiles/` exist only after building them) |
 | `?lod=<zoom>` | choose tiles and levels as if the map were at this zoom |
+| `?terrainshift=<metres>` | lower the terrain by this much (default 2): the DEM lies up to 2.4 m above the point cloud's ground and would hide splats there (E010) |
 | `?terrain=<exaggeration>` | add MapLibre terrain from stars' `mapterhorn-japan-bridge` Terrarium DEM. Needed for data far above sea level: without terrain the camera is relative to 0 m and high data vanishes or is magnified (NOTES.md) |
 | `?dz=<metres>` | raise every tile, to test high-elevation behaviour |
 | `?fade=0` | keep the basemap at full opacity. By default its layers fade from zoom 15.5 to 20 % at zoom 19, so the splats stand out. Only layers whose opacity is a plain number are changed (92 of 135 opacity properties of the bvmap-starlight style, including 59 of 99 line properties); layers with their own zoom expressions are not |
@@ -69,9 +70,23 @@ Kept separate as AGENTS.md requires.
 | `tile-matrix.ts` | tile-local to Web Mercator placement (float64) |
 | `splat-instances.ts` | per-splat instance data |
 | `gpu-surfels.ts` | shaders, buffer upload, instanced draw |
-| `surfel-layer.ts` | MapLibre `CustomLayerInterface` lifecycle |
+| `surfel-layer.ts` | MapLibre `CustomLayerInterface` lifecycle; `setTiles` swaps the tile set |
+| `tile-view.ts` | which tiles of a zoom intersect the view (nearest first, at most 9) |
+| `tile-streamer.ts` | loads the in-view tiles of the selected zoom and hands the whole set over when complete |
 | `main.ts` | map setup and wiring |
 | `demo-tile.ts` | demo tile address and deterministic tile bytes |
+
+## Tile streaming
+
+The demo does not fetch every tile of a tileset. On load and after every map move
+(`moveend`) it picks the zoom (`selectZoom`), takes the tiles of that zoom that
+intersect the view, nearest to the centre first and at most nine, and fetches,
+decodes and uploads only those. The previous set keeps being drawn until every
+tile of the new set has arrived, then the whole set is swapped (no holes; the status
+line shows "Loading z17: 6/12 tile(s)"). A tile already in flight or held is reused;
+tiles outside the new set are freed (a tile seen again is fetched again, usually
+from the browser's HTTP cache). Kawazu's nine-mesh set (46 tiles, 132 MB) shows
+9 tiles (25.8 MB) at zoom 16.4 and 12 (59 MB) at 17.6 without the cap.
 
 ## GitHub Pages site
 

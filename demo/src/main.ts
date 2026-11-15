@@ -9,6 +9,8 @@ import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTiles
 import { fetchTilesBytes } from "./load-tile.js";
 import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
 import { SurfelLayer } from "./surfel-layer.js";
+import { TileStreamer } from "./tile-streamer.js";
+import type { SurfelBlock } from "../../src/surfel-block.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
   return [tileLongitude(t, x), tileLatitude(t, y)];
@@ -131,23 +133,24 @@ const map = new MapLibreMap({
 });
 map.addControl(new NavigationControl({ visualizePitch: true }));
 
-const urls = tiles.map((t) => (external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t)));
-/** Decode a tile into splats and its level table. */
-function toLoaded(tile: TileAddress, bytes: Uint8Array) {
-  return { tile, bytes, ...decodeSurfelTileWithLevels(bytes) };
-}
+const urlOf = (t: TileAddress): string => (external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t));
 
-/** Load-time measurements (E001 in EXPERIMENTS.md). */
-const timings: { fetchMs?: number; decodeMs?: number } = {};
-const tFetch = performance.now();
-const tilesPromise = fetchTilesBytes(urls, undefined, { allowMissing: external !== undefined }).then((all) => {
-  timings.fetchMs = performance.now() - tFetch;
-  const tDecode = performance.now();
-  // Tiles listed from TileJSON bounds may not exist (204/404); skip those.
-  const decoded = all.flatMap((bytes, n) => (bytes ? [toLoaded(tiles[n] as TileAddress, bytes)] : []));
-  timings.decodeMs = performance.now() - tDecode;
-  return decoded;
-});
+/** One loaded tile: its bytes (for the status) and the decoded splats with the level table. */
+type LoadedTile = { tile: TileAddress; bytes: Uint8Array } & SurfelBlock;
+
+/** Load-time measurements, summed over every tile loaded (E001 in EXPERIMENTS.md). */
+const timings = { fetchMs: 0, decodeMs: 0 };
+async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
+  const t0 = performance.now();
+  // Tiles listed from TileJSON bounds may not exist (204/404); those come back as null.
+  const [bytes] = await fetchTilesBytes([urlOf(tile)], undefined, { allowMissing: external !== undefined });
+  timings.fetchMs += performance.now() - t0;
+  if (!bytes) return null;
+  const t1 = performance.now();
+  const decoded = decodeSurfelTileWithLevels(bytes);
+  timings.decodeMs += performance.now() - t1;
+  return { tile, bytes, ...decoded };
+}
 
 map.on("load", () => {
   // Fade the basemap from zoom 15.5 (to 20 % at zoom 19) so the splats stand out; `?fade=0` keeps it as is.
@@ -160,7 +163,15 @@ map.on("load", () => {
   // Debug (`?terrain=1`): MapLibre terrain from stars' Terrarium DEM, to see how the custom layer behaves with it.
   const terrain = Number(flag("terrain", tileset));
   if (terrain > 0) {
-    map.addSource("dem", { type: "raster-dem", url: "https://stars.optgeo.org/mapterhorn-japan-bridge", encoding: "terrarium", tileSize: 512 });
+    // The DEM is lowered by `?terrainshift=` metres (default 2): it differs from the point cloud's ground by
+    // -0.9 to +0.7 m (5 to 95 %, up to +2.4 m) in the Kawazu area (E010), and where it lies above the ground it
+    // hides the splats. The Terrarium decode is spelled out so that `baseShift` can carry the shift
+    // (MapLibre computes red*redFactor + green*greenFactor + blue*blueFactor - baseShift).
+    const shift = Number(flag("terrainshift", tileset) ?? 2);
+    map.addSource("dem", {
+      type: "raster-dem", url: "https://stars.optgeo.org/mapterhorn-japan-bridge", tileSize: 512,
+      encoding: "custom", redFactor: 256, greenFactor: 1, blueFactor: 1 / 256, baseShift: 32768 + shift,
+    });
     map.setTerrain({ source: "dem", exaggeration: terrain });
   }
   // Debug overlay on top of the basemap: the demo tile's boundary.
@@ -174,85 +185,102 @@ map.on("load", () => {
     source: "tile-outline",
     paint: { "line-color": "#d03030", "line-width": 2, "line-dasharray": [2, 2] },
   });
-  tilesPromise.then(
-    (loaded) => {
-      const layer = new SurfelLayer("surfels", loaded);
-      const lod = Number(flag("lod", tileset));
-      if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
-      const extent = Number(flag("extent", tileset));
-      if (extent > 0) layer.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
-      const dz = Number(flag("dz", tileset));
-      if (dz) layer.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
-      map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
-      depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
+  const layer = new SurfelLayer("surfels");
+  const lod = Number(flag("lod", tileset));
+  if (lod > 0) layer.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+  const extent = Number(flag("extent", tileset));
+  if (extent > 0) layer.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
+  const dz = Number(flag("dz", tileset));
+  if (dz) layer.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
+  map.addLayer(layer, "tile-outline"); // keep the 2D tile outlines visible on top
+  depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
+
+  // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
+  // as a whole when it is complete (documents/demo-and-site.md).
+  let loaded: LoadedTile[] = [];
+  let summary = "loading…";
+  const streamer = new TileStreamer<LoadedTile>({
+    candidates: tiles,
+    load: loadTile,
+    onProgress: ({ zoom, wanted, done }) => {
+      if (done < wanted) setStatus(`${summary} Loading z${zoom}: ${done}/${wanted} tile(s)…`);
+    },
+    onReady: (set, zoom) => {
+      loaded = set.map((x) => x.data);
+      layer.setTiles(loaded);
       const bytes = loaded.reduce((n, t) => n + t.bytes.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.splats.length, 0);
-      const loadedSummary = `${loaded.length} tile(s) of ${tileset}: ${bytes} bytes, ${count} surfels`;
-      setStatus(loadedSummary);
-      // After each frame, show what the zoom-based selection drew.
-      map.on("render", () => {
-        const d = layer.lastDraw;
-        if (!d) return;
-        const progressive = d.levelsDrawn > 1 || loaded.some((t) => t.tile.z === d.zoom && t.levels.length > 1);
-        setStatus(`${loadedSummary}. Drawing z${d.zoom}: ${d.tiles} tile(s), ${d.surfels} surfels` +
-          (progressive ? `, levels ${d.levelsDrawn}, min radius ${(d.minRadius * 100).toFixed(1)} cm` : ""));
-      });
-      /**
-       * Frame timing: force `frames` repaints in a row and report the median
-       * interval between rendered frames and the median CPU time of the
-       * surfel layer's render(). GPU time is not measured.
-       */
-      const measureFrames = (frames = 120): Promise<Record<string, number | string | undefined>> =>
-        new Promise((resolve) => {
-          const stamps: number[] = [];
-          const cpu: number[] = [];
-          const onRender = () => {
-            stamps.push(performance.now());
-            if (layer.lastRenderMs !== undefined) cpu.push(layer.lastRenderMs);
-            if (stamps.length > frames) {
-              map.off("render", onRender);
-              const median = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] ?? NaN;
-              const intervals = stamps.slice(1).map((t, i) => t - stamps[i]!);
-              resolve({
-                frames, medianFrameMs: median(intervals), medianLayerCpuMs: median(cpu),
-                drawnSurfels: layer.lastDraw?.surfels, gpu: layer.gpu, userAgent: navigator.userAgent,
-              });
-            } else map.triggerRepaint();
-          };
-          map.on("render", onRender);
-          map.triggerRepaint();
-        });
-      /**
-       * Share of near-white (background) pixels in a screen rectangle given as
-       * fractions of the canvas, read back inside a render event. Used by E006
-       * to compare how many gaps different `?extent=` values leave on a road.
-       */
-      const holeFraction = (rect: [number, number, number, number] = [0.35, 0.55, 0.65, 0.9]): Promise<number> =>
-        new Promise((resolve) => {
-          const onRender = () => {
-            map.off("render", onRender);
-            const gl = map.getCanvas().getContext("webgl2") as WebGL2RenderingContext;
-            const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
-            const x0 = Math.floor(rect[0] * w), x1 = Math.floor(rect[2] * w);
-            const y0 = Math.floor((1 - rect[3]) * h), y1 = Math.floor((1 - rect[1]) * h);
-            const px = new Uint8Array((x1 - x0) * (y1 - y0) * 4);
-            gl.readPixels(x0, y0, x1 - x0, y1 - y0, gl.RGBA, gl.UNSIGNED_BYTE, px);
-            let white = 0;
-            for (let i = 0; i < px.length; i += 4) if (px[i]! > 235 && px[i + 1]! > 235 && px[i + 2]! > 235) white++;
-            resolve(white / (px.length / 4));
-          };
-          map.on("render", onRender);
-          map.triggerRepaint();
-        });
-      const report = () => ({
-        tileset, tiles: loaded.length, surfels: count, encodedBytes: bytes,
-        fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
-      });
-      (window as unknown as { dorayaki: unknown }).dorayaki = { map, layer, loaded, timings, report, measureFrames, holeFraction };
+      summary = `${loaded.length} tile(s) of ${tileset} at z${zoom}: ${bytes} bytes, ${count} surfels.`;
+      setStatus(summary);
     },
-    (err: unknown) => {
-      setStatus(`failed: ${err instanceof Error ? err.message : String(err)}`);
-      console.error(err);
-    },
-  );
+  });
+  const refresh = (): void => {
+    const b = map.getBounds();
+    streamer.update(lod > 0 ? lod : map.getZoom(), [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+  };
+  map.on("moveend", refresh);
+  refresh();
+  // After each frame, show what the zoom-based selection drew.
+  map.on("render", () => {
+    const d = layer.lastDraw;
+    if (!d) return;
+    const progressive = d.levelsDrawn > 1 || loaded.some((t) => t.tile.z === d.zoom && t.levels.length > 1);
+    setStatus(`${summary} Drawing z${d.zoom}: ${d.tiles} tile(s), ${d.surfels} surfels` +
+      (progressive ? `, levels ${d.levelsDrawn}, min radius ${(d.minRadius * 100).toFixed(1)} cm` : ""));
+  });
+  /**
+   * Frame timing: force `frames` repaints in a row and report the median
+   * interval between rendered frames and the median CPU time of the
+   * surfel layer's render(). GPU time is not measured.
+   */
+  const measureFrames = (frames = 120): Promise<Record<string, number | string | undefined>> =>
+    new Promise((resolve) => {
+      const stamps: number[] = [];
+      const cpu: number[] = [];
+      const onRender = () => {
+        stamps.push(performance.now());
+        if (layer.lastRenderMs !== undefined) cpu.push(layer.lastRenderMs);
+        if (stamps.length > frames) {
+          map.off("render", onRender);
+          const median = (a: number[]) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] ?? NaN;
+          const intervals = stamps.slice(1).map((t, i) => t - stamps[i]!);
+          resolve({
+            frames, medianFrameMs: median(intervals), medianLayerCpuMs: median(cpu),
+            drawnSurfels: layer.lastDraw?.surfels, gpu: layer.gpu, userAgent: navigator.userAgent,
+          });
+        } else map.triggerRepaint();
+      };
+      map.on("render", onRender);
+      map.triggerRepaint();
+    });
+  /**
+   * Share of near-white (background) pixels in a screen rectangle given as
+   * fractions of the canvas, read back inside a render event. Used by E006
+   * to compare how many gaps different `?extent=` values leave on a road.
+   */
+  const holeFraction = (rect: [number, number, number, number] = [0.35, 0.55, 0.65, 0.9]): Promise<number> =>
+    new Promise((resolve) => {
+      const onRender = () => {
+        map.off("render", onRender);
+        const gl = map.getCanvas().getContext("webgl2") as WebGL2RenderingContext;
+        const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+        const x0 = Math.floor(rect[0] * w), x1 = Math.floor(rect[2] * w);
+        const y0 = Math.floor((1 - rect[3]) * h), y1 = Math.floor((1 - rect[1]) * h);
+        const px = new Uint8Array((x1 - x0) * (y1 - y0) * 4);
+        gl.readPixels(x0, y0, x1 - x0, y1 - y0, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        let white = 0;
+        for (let i = 0; i < px.length; i += 4) if (px[i]! > 235 && px[i + 1]! > 235 && px[i + 2]! > 235) white++;
+        resolve(white / (px.length / 4));
+      };
+      map.on("render", onRender);
+      map.triggerRepaint();
+    });
+  const report = () => ({
+    tileset, tiles: loaded.length, surfels: loaded.reduce((n, t) => n + t.splats.length, 0),
+    encodedBytes: loaded.reduce((n, t) => n + t.bytes.byteLength, 0),
+    fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
+  });
+  (window as unknown as { dorayaki: unknown }).dorayaki = {
+    map, layer, get loaded() { return loaded; }, timings, report, measureFrames, holeFraction, refresh,
+  };
 });
