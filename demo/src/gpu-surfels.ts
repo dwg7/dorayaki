@@ -11,7 +11,7 @@
  * is decoded Splat objects (see splat-instances.ts).
  */
 import type { Splat } from "../../src/surfel-block.js";
-import { cameraAxes, splatInstances } from "./splat-instances.js";
+import { cameraAxes, splatInstances, type SplatInstances } from "./splat-instances.js";
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -143,7 +143,11 @@ export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
 }
 
 export function uploadSplats(gl: WebGL2RenderingContext, splats: readonly Splat[]): SurfelBuffers {
-  const inst = splatInstances(splats);
+  return uploadInstances(gl, splatInstances(splats));
+}
+
+/** Upload instance data that was built earlier (so that the decoded Splat objects need not be kept). */
+export function uploadInstances(gl: WebGL2RenderingContext, inst: SplatInstances): SurfelBuffers {
 
   const vao = gl.createVertexArray();
   if (!vao) throw new Error("createVertexArray failed");
