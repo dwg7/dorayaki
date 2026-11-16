@@ -731,3 +731,10 @@ rejected), a reader inflates at most `count` bytes, the builder refuses `DORAYAK
 code 242 for every splat), the merge refuses to join planes of the wrong length, the demo computes the vegetation guess only while a class
 feature is on, and the legend is cleared. Inflating the planes of 785,133 splats took 305 ms in the browser (the earlier note of 0.1 s per million
 splats was not measured; it was about 0.39 s). Details and the table of findings: documents/class-plane.md "Review".
+
+## 2026-11-17 (evening): the Kawazu archive on stars has class planes
+
+`dorayaki-kawazu.pmtiles` on stars is now the version 6 build with class planes (84,036,082 B, SHA-256 `bc5193b0...`, equal on the host); served tiles z15 and z17
+byte-identical to the local files; TileJSON `?v=20261117c`; centre the loop bridge. The earlier file (83,230,962 B, SHA `9f416dcb...`) is kept locally as
+`demo/tiles/dorayaki-kawazu-v6b.pmtiles`. Until the site that points at `?v=20261117c` is merged, the live site (still on `?v=20261117v6b`) gets cached plane-less
+tiles for up to four hours and, for tiles not in the edge cache, tiles with planes: both decode.
