@@ -1,10 +1,15 @@
-# Surfel Block format (experimental, version 5)
+# Surfel Block format (experimental, versions 5 and 6)
 
 Status: implemented in `src/surfel-block.ts`. This is an experimental
 layout for the Dorayaki proof of concept, not a specification. It may
 change without backward compatibility; any such change will be stated
 explicitly and will bump `version`. Version numbers are expected to rise
 freely while the format is explored.
+
+Version 6 (2026-11-16, opt-in, E016) is a lossier and smaller layout: 12-byte bit-packed
+records. It is described in its own section at the end ("Version 6"); the encoder still writes
+version 5 unless asked for 6, and the decoder reads 4, 5 and 6. The rest of this document
+describes versions 4 and 5.
 
 Version 5 (2026-11-15) changes only how the records are laid out: byte planes
 instead of whole records (see "Splat records"). A reader still accepts version 4.
@@ -202,6 +207,11 @@ sampled once on a grid that is continuous across seams, then split.
 
 ## Compatibility
 
+**Version 6** (2026-11-16) adds a layout beside version 5; nothing that wrote or read versions
+4 and 5 changes (`encodeSurfelBlock` writes 5 by default, `{ version: 6 }` writes 6). It is
+**lossier** (see "Version 6"), and it stores one opacity per block, so a tool that needs
+per-splat opacity must stay on version 5.
+
 **Version 5** (2026-11-15) stores the records as byte planes (above). The header,
 the level table and the record fields are unchanged. The decoder reads versions
 4 and 5; the encoder writes 5. Tilesets written as version 4 (the Numazu tiles
@@ -238,3 +248,45 @@ undefined and no published data relied on another datum.
   rule against a second mandatory LOD mechanism in AGENTS.md.
 - Spherical harmonics beyond the degree-0 colour, source-point storage and
   per-splat covariance beyond scales and a rotation.
+
+## Version 6
+
+Status: implemented in `src/surfel-block.ts` (`encodeSurfelBlock(splats, levels, { version: 6 })`), read by the
+GPU path in `demo/src/gpu-surfels.ts`; opt-in (`DORAYAKI_BLOCK_VERSION=6` in the tileset builders). Motivation and
+measurements: E016 in EXPERIMENTS.md. Not a standard.
+
+```
+offset      size          content
+0           40            header
+40          4 * L         level table (L = level_count)
+40 + 4L     12 * count    splat records, whole records in stored order
+```
+
+The total length must be exactly `40 + 4·L + 12·count`; the same errors as for version 5 apply.
+
+Header (40 bytes): offsets 0 to 31 as version 5 (magic `DSRF`, `version` = 6, `record_bytes` = 12, `count`,
+`level_count`, `z_origin` float64, `z_step` float64), then `scale_log2_min` float32 at 32, `alpha` uint8 at 36, and
+three reserved bytes (written as zero, not checked). The level table is as in version 5.
+
+Record: 96 bits, little-endian (bit 0 is the least significant bit of byte 0), fields not aligned to bytes:
+
+| field | bit offset | bits | meaning |
+| --- | ---: | ---: | --- |
+| x | 0 | 13 | `u / 8192` of the tile, west to east |
+| y | 13 | 13 | `u / 8192`, north to south |
+| z | 26 | 14 | `z_origin + u · z_step` metres |
+| sx, sy, sz | 40, 47, 54 | 7 each | `2^(scale_log2_min + code / 6)` metres, standard deviations |
+| rotation | 61 | 17 | bits 0-1: index of the largest component; then three codes of 5 bits (0..30, 15 = 0) of the other components over [-1/sqrt2, 1/sqrt2], in w, x, y, z order with the largest skipped; code 31 is invalid |
+| r, g, b | 78, 84, 90 | 6 each | `round(code · 255 / 63)` |
+
+The block's `alpha` applies to every splat. The encoder picks `z_step` as at least 1 mm and wide enough for 14 bits,
+and `scale_log2_min` as the base-2 logarithm of the smallest scale of the block (float32); scales more than 127/6 = 21.2
+octaves above it clamp. Splats of one block must share one opacity (the encoder rejects anything else).
+
+Tolerances: position 1/16384 of the tile, height half a step, scale a factor 2^(1/12) (6 %), rotation a few
+degrees, colour about 2 of 255. Measured on Kawazu (E016): about 1.6 of 255 mean colour error against version 5
+in the software renderer, 0.63 in a browser comparison with 25 x 25 block means.
+
+A reader that draws splats decodes the fields as above; `demo/src/gpu-surfels.ts` (`packedVertexShader(12)`) does it
+in the vertex shader from the record as uploaded, `u_scale_base` carrying `scale_log2_min`. The round-splat rule
+(largest over smallest scale below 1.5) becomes a code difference of at most 3 (version 5: 5).

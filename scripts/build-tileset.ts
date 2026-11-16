@@ -43,6 +43,8 @@ const config: PyramidConfig = {
   aggregatedZooms: aggArgs.map(Number), maxzoom: Number(maxzoomArg), levels: 1, minRefinementSupport: 1,
 };
 const OUT = `demo/tiles/${name}`;
+/** DORAYAKI_BLOCK_VERSION=6 writes version 6 blocks (12-byte records, E016); the default is version 5. */
+const blockVersion = process.env.DORAYAKI_BLOCK_VERSION === "6" ? (6 as const) : undefined;
 
 /** `path@c2+1@first` -> path and a point filter (all points when no filter is given). */
 function parseSpec(spec: string): { path: string; keep: (cls: number, returns: number) => boolean } {
@@ -153,7 +155,7 @@ for (const [z, g] of Object.entries(pyramid.gaussiansPerZoom)) perZoom[Number(z)
 for (const { tile, splats, levels } of pyramid.tiles) {
   const path = `${OUT}/${tile.z}/${tile.x}/${tile.y}.mlt`;
   mkdirSync(dirname(path), { recursive: true });
-  const data = encodeDemoTile(splats, levels);
+  const data = encodeDemoTile(splats, levels, blockVersion);
   writeFileSync(path, data);
   archiveTiles.push({ ...tile, data });
   manifestTiles.push({ ...tile, levels, bytes: data.byteLength });

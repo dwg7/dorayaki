@@ -214,6 +214,9 @@ npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size t
 npm run measure:omission  # E002: omission strategies on the Numazu data
 npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
 npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
+npm run measure:encoding -- <tileset dir> <zoom>   # E016: entropy per field, gzip/brotli of the block as stored and rearranged
+npm run measure:precision -- <tileset dir> <zoom>  # E016: which precision reductions are visually free (software renderer)
+DORAYAKI_BLOCK_VERSION=6 npm run build:tileset -- ...   # write version 6 blocks (12-byte records); default is version 5
 npm run measure:quality -- <tileset dir> <ref zoom> <cand zoom|mixed> [<cand dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]  # E012: software-render both from fixed cameras, print holes/colour/depth differences, optional PNGs
 npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
 npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOUR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=gzip gzips PMTiles tiles (default raw; Martin 1.14 cannot read gzip MLT tiles)

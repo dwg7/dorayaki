@@ -1079,3 +1079,142 @@ Kept behind `?mixed=1`, not the default: the byte cost at ordinary views is high
 a byte budget (the selector knows tile counts, not sizes) is not designed. Next questions:
 a byte-aware cap, and per-area maximum zoom (B-1), which this selector already handles
 (a finer tile is used only where it exists).
+
+## E016: where the bytes of a tile go, and which precision is free (in progress)
+
+### Question
+Tiles are 16 bytes per splat (98.8 MB for the 6.17 million z17 splats of the Kawazu archive). What can a better
+encoding save, losslessly and with which precision reductions?
+
+### Method
+`npm run measure:encoding -- <dir> <zoom>`: per field, zero-order entropy (bits per splat, per tile; an adaptive entropy
+coder would approach it) of the stored value and of simple transforms; gzip and brotli of the block as stored and with the
+fields rearranged. `npm run measure:precision -- <dir> <zoom>`: requantize one field at a time, render original and
+variant from three cameras with the software renderer (E012), compare (colour error, PSNR, holes; block 4; worst of the
+views). The tiles are stored in raster order (99.5 % of neighbours in row-then-column order).
+
+### Measurements: bits per splat (Kawazu factor-10 archive, z17, 6,172,195 splats)
+| field | stored | ideal after a transform |
+| --- | ---: | ---: |
+| position x, y (32) | 32 | row delta 1.2 + column delta 6.5 + sub-cell 7.0 + 7.0 |
+| height (16) | 16 | delta to previous 7.9 |
+| scales (24) | 24 | x 5.3, y - x 5.8, z - x 6.1 |
+| rotation (24) | 24 | 0.0 + 6.3 + 6.1 + 6.0 |
+| colour (24) | 24 | r 6.8, g - r 4.8, b - r 5.8 |
+| alpha (8) | 8 | 0 (always 242) |
+| total | 128 (101.4 as stored bytes) | **82.3** |
+
+gzip: 10.95 bytes per splat as stored (31 % less than 16), 10.50 rearranged (34 % less); brotli quality 9: 11.4 and 10.9.
+
+Precision reductions (mesh 08OF4060, z17, 702,139 splats; colour error in 0-255, worst of three views):
+| change | bits saved | colour error | PSNR dB |
+| --- | ---: | ---: | ---: |
+| position x, y 12 bits (from 16) | 8 | 1.0 | 41.4 |
+| position 11 / 10 bits | 10 / 12 | 1.6 / 2.6 | 38.7 / 35.4 |
+| height step 2 / 5 / 10 cm (from 4 mm) | 2.3 / 3.6 / 4.6 | 0.4 / 0.8 / 1.3 | 46.8 / 42.8 / 39.9 |
+| scale 6 / 4 / 3 steps per octave (from 10) | 2.2 / 4.0 / 5.2 | 0.7 / 1.0 / 1.3 | 43.7 / 41.7 / 40.2 |
+| rotation 5 / 4 / 3 bits per component (from 7) | 6 / 9 / 12 | 0.8 / 1.4 / 2.3 | 43.4 / 40.0 / 36.3 |
+| colour 6 / 5 / 4 bits per channel (from 8) | 6 / 9 / 12 | 0.6 / 1.3 / 2.6 | 49.1 / 44.0 / 38.0 |
+No change produced more than 0.23 % holes.
+
+### Observations
+- The data is mostly forest: scale, rotation and colour carry 5.3 to 6.3 bits each per field and are close to noise, so
+  lossless modelling gains little (101 -> 82 bits at best, and gzip gets about the same).
+- Raster order makes the cell gap small: the stored row and column cost 7.7 bits after deltas, and a single gap in raster
+  order (not measured) should cost about 2.
+- Together, position 12 bits (-8), height 2 cm (-2.3), scale 6 steps (-2.2), rotation 5 bits (-6), colour 6 bits (-6) save about
+  24 bits (a 96-bit, 12-byte record), if the errors add up like the worst single ones (not measured together).
+- gzip is the only general compressor the browser decodes natively (DecompressionStream), and stars' Martin cannot read gzip
+  MLT tiles (kawazu-demo.md), so the 31 to 34 % of gzip is not available yet.
+- The alpha byte is constant (242) and the renderer ignores it. Class and return data in the LAS files: airborne LP has
+  class 1 (unclassified, 90 %) and 2 (ground, 10 %), return numbers 1 to 5; MMS has 2 (ground 14 %), 3, 4, 5 (vegetation 86 %).
+
+### Decision
+Open. Not yet: a combined run of the reductions, the format change itself, the alpha question (hfu's idea: vegetation more
+transparent, which would use the alpha byte instead of dropping it).
+
+## E017: vegetation more transparent (hfu's idea)
+
+### Question
+Can vegetation be told from ground, and drawn more transparent, so that the ground and structures under a canopy show
+through?
+
+### Method
+Data: class and return histograms (sampled) of the Kawazu LAS files: airborne LP 08OF4060: class 1 (unclassified) 90 %,
+class 2 (ground) 10 %, return numbers 1 to 5; MMS 08OF4060: class 2 14 %, 3 (low vegetation) 23 %, 4 13 %, 5 50 %.
+`VoxelAccumulator` keeps a vegetation weight sum per voxel (14 doubles per voxel instead of 13); `adaptiveGaussians` merges
+it exactly; the Gaussian's opacity goes from 0.95 to `vegetationOpacity` with the share. The builder marks vegetation per
+file: `@v3+4+5` (class) or `@vr` (more than one return). The shader draws the alpha as screen-door transparency
+(interleaved gradient noise on the pixel; discarded pixels write no depth, so nothing needs sorting), switched by `?veg=1`;
+opacities from 0.94 up count as opaque, so the default 0.95 is unchanged. Built: mesh 08OF4060, MMS with `@v3+4+5` and
+LP with `@vr`, the recipe of the Kawazu archive, vegetation opacity 0.5: `kawazu-veg` (dev tileset; `kawazu-s10` is the same
+mesh without it).
+
+### Measurements
+- Size: 13,127,290 bytes against 13,127,262 for `kawazu-s10`: no change (the alpha byte was already there).
+- Alpha of the z17 splats (702,139): 88.3 % in [0.5, 0.625), 6.0 % in [0.625, 0.75), 3.1 % in [0.75, 0.875), 2.6 % opaque.
+  So about nine tenths of this mesh's splats are mostly vegetation by these rules.
+- Build 53 s, 0.32 GB peak.
+- Tests: the opacity follows the share (all, none, half), and merging keeps the share of all points.
+
+### Observations
+- With `?veg=1` the vegetation is drawn as a dither pattern, visible at close range (zoom 18 and above) and finer at a
+  distance; the road and the loop bridge stand out more than with opaque forest.
+- Not judged: whether 0.5 is the right opacity, whether the dither is acceptable, whether the ground under the canopy
+  shows (the browser view was being moved by hand while I looked, so no side-by-side of the same camera was taken).
+  The software renderer of E012 ignores opacity, so there is no number yet.
+- Classes by return count mark any multi-return pulse, so tree-like edges of buildings are vegetation by this rule; no
+  check was made against the structures in the mesh.
+- The alpha byte is now used, so the idea of dropping it in a tighter encoding (E016) becomes one or two bits.
+
+### Decision
+Abandoned and reverted (hfu, after looking at `kawazu-veg` against `kawazu-s10`: the transparency did not work as
+hoped; no further reason was recorded, and none was measured). The code (vegetation share in the accumulator and the
+merge, the `@v`/`@vr` filters, the screen-door shader, `?veg=1`) was removed again; this entry and the class and return
+histograms above stay. The local build `demo/tiles/kawazu-veg` was deleted. If the idea returns: the classes in the data
+make the vegetation share cheap to compute (E017 method), and what to try differently is the way transparency is drawn
+(sorted blending instead of screen-door noise) and the opacity, neither of which was explored.
+- The alpha byte stays unused and constant, so the note in E016 about dropping it applies again.
+
+### E016 result: version 6 (12-byte records), 2026-11-16
+
+Combined reductions (software renderer, block 4, worst of three views; mesh 08OF4060, z17): position 13 bits
+(from 16), height 2 cm, scale 6 steps per octave, rotation 5 bits per component, colour 6 bits per channel: colour error
+1.59 of 255, PSNR 40.0 dB, 0.07 % holes (position 12 bits instead of 13: 1.76, 39.1 dB). The scales of a z17 tile span
+11 to 11.6 octaves (smallest 2^-10 m, the builder's floor), so a 7-bit code at 6 steps per octave (21 octaves) from the
+block's smallest scale covers them.
+
+Version 6 (documents/surfel-block-format.md): 96-bit records, x 13, y 13, z 14, three scales 7 bits each, rotation 17,
+colour 6 bits per channel; alpha moves to the header (one opacity per block); header 40 bytes. Opt-in
+(`{ version: 6 }`, `DORAYAKI_BLOCK_VERSION=6`); reads 4, 5 and 6. The vertex shader decodes the record as uploaded
+(a `uvec3` per instance), so the GPU holds 12 bytes per splat (it held 16, and 56 before E013).
+
+| | version 5 | version 6 | ratio |
+| --- | ---: | ---: | ---: |
+| mesh 08OF4060 (11 tiles) | 13,127,262 B | 9,846,006 B | 0.750 |
+| nine meshes (46 tiles, 6,935,498 splats): z15 | 1,351,910 | 1,014,034 | 0.750 |
+| z16 | 10,862,055 | 8,146,845 | 0.750 |
+| z17 | 98,757,239 | 74,068,696 | 0.750 |
+| archive | 110,972,600 | 83,230,961 | 0.750 |
+| per square metre (1.08 km2) | 103 B | 77 B | |
+| largest tile | 7.17 MB | 5.38 MB | |
+
+In the browser (Apple M1; mesh 08OF4060, zoom 18.5, bearing -30, pitch 60, 682,792 splats, same camera in both): the
+25 x 25 block means of version 6 and version 5 differ by 0.63 of 255 on average (largest block 6.3; 81 of 1,875 blocks
+by more than 2, scattered, with no brightness bias: -0.05), so the shader decoding agrees with the codec to within
+the quantization.
+
+### Observations
+- Exactly 0.750: the record is 12/16 bytes and the header and level table are negligible; the saving does not depend
+  on the data.
+- Whole 12-byte records are less compressible than the version 5 planes: the 31 to 34 % of gzip measured above is
+  not expected on top of this (not measured on version 6).
+- Per-block `alpha` closes the door on per-splat opacity in this layout (E017 was abandoned, so nothing uses it).
+- The entropy-coding route (about 82 bits at best, E016 table) was not taken: it needs a decoder with state per field and
+  would not be uploaded to the GPU as it is.
+- The nine-mesh build was run through `merge:tilesets`, which decodes and re-encodes the tiles it merges (the
+  pyramid keeps one tile per address except at mesh seams), so tiles at seams were quantized twice.
+
+### Decision
+Version 6 is kept opt-in. The hosted Kawazu archive stays version 5 until hfu decides to replace it (a build
+and upload as before; the TileJSON version parameter must change).

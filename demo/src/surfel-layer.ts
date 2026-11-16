@@ -34,7 +34,7 @@ export interface LayerTile {
   splats?: readonly Splat[];
   instances?: SplatInstances;
   /** Or the block's 16-byte records, uploaded as they are and decoded in the vertex shader (the smallest form on the GPU). */
-  packed?: Pick<PackedBlock, "count" | "records" | "zOrigin" | "zStep">;
+  packed?: Pick<PackedBlock, "count" | "records" | "zOrigin" | "zStep" | "recordBytes" | "scaleLog2Min">;
   /** Level table; omitted means one level holding every surfel. */
   levels?: readonly number[];
 }
@@ -55,8 +55,8 @@ interface TileState {
   widthMetres: number;
   model: Mat4;
   buffers: SurfelBuffers | undefined;
-  /** Drawn with the program that decodes packed records. */
-  packed: boolean;
+  /** Drawn with the program that decodes packed records of this many bytes (0: float attributes). */
+  packed: 0 | 16 | 12;
 }
 
 export class SurfelLayer implements CustomLayerInterface {
@@ -86,6 +86,7 @@ export class SurfelLayer implements CustomLayerInterface {
   private map: MapLibreMap | undefined;
   private program: SurfelProgram | undefined;
   private packedProgram: SurfelProgram | undefined;
+  private packed12Program: SurfelProgram | undefined;
   /** Summary of the most recent frame (for status display). */
   lastDraw: DrawSummary | undefined;
   /** Milliseconds spent creating the program and uploading tiles' buffers, summed over every upload. */
@@ -126,9 +127,9 @@ export class SurfelLayer implements CustomLayerInterface {
       // The decoded splats are only needed for the upload; the state keeps none.
       const count = packed ? packed.count : instances ? instances.count : (splats ?? []).length;
       const buffers = packed
-        ? uploadPacked(gl, packed.records, packed.count, packed.zOrigin, packed.zStep)
+        ? uploadPacked(gl, packed.records, packed.count, packed.zOrigin, packed.zStep, packed.recordBytes, packed.scaleLog2Min)
         : instances ? uploadInstances(gl, instances) : uploadSplats(gl, splats ?? []);
-      return { tile, splats: [], levels: levels ?? [count], widthMetres, model, buffers, packed: !!packed };
+      return { tile, splats: [], levels: levels ?? [count], widthMetres, model, buffers, packed: packed ? packed.recordBytes : 0 };
     });
     for (const gone of have.values()) if (gone.buffers) deleteSurfelBuffers(gl, gone.buffers);
     this.tiles = states;
@@ -140,7 +141,8 @@ export class SurfelLayer implements CustomLayerInterface {
     this.map = map;
     const t0 = performance.now();
     this.program = createSurfelProgram(gl);
-    this.packedProgram = createSurfelProgram(gl, true);
+    this.packedProgram = createSurfelProgram(gl, 16);
+    this.packed12Program = createSurfelProgram(gl, 12);
     this.uploadMs = performance.now() - t0;
     this.applyPending(gl);
     const info = gl.getExtension("WEBGL_debug_renderer_info");
@@ -148,7 +150,7 @@ export class SurfelLayer implements CustomLayerInterface {
   }
 
   render(gl: WebGL2RenderingContext, options: CustomRenderMethodInput): void {
-    if (!this.program || !this.packedProgram || !this.map) return;
+    if (!this.program || !this.packedProgram || !this.packed12Program || !this.map) return;
     this.applyPending(gl);
     const t0 = performance.now();
     const displayZoom = this.zoomOverride ?? this.map.getZoom();
@@ -160,7 +162,7 @@ export class SurfelLayer implements CustomLayerInterface {
       if (!t.buffers || (!this.drawAllTiles && t.tile.z !== zoom)) continue;
       plan = drawPlan(t, displayZoom);
       const matrix = Float32Array.from(multiplyMat4(options.defaultProjectionData.mainMatrix, t.model));
-      const program = t.packed ? this.packedProgram : this.program;
+      const program = t.packed === 16 ? this.packedProgram : t.packed === 12 ? this.packed12Program : this.program;
       if (!program) continue;
       drawSurfels(gl, program, t.buffers, {
         matrix,
@@ -184,8 +186,10 @@ export class SurfelLayer implements CustomLayerInterface {
     }
     if (this.program) deleteSurfelProgram(gl, this.program);
     if (this.packedProgram) deleteSurfelProgram(gl, this.packedProgram);
+    if (this.packed12Program) deleteSurfelProgram(gl, this.packed12Program);
     this.program = undefined;
     this.packedProgram = undefined;
+    this.packed12Program = undefined;
     this.map = undefined;
   }
 
