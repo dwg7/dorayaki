@@ -11,6 +11,7 @@ import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
 import { SurfelLayer } from "./surfel-layer.js";
 import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
+import { terrainLift } from "./terrain-lift.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
   return [tileLongitude(t, x), tileLatitude(t, y)];
@@ -208,11 +209,14 @@ map.on("load", () => {
   const lod = Number(flag("lod", tileset));
   const extent = Number(flag("extent", tileset));
   const dz = Number(flag("dz", tileset));
+  // With terrain on, MapLibre's terrain at low zoom is coarser than the ground and lies above it in places, covering
+  // the splats; raise them by a zoom-dependent amount (terrain-lift.ts). `?dz=` raises everything by dz metres (debug).
+  const zoomLift = (): number => (terrain > 0 ? terrainLift(map.getZoom()) : 0);
   const makeLayer = (): SurfelLayer => {
     const l = new SurfelLayer("surfels");
     if (lod > 0) l.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
     if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
-    if (dz) l.setZOffset(dz); // debug: raise everything by dz metres, to test high-elevation behaviour
+    l.setZOffset(dz + zoomLift());
     l.setDepthTest(depthEl.checked);
     map.addLayer(l, "tile-outline"); // keep the 2D tile outlines visible on top
     return l;
@@ -245,6 +249,7 @@ map.on("load", () => {
     streamer.update(lod > 0 ? lod : map.getZoom(), [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
   };
   map.on("moveend", refresh);
+  if (terrain > 0) map.on("zoom", () => layer.setZOffset(dz + zoomLift()));
   refresh();
   // A lost WebGL context (the browser reclaims the GPU's memory) is restored by MapLibre for its own layers but not for
   // this custom layer, and the tiles' GPU buffers are gone with the context: add a new layer and fetch the tiles again.

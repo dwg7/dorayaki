@@ -88,6 +88,13 @@ tiles outside the new set are freed (a tile seen again is fetched again, usually
 from the browser's HTTP cache). Kawazu's nine-mesh set (46 tiles, 111 MB) has 12 tiles at z17; before the cap of nine,
 zoom 17.6 requested 12 (59 MB). At the showcase view (zoom 16.6) the page fetches 10.8 MB (E011).
 
+## Terrain at low zoom
+
+With terrain on (Kawazu's default) MapLibre's terrain follows the DEM tile of about the map's zoom, so at low
+zoom it is a smoothed ground that lies above the splats in places and hides them. The demo raises the layer by
+`terrainLift(zoom)` (`demo/src/terrain-lift.ts`): 0 at zoom 15 and above, 9 m per zoom level below, at most
+40 m. Measurements and what was tried: NOTES.md (2026-11-16, white holes at zoom 12.7).
+
 ## GitHub Pages site
 
 Published from `main:docs/` at <https://dwg7.unopengis.org/dorayaki/>.

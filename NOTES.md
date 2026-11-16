@@ -698,3 +698,20 @@ tiles (uncompressed and gzip directories) and reads samples back with the refere
 `pmtiles` reader. Not tried: stars' Martin reading such an archive. The writer still builds
 the whole archive in one `Uint8Array`, so an archive of tens of gigabytes needs a
 streaming writer (found while doing this; not done).
+
+## 2026-11-16: white holes in the data at low zoom with terrain (zoom 12.7)
+
+Seen by hfu at zoom 12.7 on the Pages site: the Kawazu data had white patches. Terrain off: no
+patches (zoom 12.7 and 14.4). Cause: MapLibre builds the terrain from DEM tiles of about the map's
+zoom; at zoom 12.7 the terrain differs from that at zoom 16.6 by -11.7 to +13.7 m (64 points, median
++1.0 m), at 14.5 by -2.3 to +2.7 m (`map.queryTerrainElevation`), so it lies above the splats (which
+sit 2 m below the fine ground) in places and hides them.
+
+Tried, at zoom 12.7, with terrain on: splats lowered by 12 m and by 40 m: *more* white (my first
+change had the sign wrong; the terrain is above the splats, so lowering them hides more). Splats
+raised by 12 m: one small hole left; by 22 m: a few specks. The demo now raises the splats by
+`terrainLift(zoom)` = 9 m per zoom level below 15, capped at 40 m (20.7 m at 12.7; 31.5 m at 11.5;
+none at 15 or above), set on every zoom event when terrain is on (`demo/src/terrain-lift.ts`).
+Looked at zoom 14 and 11.5 (no holes at 14); the slope and cap are tuned by eye on this one area, and
+the 40 m cap is an assumption. A different region needs its own check. Raising the data makes it hover
+over the basemap by up to 20 to 30 m at zoom 12 (a pixel there is about 25 m).
