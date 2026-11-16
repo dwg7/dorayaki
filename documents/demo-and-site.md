@@ -43,6 +43,7 @@ All optional; the camera is in the fragment, the rest in the query.
 | `?lod=<zoom>` | choose tiles and levels as if the map were at this zoom |
 | `?terrainshift=<metres>` | lower the terrain by this much (default 2): the DEM lies up to 2.4 m above the point cloud's ground and would hide splats there (E010) |
 | `?terrain=<exaggeration>` | add MapLibre terrain from stars' `mapterhorn-japan-bridge` Terrarium DEM. Needed for data far above sea level: without terrain the camera is relative to 0 m and high data vanishes or is magnified (NOTES.md) |
+| `?staged=0` | switch off the staged first display: the next coarser zoom is shown while the first set of tiles loads (E014) |
 | `?gpu=legacy` | draw from float instance data (56 bytes per splat) instead of the packed 16-byte records, to compare the two (E013) |
 | `?dz=<metres>` | raise every tile, to test high-elevation behaviour |
 | `?fade=0` | keep the basemap at full opacity. By default its layers fade from zoom 15.5 to 20 % at zoom 19, so the splats stand out. Only layers whose opacity is a plain number are changed (92 of 135 opacity properties of the bvmap-starlight style, including 59 of 99 line properties); layers with their own zoom expressions are not |

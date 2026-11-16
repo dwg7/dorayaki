@@ -162,6 +162,8 @@ interface LoadedTile {
 
 /** Load-time measurements, summed over every tile loaded (E001 in EXPERIMENTS.md). */
 const timings = { fetchMs: 0, decodeMs: 0 };
+/** Each set handed to the layer: when (ms since the page started), zoom, tiles, bytes (`dorayaki.deliveries`). */
+const deliveries: Array<{ ms: number; zoom: number; tiles: number; bytes: number }> = [];
 async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   const t0 = performance.now();
   // Tiles listed from TileJSON bounds may not exist (204/404); those come back as null.
@@ -237,11 +239,13 @@ map.on("load", () => {
   let summary = "loading…";
   const streamer = new TileStreamer<LoadedTile>({
     candidates: tiles,
+    staged: flag("staged", tileset) !== "0", // show the next coarser zoom while the first set loads (`?staged=0` switches it off)
     load: loadTile,
     onProgress: ({ zoom, wanted, done }) => {
       if (done < wanted) setStatus(`${summary} Loading z${zoom}: ${done}/${wanted} tile(s)…`);
     },
     onReady: (set, zoom) => {
+      deliveries.push({ ms: Math.round(performance.now()), zoom, tiles: set.length, bytes: set.reduce((n, x) => n + x.data.byteLength, 0) });
       loaded = set.map((x) => x.data);
       layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
       for (const t of loaded) { t.instances = undefined; t.packed = undefined; } // the layer owns the data now; do not keep a second copy
@@ -331,6 +335,7 @@ map.on("load", () => {
     fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
   });
   (window as unknown as { dorayaki: unknown }).dorayaki = {
+    deliveries,
     map, get layer() { return layer; }, get loaded() { return loaded; }, timings, report, measureFrames, holeFraction, refresh,
   };
 });

@@ -984,3 +984,37 @@ for the old path, and 25 MB 20 seconds later (transient arrays not yet collected
 
 ### Decision
 Keep; packed is the default. `?gpu=legacy` stays as a comparison path for now.
+
+## E014: staged first display
+
+### Question
+At the default Kawazu view (zoom 18.5, pitch 60) the map was empty until all six z17 tiles
+(25.8 MB) had arrived. Can the view show something sooner?
+
+### Method
+`TileStreamer` (demo/src/tile-streamer.ts) takes `staged`: when nothing has been handed over yet
+(page start, or after `reset`), it also loads the next coarser zoom's tiles of the same view and
+hands them over when they are complete, if the target set is not there yet; the target set then
+replaces them as before. Later zoom changes do not stage (the layer already shows a set).
+`?staged=0` switches it off. `dorayaki.deliveries` records each handed-over set. Network times
+were taken with `fetch` and a fresh query string (no HTTP cache) from this Mac to stars, all tiles
+of a set in parallel.
+
+### Measurements
+| set | tiles | bytes | time to fetch all |
+| --- | ---: | ---: | ---: |
+| z16 (shown first) | 4 | 6,035,801 | 0.82 s |
+| z17 (target) | 6 | 25,840,074 | 2.75 s |
+
+On the page: z16 delivered, then z17 (`deliveries`: z16 4 tiles 6.0 MB, then z17 6 tiles 25.5 MB).
+With the browser's HTTP cache warm both arrived within 0.1 s of each other (454 and 538 ms), so
+the page's own timing does not show the gain; the two fetch times above do.
+
+### Observations
+- The first picture needs about a quarter of the bytes and about a third of the time of the
+  target set on this connection; a slower connection widens the gap.
+- The z16 picture is coarser, so the view changes when z17 replaces it (no fade).
+- Staging asks for both sets at once, so the z17 fetch is not delayed (bandwidth is shared).
+
+### Decision
+Keep, on by default.
