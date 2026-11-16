@@ -944,3 +944,43 @@ errors are larger (mae 7.6 to 13.5) and the order is the same.
 ### Decision
 Keep. It is the tool for B-2 to B-4 (sparse rule at z17, encoding changes that quantize more,
 per-area maxzoom): change one thing, render, read the table.
+
+## E013: 16-byte records on the GPU
+
+### Question
+The GPU held 56 bytes per splat (float attributes made from decoded Splat objects) although the
+wire record is 16. Can the record go to the GPU as it is, with the vertex shader decoding it, and
+look the same?
+
+### Method
+`packedSurfelBlock` (src/surfel-block.ts) returns a block's records as 16-byte records without
+making Splat objects (version 5 planes are transposed; version 4 is copied). The layer uploads
+them as one `uvec4` attribute per instance and a second program (`PACKED_VERTEX_SHADER` in
+`demo/src/gpu-surfels.ts`) decodes position, scales, rotation (smallest three), axis order,
+roundness and colour as `splat-instances.ts` does. `?gpu=legacy` keeps the old path. Compared in
+the browser (Chromium of the Claude desktop app, Apple M1) on the Kawazu archive from stars: the
+canvas of the same camera, averaged over 25 x 25 blocks, in both modes.
+
+### Measurements
+| view | splats | mean block difference (0-255) | largest block difference |
+| --- | ---: | ---: | ---: |
+| zoom 16.63, bearing 128.7, pitch 67 | 676,201 | 0.001 | 0.02 |
+| zoom 18.5, bearing -30, pitch 60 | 1,591,264 | 0.006 | 0.37 |
+
+Loading the z17 view (6 tiles, 1,591,264 splats): decode 666 ms before, 47 ms after (no Splat
+objects, no instance arrays); GPU upload 32 ms before, 15 ms after; buffers 89 MB before
+(56 bytes), 25.5 MB after (16 bytes). The JS heap read 75 MB right after the load against 26 MB
+for the old path, and 25 MB 20 seconds later (transient arrays not yet collected).
+
+### Observations
+- A first z18.5 comparison showed a large difference (mean 24.8). The camera had moved: MapLibre
+  ended at zoom 18.44 in one run (the user also clicked in the page). With the camera at exactly
+  zoom 18.5 / bearing -30 / pitch 60 in both runs, the difference is the one above. Compare
+  camera values with the images.
+- Ties in scale code and the roundness threshold (largest code minus smallest code at most 5,
+  the same as a ratio below 1.5 in `splat-instances.ts`) are decided on the integer codes, so
+  both paths choose the same axes.
+- Block means do not prove equal pixels; no per-pixel comparison was made.
+
+### Decision
+Keep; packed is the default. `?gpu=legacy` stays as a comparison path for now.

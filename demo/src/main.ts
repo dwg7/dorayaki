@@ -3,7 +3,8 @@
  */
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type ExpressionSpecification } from "maplibre-gl";
 
-import { decodeSurfelTileWithLevels } from "./decode-tile.js";
+import { decodeSurfelTileWithLevels, packSurfelTile } from "./decode-tile.js";
+import type { PackedBlock } from "../../src/surfel-block.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
@@ -154,7 +155,8 @@ interface LoadedTile {
   byteLength: number;
   count: number;
   levels: number[];
-  /** Until the layer has taken it. */
+  /** Until the layer has taken it: the block's 16-byte records (default), or float instance data (`?gpu=legacy`). */
+  packed: PackedBlock | undefined;
   instances: SplatInstances | undefined;
 }
 
@@ -167,10 +169,15 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   timings.fetchMs += performance.now() - t0;
   if (!bytes) return null;
   const t1 = performance.now();
+  if (flag("gpu", tileset) !== "legacy") {
+    const packed = packSurfelTile(bytes); // no Splat objects: the records go to the GPU as they are
+    timings.decodeMs += performance.now() - t1;
+    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, instances: undefined };
+  }
   const decoded = decodeSurfelTileWithLevels(bytes);
   const instances = splatInstances(decoded.splats); // the Splat objects become garbage here
   timings.decodeMs += performance.now() - t1;
-  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, instances };
+  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, packed: undefined, instances };
 }
 
 map.on("load", () => {
@@ -236,8 +243,8 @@ map.on("load", () => {
     },
     onReady: (set, zoom) => {
       loaded = set.map((x) => x.data);
-      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
-      for (const t of loaded) t.instances = undefined; // the layer owns the data now; do not keep a second copy
+      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
+      for (const t of loaded) { t.instances = undefined; t.packed = undefined; } // the layer owns the data now; do not keep a second copy
       const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.count, 0);
       summary = `${loaded.length} tile(s) of ${tileset} at z${zoom}: ${bytes} bytes, ${count} surfels.`;

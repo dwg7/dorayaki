@@ -43,6 +43,7 @@ All optional; the camera is in the fragment, the rest in the query.
 | `?lod=<zoom>` | choose tiles and levels as if the map were at this zoom |
 | `?terrainshift=<metres>` | lower the terrain by this much (default 2): the DEM lies up to 2.4 m above the point cloud's ground and would hide splats there (E010) |
 | `?terrain=<exaggeration>` | add MapLibre terrain from stars' `mapterhorn-japan-bridge` Terrarium DEM. Needed for data far above sea level: without terrain the camera is relative to 0 m and high data vanishes or is magnified (NOTES.md) |
+| `?gpu=legacy` | draw from float instance data (56 bytes per splat) instead of the packed 16-byte records, to compare the two (E013) |
 | `?dz=<metres>` | raise every tile, to test high-elevation behaviour |
 | `?fade=0` | keep the basemap at full opacity. By default its layers fade from zoom 15.5 to 20 % at zoom 19, so the splats stand out. Only layers whose opacity is a plain number are changed (92 of 135 opacity properties of the bvmap-starlight style, including 59 of 99 line properties); layers with their own zoom expressions are not |
 | `?extent=<factor>` | scale every splat's semi-axes (default 1); about 1.3 closes the gaps between neighbours ([adaptive-merging.md](adaptive-merging.md)) |
@@ -68,8 +69,8 @@ Kept separate as AGENTS.md requires.
 | `decode-tile.ts` | MLT frame extraction + Surfel Block decoding |
 | `tile-selection.ts` | choose zoom and level prefix |
 | `tile-matrix.ts` | tile-local to Web Mercator placement (float64) |
-| `splat-instances.ts` | per-splat instance data |
-| `gpu-surfels.ts` | shaders, buffer upload, instanced draw |
+| `splat-instances.ts` | per-splat instance data (float attributes; `?gpu=legacy`, and the reference for the packed shader) |
+| `gpu-surfels.ts` | shaders (float attributes and packed 16-byte records), buffer upload, instanced draw |
 | `surfel-layer.ts` | MapLibre `CustomLayerInterface` lifecycle; `setTiles` swaps the tile set |
 | `tile-view.ts` | which tiles of a zoom intersect the view (nearest first, at most 9) |
 | `tile-streamer.ts` | loads the in-view tiles of the selected zoom and hands the whole set over when complete |
@@ -83,7 +84,7 @@ The demo does not fetch every tile of a tileset. On load and after every map mov
 intersect the view, nearest to the centre first and at most nine, and fetches,
 decodes and uploads only those. The previous set keeps being drawn until every
 tile of the new set has arrived, then the whole set is swapped (no holes; the status
-line shows "Loading z17: 6/12 tile(s)"). A tile is turned into instance data (56 bytes per splat) as soon as it is decoded; the decoded Splat objects are not kept, and the layer drops its copy after the GPU upload, so the JS heap stays near 230 to 420 MB at the Kawazu views (E011). If the WebGL context is lost and restored, MapLibre does not bring the custom layer back: the demo adds a new layer and loads the tiles again. A tile already in flight or held is reused;
+line shows "Loading z17: 6/12 tile(s)"). A tile's 16-byte records are taken from the block as they are (no Splat objects) and uploaded to the GPU, where the vertex shader decodes them (E013; `?gpu=legacy` builds 56-byte float instance data instead); the layer drops its copy after the upload, so the JS heap stays near 230 to 420 MB at the Kawazu views (E011). If the WebGL context is lost and restored, MapLibre does not bring the custom layer back: the demo adds a new layer and loads the tiles again. A tile already in flight or held is reused;
 tiles outside the new set are freed (a tile seen again is fetched again, usually
 from the browser's HTTP cache). Kawazu's nine-mesh set (46 tiles, 111 MB) has 12 tiles at z17; before the cap of nine,
 zoom 17.6 requested 12 (59 MB). At the showcase view (zoom 16.6) the page fetches 10.8 MB (E011).
