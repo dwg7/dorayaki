@@ -1218,3 +1218,189 @@ the quantization.
 ### Decision
 Version 6 is kept opt-in. The hosted Kawazu archive stays version 5 until hfu decides to replace it (a build
 and upload as before; the TileJSON version parameter must change).
+
+## E018: a softer, more Gaussian-splat-like look (`?look=soft`)
+
+### Question
+Splats are drawn as flat, opaque, hard-edged ellipses. Can they be drawn so that they look like Gaussian splats (soft
+overlapping blobs), without sorting millions of splats per frame?
+
+### Method
+Two passes per frame over the same tiles (demo/src/surfel-layer.ts, gpu-surfels.ts): first an opaque pass of splats shrunk
+by `coreScale` (default 0.8) that writes depth, then a pass of splats grown by `softScale` (default 1.4) with a Gaussian
+falloff, `0.95 * exp(-falloff * r2)` over the quad (r2 = 1 at its edge), premultiplied alpha blending, depth test against
+the cores, no depth write. Splats overlap their neighbours with soft edges, and nothing is sorted: the order dependence is
+confined to the feathered rims. `?softcore=`, `?softscale=`, `?softfalloff=` change the three numbers. The default look is
+unchanged (one opaque pass).
+
+### Observations (looked at, one browser, Kawazu archive)
+- First defaults (core 0.8, feathered 1.4, falloff 3.5): edges between splats melt into each other; the picture is slightly
+  softer than the flat one and otherwise the same.
+- A stronger setting (core 0.5, feathered 2, falloff 7) gave a soft, painterly foliage while the bridge and the road stayed
+  legible, **but hfu saw a regular pattern of dark circles on flat ground** (a screenshot of fields and houses): the shrunken
+  opaque cores left gaps between them, so only the semi-transparent feathered splats covered the gaps (the basemap shows
+  through as a pale haze) and each core showed as a dot. Flat ground is where splats sit on a grid.
+- Fix: the cores always cover the surface. The core is now the full extent (`coreScale` 1, as the flat look draws it, with the
+  `?extent=` that covers gaps), and only the feathered splat is larger (1.8, falloff 6.5, a Gaussian over 3.6 sigma across).
+  The same camera that showed the dots (zoom 17.67, bearing -30, pitch 60, lower-left ground below the bridge) shows none; a
+  close forest view (zoom 19.4) and a mountain-side view (zoom 18.3) show none either. Not checked: hfu's exact view of the
+  fields and houses (its coordinates were not given, and a search for it in the nine meshes did not find it).
+- `?shade=<0..1>` scales the fixed Lambert shading (uniform `u_shade`, in all three vertex shaders): at 0 the colours are drawn as
+  stored, lighter and closer to a photograph (the forest greener), as 3D Gaussian splatting does (it has no shading).
+- Cost not measured (two draw calls per tile instead of one).
+- Not done: a sorted, depth-correct blend (true splat compositing), which would need sorting per frame.
+
+### Decision
+Open: hfu to judge by eye (`?fixture=kawazu-stars&look=soft`, with `&shade=0`).
+
+## E019: a button to take vegetation away; what bare ground looks like
+
+### Question
+hfu asked for a button that removes vegetation, to see what the ground looks like in the soft look (E018).
+
+### Method
+1. A guess from the splats alone (`demo/src/vegetation.ts`, a "hide vegetation (guess)" checkbox, `?hideveg=1`): the tile is cut
+   into cells of 4 m; the ground of a cell is the lowest splat in it and its eight neighbours; a splat is vegetation when it is
+   more than 2 m above that and round (largest scale below 1.5 times the smallest, as the shader's disc rule). Computed when a
+   tile loads, one flag byte per splat, uploaded as an instanced attribute (`a_veg`), skipped in the vertex shader
+   (`u_hide_veg`). Works with versions 5 and 6.
+2. The real classification: the tileset builder already filters by LAS class. Mesh 08OF4060 built with `@c2` on both the MMS and
+   the airborne file (class 2 is ground in both): `kawazu-ground`, version 6, same recipe.
+
+### Measurements
+- The guess flags 11.0 % of the z17 splats of the nine-mesh archive (10.8 % at z16). Without the shape test it would flag
+  98.8 %: **the height test does not work on this terrain**: the lowest splat of a 12 m window on a 45 degree slope is 10 m below
+  the others, so nearly everything is "above ground". Heights 1, 3 m and cells of 8 m change the share by 0.2 points: the shape
+  test decides. Time: about 0.2 s per 1.2 million splats in Node.
+- Bare ground (`@c2`): 52,570 z17 splats (7.5 % of 702,139), 806,679 bytes for the mesh against 13.1 MB.
+- Seen in the browser (soft look, no shading, zoom 17.67, pitch 60): with the guess on, the forest loses its speckle but the
+  canopy surface stays: it is round blobs that go, not the canopy. With `kawazu-ground` the trees are gone: the slopes, the
+  road bed, the bridge piers and the stream bed show as bare earth, with white gaps where the ground splats are too sparse to
+  cover (laser returns on the ground under dense canopy are few).
+
+### Observations
+- The splats alone do not tell vegetation from ground here; the classification of the point cloud does. The checkbox is kept as
+  an honest, weak guess; for ground use the class.
+- A ground-only archive of the whole 1.08 km2 would be about 7 to 10 MB (the mesh is 0.8 MB), small enough to host beside the
+  full one. Not built.
+- A real button needs the class in the tiles (a class code per splat: the alpha byte of version 5 is free for it; version 6
+  has one opacity per block and no spare bits). It would serve the vivid-colour and the false-colour ideas as well (colour by
+  class). Not done.
+
+### Decision
+Open. The checkbox and the guess stay in the branch as an experiment; the next step, if hfu wants it, is the class per splat.
+
+## E020: what would a class per splat cost in the tiles? (analysis)
+
+### Question
+A class for every splat (ground, vegetation, ...) would give a real "hide vegetation" button (E019), vivid colours by class and
+false-colour classification. How much of the size work (E016) would it cost?
+
+### Method
+No format change. The class goes through the existing pipeline in the opacity byte of version 5 (analysis only, behind
+`DORAYAKI_CLASS_ALPHA=1`): the voxel accumulator takes optional class slots (point counts by class per voxel), the adaptive merge
+sums them exactly, and a splat's opacity byte becomes `slot * 32 + round(share * 31)`: its dominant class and the share of its
+points in it (purity). Slots: LAS class 0 to 5; 6 = class 1 on a pulse with several returns (the airborne files have only
+classes 1 and 2, so canopy is told by multiple returns); 7 = other. Built with the Kawazu recipe: meshes 08OF4060 (MMS and
+airborne), 08OF4062 and 08OF4050 (the latter two airborne; 4050 also has MMS). The tile sizes equal those without classes (13,127,264
+bytes for 4060). `npm run measure:class -- <zoom> <dir>...` reads the tiles and reports the class mix, purity, entropies and coded
+sizes. The price of freeing bits inside the 96-bit record comes from `npm run measure:precision` (software renderer, E012).
+
+### Measurements
+Class mix at z17 (2,127,206 splats): ground (2) 8.5 %; vegetation (3 to 5 from MMS 11.3 %, and 75.1 % unclassified airborne points
+with several returns) 86.4 %; other 5.1 %. At z16 (257,565 splats): ground 13.5 %, vegetation 82.4 %; at z15 (34,545): 15.3 %, 82.6 %.
+Purity (share of a splat's points in its dominant class): at least 0.9 for 76.9 % of the z17 splats, 63.0 % at z16, 47.4 % at z15
+(merged splats mix classes).
+
+Bits per splat to store the class (z17; z16 and z15 are within 0.1 of these except where noted):
+| form | bits per splat |
+| --- | ---: |
+| ideal, 8 slots, no context (zero-order entropy) | 1.15 (z16 1.53, z15 1.84) |
+| ideal, 8 slots, given the previous splat's class (raster order) | 0.82 (0.89, 1.12) |
+| ideal, 3 groups (ground, vegetation, other), given the previous | 0.62 (0.58, 0.59) |
+| ideal, ground or not, given the previous | 0.37 (0.38, 0.46) |
+| 1 byte per splat, gzip per tile | 0.99 (1.04, 1.34) |
+| 2 bits per splat (3 groups), gzip per tile | 0.71 (0.67, 0.72) |
+| run lengths (varint), gzip per tile | 0.77 |
+| 1 bit per splat (ground or not), gzip per tile | 0.39 (0.42, 0.56) |
+| 2 bits packed, not compressed | 2 |
+| 1 byte, not compressed | 8 |
+
+Cost for the nine-mesh archive (6,935,498 splats; 83,230,962 bytes as version 6):
+| way of storing the class | extra bytes | share of the archive |
+| --- | ---: | ---: |
+| nothing extra: take it from the version 5 opacity byte (keeps 16-byte records) | 0, but version 5 is 33 % larger than 6 | +33 % against version 6 |
+| 1 byte per splat next to the 12-byte records | 6.94 MB | +8.3 % |
+| 2 bits per splat packed | 1.73 MB | +2.1 % |
+| fine class, byte plane, gzip per tile | 0.86 MB | +1.0 % |
+| 3 groups, 2-bit plane, gzip per tile | 0.61 MB | +0.74 % |
+| ground or not, 1-bit plane, gzip per tile | 0.34 MB | +0.41 % |
+| 3 groups, ideal with context | 0.53 MB | +0.64 % |
+| class bits inside the 96-bit record (no extra bytes) | 0 | 0; colour error 1.59 -> 1.76 for 2 bits (position 12 bits), 1.82 for 3 bits (position 12 bits and height 4 cm), 1.93 (rotation 4 bits), 2.03 (colour 5 bits); PSNR 40.0 -> 38.3 to 39.1 dB; holes 0.07 -> 0.07 to 0.10 % |
+
+### Observations
+- A class plane compresses very well because classes come in runs along the raster order (the previous splat's class cuts the
+  entropy by about 30 %): about 0.4 to 1.0 bit per splat, 0.4 to 1.0 % of the archive. The expensive ways are the uncompressed
+  ones (2 % for two bits, 8 % for a byte).
+- Inside the record the class is free in bytes but costs picture quality: two bits cost 0.17 of 255 (11 % more colour error),
+  three bits 0.23 to 0.44, and the record is then fixed to 3 or 4 classes.
+- The class plane has to be a separate unit to be cheap: the browser decodes gzip natively (`DecompressionStream`), so a gzip-ed plane
+  inside the tile (a second MLT frame) is possible even though stars' Martin cannot read gzip tiles. A separate sidecar archive
+  would cost the plain tiles nothing.
+- How good the class is limits what a button can do: 75 % of the airborne splats are "several returns", which is vegetation but
+  also the edges of structures; MMS classes 3 to 5 are a different (finer) vegetation scale from the airborne rule; only 5 % are
+  "other", so bridges and buildings are not separated; at z15 only 47 % of the splats are 90 % pure. These matter more than the bytes.
+- In the ground class the data is thin (8.5 % of the z17 splats, 7.5 % of the mesh's splats for `@c2`): the bare-ground picture
+  has gaps under dense canopy (E019).
+
+### Decision
+Not a format change yet. The analysis says that the size penalty is small (about 0.4 to 1 % of the archive) if the class is a
+gzip-ed plane beside the 12-byte records, and 2 to 8 % if it is stored plainly. The open design question is where the plane lives (a
+second frame in the tile, or a sidecar archive) and what classes the build can really provide.
+
+## E021: the class plane (design and first slice)
+
+### Question
+E020 found that a class per splat is cheap if it is a compressed plane beside the records. Where does the plane live, what is in it, and
+does it make a real "hide vegetation" button and a false-colour view possible?
+
+### Decisions (documents/class-plane.md)
+- **A second frame in the same tile** (experimental tag 0xD1), not a sidecar archive: one request, the plane cannot get out of step with
+  the block, nothing more to host (hfu wants few Kawazu archives on stars), and a reader that does not know it skips it. The cost
+  is that every client downloads it (about 1 % of the archive).
+- **Class codes are the ASPRS LAS codes** (the palette hfu named: "the standard colours of LAS point classes"), plus codes from 64 up
+  for a build's own rules: 64 = vegetation inferred from several returns (the airborne files have no vegetation class).
+- **One byte per splat, gzip-ed** (E020: 0.99 bit per splat at z17 against 0.71 for a 2-bit plane): simpler, any of 256 codes, 0.25 %
+  of the archive more than the tightest form. Purity is not stored.
+- **Inflate on demand** in the browser (`DecompressionStream`), and the class is an instanced byte attribute on the GPU.
+- The block does not change (versions 5 and 6 both work); the plane's count must equal the block's, else it is ignored.
+
+### Built
+`src/class-plane.ts` (encode, header validation, decode with an injected inflate), `extractClassPlanes` / `wrapClassPlane` in
+`src/mlt-frame.ts`, 18 class slots in the voxel accumulator, `DORAYAKI_CLASS_PLANE=1` in `build:tileset`, planes joined in
+`merge:tilesets`, and in the demo: a "hide vegetation" checkbox and `?hide=` codes, a "colour: by class" select with a legend, a
+vivid palette (`demo/src/class-palette.ts`); the GPU skips hidden classes with a 128-bit mask and colours from a 32-slot palette.
+Tests (`test/class-plane.test.ts`): round trip with and without gzip, zero and one splat, short header, bad magic, version,
+compression, length mismatches (both ways, and a gzip plane whose inflated size is not the count), the plane found in either order beside
+an unknown frame, a tile without a plane, a truncated frame.
+
+### Measurements
+- Mesh 08OF4060 (MMS and airborne, version 6, 802,958 splats): 9,962,817 bytes with the plane against 9,846,006 without: **+116,811
+  bytes, +1.19 %** (1.16 bits per splat; E020 had predicted 0.4 to 1 % from the airborne-heavy 3-mesh mix, and this mesh has the finer MMS
+  vegetation classes).
+- At zoom 17.67 in the browser (four z17 tiles, 682,792 splats): the legend of the classes in view (shares of splats): canopy 62.9 %, high
+  vegetation 14.5 %, medium 8.6 %, ground 7.9 %, unclassified 4.9 %, low 1.2 %. With "colour by class" (zoom 15.96, one z15 tile): high
+  vegetation 35.4 %, canopy 32.0 %, medium 15.7 %, ground 11.2 %, low 3.6 %, unclassified 2.2 %.
+
+### Observations
+- Colour by class works as a false-colour view: ground orange, canopy teal, greens for the vegetation classes; the road shows as a
+  lime ribbon (class 3) and the loop bridge area stands out from the forest.
+- Hiding vegetation by the real class removes the forest and the **loop bridge with its road**: the bridge is classed as vegetation
+  (MMS classes 3 to 5 on the road's surroundings, and the airborne several-returns rule on the structure's edges), and the road's white
+  ribbon in the picture is the basemap showing through. The class quality limits the button, as E020 warned: the data has no
+  building or bridge class.
+- A plane costs 0.1 s per million splats to inflate (not measured separately) and does not change what is drawn until it is used.
+
+### Decision
+Keep as a first slice behind the flags and the controls. Open: how to get a better class for the airborne data (E020), whether the
+plane is built for the whole area and hosted, and the vivid-colour idea (correcting colours by class).

@@ -113,6 +113,10 @@ Other things checked, not used: `2019/ALB` covers meshes `08NE`, `NF`, `OE`,
 `OF`, `PE` (bathymetry). The 2019 MMS ground-and-structures data of zone 08
 is 1,795 zips, 1.56 TB in all.
 
+Ground only (E019): `file.las@c2` keeps the ground class. In the Virtual Shizuoka 2019 data class 2 is ground in both the airborne
+and the MMS files, so `npm run build:tileset -- "<mms.las>@c2,<lp.las>@c2" 8 kawazu-ground 17 16 15` gives a bare-earth tileset
+(mesh 08OF4060: 52,570 z17 splats and 0.81 MB in all, against 702,139 splats and 13.1 MB with everything).
+
 ## Merging tilesets built apart
 
 `scripts/merge-tilesets.ts` (`npm run merge:tilesets`) joins tilesets of

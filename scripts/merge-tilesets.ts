@@ -13,10 +13,12 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { gzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 
 import { decodeSurfelTileWithLevels } from "../demo/src/decode-tile.js";
 import { encodeDemoTile } from "../demo/src/demo-tile.js";
+import { decodeClassPlane, encodeClassPlane, readClassPlane } from "../src/class-plane.js";
+import { extractClassPlanes } from "../src/mlt-frame.js";
 import { PmtilesCompression, PmtilesTileType, writePmtiles } from "../src/pmtiles.js";
 import type { Splat } from "../src/surfel-block.js";
 import { tileLatitude, tileLongitude } from "../src/tile-geometry.js";
@@ -47,8 +49,19 @@ const perZoom: Record<number, { tiles: number; splats: number; bytes: number }> 
 for (const e of [...byAddress.values()].sort((a, b) => a.z - b.z || a.x - b.x || a.y - b.y)) {
   const splats: Splat[] = [];
   // A loop, not push(...array): spreading hundreds of thousands of arguments overflows the stack.
-  for (const d of e.from) for (const s of decodeSurfelTileWithLevels(new Uint8Array(readFileSync(`${ROOT}/${d}/${e.z}/${e.x}/${e.y}.mlt`))).splats) splats.push(s);
-  const data = encodeDemoTile(splats, [splats.length], process.env.DORAYAKI_BLOCK_VERSION === "6" ? 6 : undefined);
+  const classes: Uint8Array[] = [];
+  let everyTileHasClasses = true;
+  for (const d of e.from) {
+    const bytes = new Uint8Array(readFileSync(`${ROOT}/${d}/${e.z}/${e.x}/${e.y}.mlt`));
+    for (const s of decodeSurfelTileWithLevels(bytes).splats) splats.push(s);
+    // The class planes of the source tiles are joined in the same order as their splats; a missing one drops the plane.
+    const [plane] = extractClassPlanes(bytes);
+    if (plane) classes.push(await decodeClassPlane(readClassPlane(plane), (b) => new Uint8Array(gunzipSync(b)))); else everyTileHasClasses = false;
+  }
+  const classPlane = everyTileHasClasses && classes.length > 0
+    ? encodeClassPlane(Uint8Array.from(classes.flatMap((c) => [...c])), (b) => new Uint8Array(gzipSync(b, { level: 9 })))
+    : undefined;
+  const data = encodeDemoTile(splats, [splats.length], process.env.DORAYAKI_BLOCK_VERSION === "6" ? 6 : undefined, classPlane);
   const path = `${OUT}/${e.z}/${e.x}/${e.y}.mlt`;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, data);

@@ -11,6 +11,7 @@
  * is decoded Splat objects (see splat-instances.ts).
  */
 import type { Splat } from "../../src/surfel-block.js";
+import { classPaletteArray } from "./class-palette.js";
 import { cameraAxes, splatInstances, type SplatInstances } from "./splat-instances.js";
 
 const VERTEX_SHADER = `#version 300 es
@@ -21,8 +22,19 @@ uniform float u_min_radius; // metres; semi-axis floor when drawing a progressiv
 uniform float u_extent;     // factor on every semi-axis (1 = the 2-sigma ellipse); covers gaps between neighbours
 uniform vec3 u_light;       // local metric frame, normalized
 uniform vec3 u_right;       // camera right in the local metric frame, normalized
-uniform vec3 u_up;          // camera up in the local metric frame, normalized
+uniform vec3 u_up;
+uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colours as stored (no shading)
+uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
+uniform float u_has_class;  // 1: the tile has class codes (a_class)
+uniform float u_class_colour; // 1: colour by class instead of the stored colour
+uniform vec3 u_palette[32]; // colour of a class slot, see classSlotOf in class-palette.ts
+uint classIndex(uint code) { return code >= 64u ? 31u : min(code, 30u); }
+bool hidden(float cls) {
+  uint code = uint(cls + 0.5);
+  return u_has_class > 0.5 && code < 128u && ((u_hide_mask[code >> 5u] >> (code & 31u)) & 1u) == 1u;
+}          // camera up in the local metric frame, normalized
 in vec2 a_corner;           // quad corner in [-1, 1]^2
+in float a_class;           // class code of the splat (u_has_class says whether the tile has them)
 in vec3 a_position;         // x, y tile-local; z metres
 in vec3 a_axis_u;           // semi-axis vector along the major axis, metres
 in vec3 a_axis_v;           // semi-axis vector along the minor axis, metres
@@ -32,6 +44,7 @@ in vec4 a_color;
 out vec2 v_corner;
 out vec3 v_color;
 void main() {
+  if (hidden(a_class)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   vec3 centre = vec3(a_position.xy * u_tile_width, a_position.z);
   vec3 u = a_axis_u;
   vec3 v = a_axis_v;
@@ -40,28 +53,39 @@ void main() {
     float r = max(length(a_axis_u) * u_extent, u_min_radius);
     u = u_right * r;
     v = u_up * r;
-    shade = 0.8;
+    shade = mix(1.0, 0.8, u_shade);
   } else {
     float lu = max(length(u), 1e-9);
     float lv = max(length(v), 1e-9);
     u *= u_extent * max(1.0, u_min_radius / (lu * u_extent));
     v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
-    shade = 0.35 + 0.65 * abs(dot(normalize(a_normal), u_light));
+    shade = mix(1.0, 0.35 + 0.65 * abs(dot(normalize(a_normal), u_light)), u_shade);
   }
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
-  v_color = a_color.rgb * shade;
+  vec3 base = (u_class_colour > 0.5 && u_has_class > 0.5) ? u_palette[classIndex(uint(a_class + 0.5))] : a_color.rgb;
+  v_color = base * shade;
 }`;
 
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in vec2 v_corner;
 in vec3 v_color;
+uniform float u_soft;       // 1: Gaussian-feathered, blended pass (the soft look); 0: opaque
+uniform float u_falloff;    // exponent of the Gaussian falloff over the quad (soft pass)
 out vec4 fragColor;
 void main() {
-  if (dot(v_corner, v_corner) > 1.0) discard;
-  fragColor = vec4(v_color, 1.0); // opaque, so already premultiplied
+  float r2 = dot(v_corner, v_corner);
+  if (r2 > 1.0) discard;
+  if (u_soft > 0.5) {
+    // Gaussian weight of the distance from the centre (r2 = 1 at the quad's edge), premultiplied.
+    float a = 0.95 * exp(-u_falloff * r2);
+    if (a < 0.02) discard;
+    fragColor = vec4(v_color * a, a);
+  } else {
+    fragColor = vec4(v_color, 1.0); // opaque, so already premultiplied
+  }
 }`;
 
 /**
@@ -116,14 +140,26 @@ uniform float u_extent;
 uniform vec3 u_light;
 uniform vec3 u_right;
 uniform vec3 u_up;
+uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colours as stored (no shading)
+uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
+uniform float u_has_class;  // 1: the tile has class codes (a_class)
+uniform float u_class_colour; // 1: colour by class instead of the stored colour
+uniform vec3 u_palette[32]; // colour of a class slot, see classSlotOf in class-palette.ts
+uint classIndex(uint code) { return code >= 64u ? 31u : min(code, 30u); }
+bool hidden(float cls) {
+  uint code = uint(cls + 0.5);
+  return u_has_class > 0.5 && code < 128u && ((u_hide_mask[code >> 5u] >> (code & 31u)) & 1u) == 1u;
+}
 uniform float u_z_origin;   // metres, of the tile's block
 uniform float u_z_step;     // metres per z code
 in vec2 a_corner;
+in float a_class;           // class code of the splat (u_has_class says whether the tile has them)
 ${record}
 out vec2 v_corner;
 out vec3 v_color;
 const float QUAT_RANGE = 0.70710678118654752;
 void main() {
+  if (hidden(a_class)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
 ${decode}
   // Rotation: columns of the matrix of the unit quaternion (w, x, y, z).
   int largest = int(qb & 3u);
@@ -165,7 +201,7 @@ ${decode}
     float r = max(2.0 * sqrt(sa * sb) * u_extent, u_min_radius);
     u = u_right * r;
     v = u_up * r;
-    shade = 0.8;
+    shade = mix(1.0, 0.8, u_shade);
   } else {
     u = aa * 2.0 * sa;
     v = ab * 2.0 * sb;
@@ -173,16 +209,18 @@ ${decode}
     float lv = max(length(v), 1e-9);
     u *= u_extent * max(1.0, u_min_radius / (lu * u_extent));
     v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
-    shade = 0.35 + 0.65 * abs(dot(normalize(an), u_light));
+    shade = mix(1.0, 0.35 + 0.65 * abs(dot(normalize(an), u_light)), u_shade);
   }
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
-  v_color = rgb * shade;
+  vec3 base = (u_class_colour > 0.5 && u_has_class > 0.5) ? u_palette[classIndex(uint(a_class + 0.5))] : rgb;
+  v_color = base * shade;
 }`;
 }
 
 /** Light direction in the local metric frame (east, south, up): from the north-west, above. */
+const PALETTE = classPaletteArray();
 const LIGHT = normalize3(-0.4, -0.5, 0.75);
 
 export interface SurfelProgram {
@@ -194,6 +232,13 @@ export interface SurfelProgram {
   uLight: WebGLUniformLocation;
   uRight: WebGLUniformLocation;
   uUp: WebGLUniformLocation;
+  uSoft: WebGLUniformLocation;
+  uShade: WebGLUniformLocation;
+  uHideMask: WebGLUniformLocation;
+  uHasClass: WebGLUniformLocation;
+  uClassColour: WebGLUniformLocation;
+  uPalette: WebGLUniformLocation;
+  uFalloff: WebGLUniformLocation;
   /** Only in the program that decodes packed records. */
   uZOrigin?: WebGLUniformLocation;
   uZStep?: WebGLUniformLocation;
@@ -205,6 +250,8 @@ export interface SurfelBuffers {
   vao: WebGLVertexArrayObject;
   buffers: WebGLBuffer[];
   count: number;
+  /** The tile has per-splat class codes in the `a_class` attribute. */
+  hasClasses?: boolean;
   /** Set for packed records: the block's z origin and step, metres. */
   z?: { origin: number; step: number; scaleBase: number };
 }
@@ -228,7 +275,7 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
 }
 
 // Fixed attribute locations so the VAO does not depend on the program.
-const LOC = { corner: 0, position: 1, axisU: 2, axisV: 3, normal: 4, round: 5, color: 6, record: 1 } as const;
+const LOC = { corner: 0, position: 1, axisU: 2, axisV: 3, normal: 4, round: 5, color: 6, record: 1, cls: 7 } as const;
 
 /**
  * The drawing program: `"instances"` (float attributes, default), or `16` / `12` for the program that decodes records of
@@ -243,6 +290,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
   gl.attachShader(program, vs);
   gl.attachShader(program, fs);
   gl.bindAttribLocation(program, LOC.corner, "a_corner");
+  gl.bindAttribLocation(program, LOC.cls, "a_class");
   if (packed) {
     gl.bindAttribLocation(program, LOC.record, "a_rec");
   } else {
@@ -273,6 +321,13 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
     uLight: uniform("u_light"),
     uRight: uniform("u_right"),
     uUp: uniform("u_up"),
+    uSoft: uniform("u_soft"),
+    uShade: uniform("u_shade"),
+    uHideMask: uniform("u_hide_mask"),
+    uHasClass: uniform("u_has_class"),
+    uClassColour: uniform("u_class_colour"),
+    uPalette: uniform("u_palette"),
+    uFalloff: uniform("u_falloff"),
     ...(packed ? { uZOrigin: uniform("u_z_origin"), uZStep: uniform("u_z_step") } : {}),
     ...(kind === 12 ? { uScaleBase: uniform("u_scale_base") } : {}),
   };
@@ -281,7 +336,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
 /** Upload a block's 16-byte records as they are (PackedBlock in src/surfel-block.ts); draw them with a packed program. */
 export function uploadPacked(
   gl: WebGL2RenderingContext, records: Uint8Array, count: number, zOrigin: number, zStep: number,
-  recordBytes: 16 | 12 = 16, scaleBase = 0,
+  recordBytes: 16 | 12 = 16, scaleBase = 0, classes?: Uint8Array,
 ): SurfelBuffers {
   const vao = gl.createVertexArray();
   if (!vao) throw new Error("createVertexArray failed");
@@ -301,9 +356,10 @@ export function uploadPacked(
   gl.enableVertexAttribArray(LOC.record);
   gl.vertexAttribIPointer(LOC.record, recordBytes / 4, gl.UNSIGNED_INT, recordBytes, 0);
   gl.vertexAttribDivisor(LOC.record, 1);
+  if (classes) attachClasses(gl, vao, buffers, classes);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return { vao, buffers, count, z: { origin: zOrigin, step: zStep, scaleBase } };
+  return { vao, buffers, count, ...(classes ? { hasClasses: true } : {}), z: { origin: zOrigin, step: zStep, scaleBase } };
 }
 
 export function uploadSplats(gl: WebGL2RenderingContext, splats: readonly Splat[]): SurfelBuffers {
@@ -353,6 +409,20 @@ export interface DrawOptions {
   /** Factor on every semi-axis (default 1: the 2-sigma ellipse). */
   extent?: number;
   depthTest: boolean;
+  /**
+   * The soft look (E018): `"core"` draws opaque splats shrunk by `coreScale` (they carry the depth), `"soft"` draws
+   * Gaussian-feathered, alpha-blended splats grown by `softScale` on top, testing depth but not writing it. Default
+   * `"flat"`: opaque splats of the full extent.
+   */
+  pass?: "flat" | "core" | "soft";
+  /** Class codes whose splats are skipped (needs the tile's class codes, E021). */
+  hideClasses?: readonly number[];
+  /** Colour by class (palette in class-palette.ts) instead of the stored colour, for tiles that have class codes. */
+  classColour?: boolean;
+  /** Strength of the shading, 0..1 (default 1: the fixed Lambert light; 0: colours as stored). */
+  shade?: number;
+  /** Exponent of the Gaussian falloff over the quad in the soft pass (default 3.5 here; the layer uses 6.5, a Gaussian over 3.6 sigma across). */
+  falloff?: number;
 }
 
 export function drawSurfels(
@@ -372,17 +442,57 @@ export function drawSurfels(
     gl.uniform1f(p.uZStep, b.z?.step ?? 1);
   }
   if (p.uScaleBase) gl.uniform1f(p.uScaleBase, b.z?.scaleBase ?? 0);
+  const soft = opts.pass === "soft";
+  gl.uniform1f(p.uSoft, soft ? 1 : 0);
+  gl.uniform1f(p.uShade, opts.shade ?? 1);
+  const mask = new Uint32Array(4);
+  for (const code of opts.hideClasses ?? []) if (code >= 0 && code < 128) mask[code >> 5]! |= 1 << (code & 31);
+  gl.uniform4uiv(p.uHideMask, mask);
+  gl.uniform1f(p.uHasClass, b.hasClasses ? 1 : 0);
+  gl.uniform1f(p.uClassColour, opts.classColour ? 1 : 0);
+  gl.uniform3fv(p.uPalette, PALETTE);
+  gl.uniform1f(p.uFalloff, opts.falloff ?? 3.5);
   if (opts.depthTest) {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
-    gl.depthMask(true);
+    gl.depthMask(!soft);
   } else {
     gl.disable(gl.DEPTH_TEST);
   }
   gl.disable(gl.CULL_FACE); // splats are two-sided
+  const blendWas = gl.isEnabled(gl.BLEND);
+  if (soft) {
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); // premultiplied
+  }
   gl.bindVertexArray(b.vao);
   gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.min(b.count, opts.count ?? b.count));
   gl.bindVertexArray(null);
+  if (soft) {
+    if (!blendWas) gl.disable(gl.BLEND);
+    gl.depthMask(true);
+  }
+}
+
+function attachClasses(gl: WebGL2RenderingContext, vao: WebGLVertexArrayObject, buffers: WebGLBuffer[], classes: Uint8Array): void {
+  const buffer = gl.createBuffer();
+  if (!buffer) throw new Error("createBuffer failed");
+  buffers.push(buffer);
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, classes, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(LOC.cls);
+  gl.vertexAttribPointer(LOC.cls, 1, gl.UNSIGNED_BYTE, false, 0, 0);
+  gl.vertexAttribDivisor(LOC.cls, 1);
+  gl.bindVertexArray(null);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+}
+
+/** Give a tile that is already on the GPU its class codes (they arrive after the tile, once the class plane is inflated). */
+export function setBufferClasses(gl: WebGL2RenderingContext, b: SurfelBuffers, classes: Uint8Array): void {
+  if (classes.byteLength !== b.count) return; // a plane of another block: ignore
+  attachClasses(gl, b.vao, b.buffers, classes);
+  b.hasClasses = true;
 }
 
 export function deleteSurfelBuffers(gl: WebGL2RenderingContext, b: SurfelBuffers): void {

@@ -5,7 +5,7 @@ import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type ExpressionSpe
 
 import { decodeSurfelTileWithLevels, packSurfelTile } from "./decode-tile.js";
 import type { PackedBlock } from "../../src/surfel-block.js";
-import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
+import { tileLatitude, tileLongitude, tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
 import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
@@ -13,6 +13,10 @@ import { SurfelLayer } from "./surfel-layer.js";
 import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
 import { terrainLift } from "./terrain-lift.js";
+import { vegetationFlags } from "./vegetation.js";
+import { classStyle } from "./class-palette.js";
+import { decodeClassPlane, readClassPlane, VEGETATION_CLASSES, CLASS_DERIVED_CANOPY, CLASS_UNCLASSIFIED, type ClassPlane } from "../../src/class-plane.js";
+import { extractClassPlanes } from "../../src/mlt-frame.js";
 import { selectMixedTiles } from "./mixed-selection.js";
 import type { View } from "./camera.js";
 import type { LngLatBoundsArray } from "./tile-view.js";
@@ -49,6 +53,8 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-sc4": "tiles/kawazu-sc4/tilejson.json",
         "kawazu-v2": "tiles/kawazu-v2/tilejson.json",
         "kawazu-v6": "tiles/kawazu-v6/tilejson.json",
+        "kawazu-ground": "tiles/kawazu-ground/tilejson.json",
+        "kawazu-plane": "tiles/kawazu-plane/tilejson.json",
         "kawazu-s4": "tiles/kawazu-s4/tilejson.json",
         "kawazu-s10": "tiles/kawazu-s10/tilejson.json",
         "kawazu-s16": "tiles/kawazu-s16/tilejson.json",
@@ -82,6 +88,8 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-sc4": { terrain: "1", extent: "1.3" },
   "kawazu-v2": { terrain: "1", extent: "1.3" },
   "kawazu-v6": { terrain: "1", extent: "1.3" },
+  "kawazu-ground": { terrain: "1", extent: "1.3" },
+  "kawazu-plane": { terrain: "1", extent: "1.3" },
   "kawazu-s4": { terrain: "1", extent: "1.3" },
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
@@ -116,6 +124,11 @@ toggleEl.addEventListener("click", () => {
 
 const statusEl = document.getElementById("status") as HTMLElement;
 const depthEl = document.getElementById("depth") as HTMLInputElement;
+const hideVegEl = document.getElementById("hideveg") as HTMLInputElement;
+hideVegEl.checked = new URLSearchParams(location.search).get("hideveg") === "1";
+const colourEl = document.getElementById("colourmode") as HTMLSelectElement;
+colourEl.value = new URLSearchParams(location.search).get("colour") === "class" ? "class" : "stored";
+const legendEl = document.getElementById("legend") as HTMLDivElement;
 const setStatus = (text: string): void => {
   statusEl.textContent = text;
 };
@@ -162,6 +175,13 @@ interface LoadedTile {
   levels: number[];
   /** Until the layer has taken it: the block's 16-byte records (default), or float instance data (`?gpu=legacy`). */
   packed: PackedBlock | undefined;
+  /** Class codes handed over with the records: the guess of vegetation.ts (64 vegetation, 1 other) for a tile without a class plane. */
+  classes: Uint8Array | undefined;
+  /** The tile's class plane (src/class-plane.ts), still compressed; kept for later decoding. */
+  classPlane: ClassPlane | undefined;
+  /** Its decoded class codes, once decoded. */
+  classCodes?: Uint8Array;
+  classesRequested?: boolean;
   instances: SplatInstances | undefined;
 }
 
@@ -169,6 +189,9 @@ interface LoadedTile {
 const timings = { fetchMs: 0, decodeMs: 0 };
 /** Each set handed to the layer: when (ms since the page started), zoom, tiles, bytes (`dorayaki.deliveries`). */
 const deliveries: Array<{ ms: number; zoom: number; tiles: number; bytes: number }> = [];
+/** The vegetation guess (vegetation.ts): `?vegh=` metres above the local ground, `?vegcell=` cell metres, `?vegshape=0` ignores the shape. */
+const vegNumber = (name: string, fallback: number): number => { const v = Number(flag(name, tileset)); return v > 0 ? v : fallback; };
+const vegOptions = { minHeight: vegNumber("vegh", 2), cellMetres: vegNumber("vegcell", 4), roundOnly: flag("vegshape", tileset) !== "0" };
 async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   const t0 = performance.now();
   // Tiles listed from TileJSON bounds may not exist (204/404); those come back as null.
@@ -179,12 +202,20 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   if (flag("gpu", tileset) !== "legacy") {
     const packed = packSurfelTile(bytes); // no Splat objects: the records go to the GPU as they are
     timings.decodeMs += performance.now() - t1;
-    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, instances: undefined };
+    const [planeBody] = extractClassPlanes(bytes);
+    let classPlane: ClassPlane | undefined;
+    if (planeBody) {
+      const p = readClassPlane(planeBody);
+      if (p.count === packed.count) classPlane = { ...p, payload: p.payload.slice() }; // a copy: do not keep the whole tile alive
+    }
+    // Without a class plane, a guess from the splats stands in for the classes.
+    const classes = classPlane ? undefined : Uint8Array.from(vegetationFlags(packed, tileWidthMetres(tile), vegOptions), (f) => (f ? CLASS_DERIVED_CANOPY : CLASS_UNCLASSIFIED));
+    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, classes, classPlane, instances: undefined };
   }
   const decoded = decodeSurfelTileWithLevels(bytes);
   const instances = splatInstances(decoded.splats); // the Splat objects become garbage here
   timings.decodeMs += performance.now() - t1;
-  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, packed: undefined, instances };
+  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, packed: undefined, classes: undefined, classPlane: undefined, instances };
 }
 
 map.on("load", () => {
@@ -228,18 +259,34 @@ map.on("load", () => {
   // With terrain on, MapLibre's terrain at low zoom is coarser than the ground and lies above it in places, covering
   // the splats; raise them by a zoom-dependent amount (terrain-lift.ts). `?dz=` raises everything by dz metres (debug).
   const zoomLift = (): number => (terrain > 0 ? terrainLift(map.getZoom()) : 0);
+  // Class codes to hide: vegetation when the checkbox is on, plus `?hide=3,4,...`.
+  const extraHide = (flag("hide", tileset) ?? "").split(",").filter((c) => c.trim() !== "").map(Number).filter((c) => Number.isInteger(c) && c >= 0);
+  const hideCodes = (): number[] => [...(hideVegEl.checked ? VEGETATION_CLASSES : []), ...extraHide];
   const makeLayer = (): SurfelLayer => {
     const l = new SurfelLayer("surfels");
     if (lod > 0) l.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+    if (flag("look", tileset) === "soft") {
+      l.look = "soft"; // Gaussian-feathered splats (E018); `?softcore=`, `?softscale=`, `?softfalloff=` tune it
+      const num = (name: string, fallback: number): number => { const v = Number(flag(name, tileset)); return v > 0 ? v : fallback; };
+      l.coreScale = num("softcore", l.coreScale);
+      l.softScale = num("softscale", l.softScale);
+      l.softFalloff = num("softfalloff", l.softFalloff);
+    }
+    const shade = flag("shade", tileset);
+    if (shade !== undefined && shade !== null && shade !== "" && Number.isFinite(Number(shade))) l.shade = Math.min(1, Math.max(0, Number(shade))); // 0: no shading
     if (mixed) l.drawAllTiles = true; // the streamer chose tiles of several zooms by distance
     if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
     l.setZOffset(dz + zoomLift());
     l.setDepthTest(depthEl.checked);
+    l.hideClasses = hideCodes();
+    l.classColour = colourEl.value === "class";
     map.addLayer(l, "tile-outline"); // keep the 2D tile outlines visible on top
     return l;
   };
   let layer = makeLayer();
   depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
+  hideVegEl.addEventListener("change", () => { layer.setHideClasses(hideCodes()); void ensureClasses(); });
+  colourEl.addEventListener("change", () => { layer.setClassColour(colourEl.value === "class"); void ensureClasses(); });
 
   // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
   // as a whole when it is complete (documents/demo-and-site.md).
@@ -250,6 +297,34 @@ map.on("load", () => {
     return { lng: c.lng, lat: c.lat, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), width: canvas.clientWidth, height: canvas.clientHeight, centreZ: map.queryTerrainElevation(c) ?? 0 };
   };
   let loaded: LoadedTile[] = [];
+  // Class codes: the hide checkbox hides vegetation (plus `?hide=3,4,...` codes), the select colours by class. The class planes of the
+  // tiles are inflated only when one of them is used (a tile without a plane has the guess of vegetation.ts instead).
+  const gunzip = async (bytes: Uint8Array): Promise<Uint8Array> =>
+    new Uint8Array(await new Response(new Blob([new Uint8Array(bytes)]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+  const classesNeeded = (): boolean => hideCodes().length > 0 || colourEl.value === "class";
+  const updateLegend = (): void => {
+    if (colourEl.value !== "class" && !hideVegEl.checked) { legendEl.textContent = ""; return; }
+    const counts = new Map<number, number>();
+    let total = 0;
+    for (const t of loaded) for (const c of t.classCodes ?? []) { counts.set(c, (counts.get(c) ?? 0) + 1); total++; }
+    if (total === 0) { legendEl.textContent = loaded.some((t) => t.classPlane) ? "classes loading…" : "no class plane in these tiles (a guess is used)"; return; }
+    legendEl.innerHTML = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([code, n]) => {
+      const st = classStyle(code);
+      return `<span style="display:inline-block;width:10px;height:10px;background:rgb(${st.rgb.join(",")});border:1px solid #888"></span> ${st.name} ${(100 * n / total).toFixed(1)} %`;
+    }).join("<br />");
+  };
+  async function ensureClasses(): Promise<void> {
+    if (!classesNeeded()) return;
+    for (const t of loaded) {
+      if (!t.classPlane || t.classesRequested) continue;
+      t.classesRequested = true;
+      try {
+        t.classCodes = await decodeClassPlane(t.classPlane, gunzip);
+        layer.setTileClasses(t.tile, t.classCodes);
+      } catch (e) { console.warn(`class plane of ${t.tile.z}/${t.tile.x}/${t.tile.y}:`, e); }
+    }
+    updateLegend();
+  }
   let summary = "loading…";
   const streamer = new TileStreamer<LoadedTile>({
     candidates: tiles,
@@ -262,10 +337,11 @@ map.on("load", () => {
     onReady: (set, zoom) => {
       deliveries.push({ ms: Math.round(performance.now()), zoom, tiles: set.length, bytes: set.reduce((n, x) => n + x.data.byteLength, 0) });
       loaded = set.map((x) => x.data);
-      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
-      for (const t of loaded) { t.instances = undefined; t.packed = undefined; } // the layer owns the data now; do not keep a second copy
+      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.classes ? { classes: t.classes } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
+      for (const t of loaded) { t.instances = undefined; t.packed = undefined; t.classes = undefined; } // the layer owns the data now; do not keep a second copy
       const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.count, 0);
+      void ensureClasses();
       summary = `${loaded.length} tile(s) of ${tileset} at z${zoom}: ${bytes} bytes, ${count} surfels.`;
       setStatus(summary);
     },

@@ -19,6 +19,7 @@ import {
   deleteSurfelProgram,
   drawSurfels,
   uploadInstances,
+  setBufferClasses,
   uploadPacked,
   uploadSplats,
   type SurfelBuffers,
@@ -35,6 +36,8 @@ export interface LayerTile {
   instances?: SplatInstances;
   /** Or the block's 16-byte records, uploaded as they are and decoded in the vertex shader (the smallest form on the GPU). */
   packed?: Pick<PackedBlock, "count" | "records" | "zOrigin" | "zStep" | "recordBytes" | "scaleLog2Min">;
+  /** Per-splat class codes for packed tiles (src/class-plane.ts), uploaded as one byte per splat; more can arrive later with setTileClasses (E021). */
+  classes?: Uint8Array;
   /** Level table; omitted means one level holding every surfel. */
   levels?: readonly number[];
 }
@@ -76,6 +79,23 @@ export class SurfelLayer implements CustomLayerInterface {
    * mixed-selection.ts). Off: draw the tiles of the one zoom picked from the map zoom.
    */
   drawAllTiles = false;
+  /**
+   * `"soft"` (`?look=soft`, E018): every splat is drawn twice, an opaque core that carries the depth, then a larger
+   * Gaussian-feathered blended splat on top, so neighbours melt into each other. `"flat"`: opaque ellipses.
+   */
+  look: "flat" | "soft" = "flat";
+  /** Soft look: the core's scale and the feathered splat's scale, as factors on the semi-axes. */
+  coreScale = 1;
+  softScale = 1.8;
+  /** Soft look: exponent of the Gaussian falloff over the feathered quad (6.5 = a Gaussian over 3.6 sigma across). */
+  softFalloff = 6.5;
+  /** Strength of the shading, 0..1 (`?shade=`; 0 draws the colours as stored, like a 3D Gaussian splat). */
+  shade = 1;
+  /** Class codes whose splats are not drawn (the demo's checkbox, `?hide=`; E021). */
+  hideClasses: readonly number[] = [];
+  /** Colour by class (`?colour=class`): the palette of class-palette.ts instead of the stored colours. */
+  classColour = false;
+  private pendingClasses = new Map<string, { tile: TileAddress; codes: Uint8Array }>();
   /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
   extent = 1;
 
@@ -118,7 +138,7 @@ export class SurfelLayer implements CustomLayerInterface {
     const t0 = performance.now();
     const address = (t: TileAddress): string => `${t.z}/${t.x}/${t.y}`;
     const have = new Map(this.tiles.map((t) => [address(t.tile), t]));
-    const states = next.map(({ tile, splats, instances, packed, levels }): TileState => {
+    const states = next.map(({ tile, splats, instances, packed, classes, levels }): TileState => {
       const kept = have.get(address(tile));
       if (kept) { have.delete(address(tile)); return kept; }
       const widthMetres = tileWidthMetres(tile);
@@ -127,7 +147,7 @@ export class SurfelLayer implements CustomLayerInterface {
       // The decoded splats are only needed for the upload; the state keeps none.
       const count = packed ? packed.count : instances ? instances.count : (splats ?? []).length;
       const buffers = packed
-        ? uploadPacked(gl, packed.records, packed.count, packed.zOrigin, packed.zStep, packed.recordBytes, packed.scaleLog2Min)
+        ? uploadPacked(gl, packed.records, packed.count, packed.zOrigin, packed.zStep, packed.recordBytes, packed.scaleLog2Min, classes)
         : instances ? uploadInstances(gl, instances) : uploadSplats(gl, splats ?? []);
       return { tile, splats: [], levels: levels ?? [count], widthMetres, model, buffers, packed: packed ? packed.recordBytes : 0 };
     });
@@ -135,6 +155,16 @@ export class SurfelLayer implements CustomLayerInterface {
     this.tiles = states;
     gl.finish(); // include the driver's copy in the measurement
     this.uploadMs = (this.uploadMs ?? 0) + (performance.now() - t0);
+  }
+
+  private applyPendingClasses(gl: WebGL2RenderingContext): void {
+    if (this.pendingClasses.size === 0) return;
+    const wanted = this.pendingClasses;
+    this.pendingClasses = new Map();
+    for (const t of this.tiles) {
+      const hit = wanted.get(`${t.tile.z}/${t.tile.x}/${t.tile.y}`);
+      if (hit && t.buffers) setBufferClasses(gl, t.buffers, hit.codes);
+    }
   }
 
   onAdd(map: MapLibreMap, gl: WebGL2RenderingContext): void {
@@ -152,28 +182,38 @@ export class SurfelLayer implements CustomLayerInterface {
   render(gl: WebGL2RenderingContext, options: CustomRenderMethodInput): void {
     if (!this.program || !this.packedProgram || !this.packed12Program || !this.map) return;
     this.applyPending(gl);
+    this.applyPendingClasses(gl);
     const t0 = performance.now();
     const displayZoom = this.zoomOverride ?? this.map.getZoom();
     if (this.tiles.length === 0) return;
     const zoom = selectZoom(this.tiles.map((t) => t.tile.z), displayZoom);
     let drawn = 0, count = 0;
     let plan: TileDraw = { count: 0, levelsDrawn: 1, minRadius: 0 };
-    for (const t of this.tiles) {
-      if (!t.buffers || (!this.drawAllTiles && t.tile.z !== zoom)) continue;
-      plan = drawPlan(t, displayZoom);
-      const matrix = Float32Array.from(multiplyMat4(options.defaultProjectionData.mainMatrix, t.model));
-      const program = t.packed === 16 ? this.packedProgram : t.packed === 12 ? this.packed12Program : this.program;
-      if (!program) continue;
-      drawSurfels(gl, program, t.buffers, {
-        matrix,
-        tileWidthMetres: t.widthMetres,
-        count: plan.count,
-        minRadius: plan.minRadius,
-        extent: this.extent,
-        depthTest: this.depthTest,
-      });
-      drawn++;
-      count += plan.count;
+    const passes: Array<{ pass: "flat" | "core" | "soft"; scale: number }> = this.look === "soft"
+      ? [{ pass: "core", scale: this.coreScale }, { pass: "soft", scale: this.softScale }]
+      : [{ pass: "flat", scale: 1 }];
+    for (const [pi, { pass, scale }] of passes.entries()) {
+      for (const t of this.tiles) {
+        if (!t.buffers || (!this.drawAllTiles && t.tile.z !== zoom)) continue;
+        plan = drawPlan(t, displayZoom);
+        const matrix = Float32Array.from(multiplyMat4(options.defaultProjectionData.mainMatrix, t.model));
+        const program = t.packed === 16 ? this.packedProgram : t.packed === 12 ? this.packed12Program : this.program;
+        if (!program) continue;
+        drawSurfels(gl, program, t.buffers, {
+          matrix,
+          tileWidthMetres: t.widthMetres,
+          count: plan.count,
+          minRadius: plan.minRadius,
+          extent: this.extent * scale,
+          depthTest: this.depthTest,
+          pass,
+          falloff: this.softFalloff,
+          shade: this.shade,
+          hideClasses: this.hideClasses,
+          classColour: this.classColour,
+        });
+        if (pi === 0) { drawn++; count += plan.count; }
+      }
     }
     this.lastDraw = { zoom, tiles: drawn, surfels: count, levelsDrawn: plan.levelsDrawn, minRadius: plan.minRadius };
     this.lastRenderMs = performance.now() - t0;
@@ -200,6 +240,22 @@ export class SurfelLayer implements CustomLayerInterface {
       t.model = metricToMercatorMatrix(t.tile, t.widthMetres);
       t.model[14] = metres * t.model[10]!; // z translation in Mercator units: s metres
     }
+    this.map?.triggerRepaint();
+  }
+
+  /** Give a tile that is already in the layer its class codes (one byte per splat); the upload happens in the next frame. */
+  setTileClasses(tile: TileAddress, codes: Uint8Array): void {
+    this.pendingClasses.set(`${tile.z}/${tile.x}/${tile.y}`, { tile, codes });
+    this.map?.triggerRepaint();
+  }
+
+  setHideClasses(codes: readonly number[]): void {
+    this.hideClasses = codes;
+    this.map?.triggerRepaint();
+  }
+
+  setClassColour(on: boolean): void {
+    this.classColour = on;
     this.map?.triggerRepaint();
   }
 

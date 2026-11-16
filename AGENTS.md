@@ -216,6 +216,7 @@ npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
 npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
 npm run measure:encoding -- <tileset dir> <zoom>   # E016: entropy per field, gzip/brotli of the block as stored and rearranged
 npm run measure:precision -- <tileset dir> <zoom>  # E016: which precision reductions are visually free (software renderer)
+DORAYAKI_CLASS_PLANE=1 npm run build:tileset -- ...   # also write a class plane (E021); merge:tilesets joins the planes
 DORAYAKI_BLOCK_VERSION=6 npm run build:tileset -- ...   # write version 6 blocks (12-byte records); default is version 5
 npm run measure:quality -- <tileset dir> <ref zoom> <cand zoom|mixed> [<cand dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]  # E012: software-render both from fixed cameras, print holes/colour/depth differences, optional PNGs
 npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
@@ -230,7 +231,8 @@ Current repository structure:
 ```text
 src/surfel-block.ts          Surfel Block encoder/decoder (v5: 16-byte quantized splats as byte planes; reads v4)
 src/splat.ts                 splat geometry: rotations, disc <-> splat conversions
-src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
+src/mlt-frame.ts             experimental MLT frame wrapper (tags 0xD0 surfel block, 0xD1 class plane)
+src/class-plane.ts           class plane: one class code per splat beside the block (documents/class-plane.md)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/tiling.ts                centre-ownership split of a tile block into tiles
 src/progressive.ts           nested refinement order for maxzoom tiles (v3 level table)
