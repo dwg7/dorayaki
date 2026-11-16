@@ -1079,3 +1079,56 @@ Kept behind `?mixed=1`, not the default: the byte cost at ordinary views is high
 a byte budget (the selector knows tile counts, not sizes) is not designed. Next questions:
 a byte-aware cap, and per-area maximum zoom (B-1), which this selector already handles
 (a finer tile is used only where it exists).
+
+## E016: where the bytes of a tile go, and which precision is free (in progress)
+
+### Question
+Tiles are 16 bytes per splat (98.8 MB for the 6.17 million z17 splats of the Kawazu archive). What can a better
+encoding save, losslessly and with which precision reductions?
+
+### Method
+`npm run measure:encoding -- <dir> <zoom>`: per field, zero-order entropy (bits per splat, per tile; an adaptive entropy
+coder would approach it) of the stored value and of simple transforms; gzip and brotli of the block as stored and with the
+fields rearranged. `npm run measure:precision -- <dir> <zoom>`: requantize one field at a time, render original and
+variant from three cameras with the software renderer (E012), compare (colour error, PSNR, holes; block 4; worst of the
+views). The tiles are stored in raster order (99.5 % of neighbours in row-then-column order).
+
+### Measurements: bits per splat (Kawazu factor-10 archive, z17, 6,172,195 splats)
+| field | stored | ideal after a transform |
+| --- | ---: | ---: |
+| position x, y (32) | 32 | row delta 1.2 + column delta 6.5 + sub-cell 7.0 + 7.0 |
+| height (16) | 16 | delta to previous 7.9 |
+| scales (24) | 24 | x 5.3, y - x 5.8, z - x 6.1 |
+| rotation (24) | 24 | 0.0 + 6.3 + 6.1 + 6.0 |
+| colour (24) | 24 | r 6.8, g - r 4.8, b - r 5.8 |
+| alpha (8) | 8 | 0 (always 242) |
+| total | 128 (101.4 as stored bytes) | **82.3** |
+
+gzip: 10.95 bytes per splat as stored (31 % less than 16), 10.50 rearranged (34 % less); brotli quality 9: 11.4 and 10.9.
+
+Precision reductions (mesh 08OF4060, z17, 702,139 splats; colour error in 0-255, worst of three views):
+| change | bits saved | colour error | PSNR dB |
+| --- | ---: | ---: | ---: |
+| position x, y 12 bits (from 16) | 8 | 1.0 | 41.4 |
+| position 11 / 10 bits | 10 / 12 | 1.6 / 2.6 | 38.7 / 35.4 |
+| height step 2 / 5 / 10 cm (from 4 mm) | 2.3 / 3.6 / 4.6 | 0.4 / 0.8 / 1.3 | 46.8 / 42.8 / 39.9 |
+| scale 6 / 4 / 3 steps per octave (from 10) | 2.2 / 4.0 / 5.2 | 0.7 / 1.0 / 1.3 | 43.7 / 41.7 / 40.2 |
+| rotation 5 / 4 / 3 bits per component (from 7) | 6 / 9 / 12 | 0.8 / 1.4 / 2.3 | 43.4 / 40.0 / 36.3 |
+| colour 6 / 5 / 4 bits per channel (from 8) | 6 / 9 / 12 | 0.6 / 1.3 / 2.6 | 49.1 / 44.0 / 38.0 |
+No change produced more than 0.23 % holes.
+
+### Observations
+- The data is mostly forest: scale, rotation and colour carry 5.3 to 6.3 bits each per field and are close to noise, so
+  lossless modelling gains little (101 -> 82 bits at best, and gzip gets about the same).
+- Raster order makes the cell gap small: the stored row and column cost 7.7 bits after deltas, and a single gap in raster
+  order (not measured) should cost about 2.
+- Together, position 12 bits (-8), height 2 cm (-2.3), scale 6 steps (-2.2), rotation 5 bits (-6), colour 6 bits (-6) save about
+  24 bits (a 96-bit, 12-byte record), if the errors add up like the worst single ones (not measured together).
+- gzip is the only general compressor the browser decodes natively (DecompressionStream), and stars' Martin cannot read gzip
+  MLT tiles (kawazu-demo.md), so the 31 to 34 % of gzip is not available yet.
+- The alpha byte is constant (242) and the renderer ignores it. Class and return data in the LAS files: airborne LP has
+  class 1 (unclassified, 90 %) and 2 (ground, 10 %), return numbers 1 to 5; MMS has 2 (ground 14 %), 3, 4, 5 (vegetation 86 %).
+
+### Decision
+Open. Not yet: a combined run of the reductions, the format change itself, the alpha question (hfu's idea: vegetation more
+transparent, which would use the alpha byte instead of dropping it).
