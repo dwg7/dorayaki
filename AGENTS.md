@@ -214,6 +214,7 @@ npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size t
 npm run measure:omission  # E002: omission strategies on the Numazu data
 npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
 npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
+npm run measure:quality -- <tileset dir> <ref zoom> <cand zoom> [<cand dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]  # E012: software-render both from fixed cameras, print holes/colour/depth differences, optional PNGs
 npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
 npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOUR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=gzip gzips PMTiles tiles (default raw; Martin 1.14 cannot read gzip MLT tiles)
 npm run merge:tilesets -- <name> <dir name> [<dir name> ...]  # merge tilesets of demo/tiles/<dir>/ (tiles with one address are concatenated)
@@ -230,7 +231,7 @@ src/mlt-frame.ts             experimental MLT frame wrapper (tag 0xD0)
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/tiling.ts                centre-ownership split of a tile block into tiles
 src/progressive.ts           nested refinement order for maxzoom tiles (v3 level table)
-src/pmtiles.ts               minimal PMTiles v3 writer (no leaf directories)
+src/pmtiles.ts               minimal PMTiles v3 writer (leaf directories when the root exceeds 16 KiB; archive built in memory)
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/fixtures/overhang.ts     deterministic overhang fixture generator
@@ -268,6 +269,9 @@ scripts/measure-codec.ts     codec timing in Node
 scripts/measure-coarse.ts    E003 coarse Gaussian measurements
 scripts/measure-stream.ts    streaming voxelisation of a LAS file (chunked read)
 scripts/build-tileset.ts     streaming tileset builder for a LAS file of any size (one level per tile)
+demo/src/cpu-render.ts       software renderer (Node) for measurement: same camera model as MapLibre, flat colour
+demo/src/image-metrics.ts    compare two renderings: holes, extra, colour error, depth difference
+scripts/measure-quality.ts   E012 quality comparison between tile zooms or tilesets
 scripts/measure-adaptive.ts  E005 splat counts for a grid of merge limits
 scripts/merge-tilesets.ts    merge tilesets built apart (one per mesh) into one
 ```

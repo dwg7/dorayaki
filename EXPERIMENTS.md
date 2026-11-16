@@ -892,3 +892,55 @@ maxzoom (`DORAYAKI_ADAPTIVE_SPARSE_SCALE=10`). Prefecture scale at 103 B/m2: abo
   symptom were not examined.
 - Zooms below 14: below z15 the demo draws the z15 tiles (four of them) at any zoom.
 - GPU memory was estimated (56 bytes per splat, about 150 MB at z17), not measured.
+
+## E012: a render-based measure of what coarser tiles lose
+
+### Question
+Every lossy choice (the per-zoom threshold factor, the sparse rule, a lower maxzoom) was
+judged by eye. Can the difference between two tile sets, seen from a fixed camera, be
+measured in Node without a browser?
+
+### Method
+`demo/src/cpu-render.ts` draws the splats of a set of tiles into an 800 x 600 image with a
+depth buffer, from a map view (lng, lat, zoom, bearing, pitch) with MapLibre's camera model.
+It is a proxy: flat colour, no lighting, no opacity. `demo/src/image-metrics.ts` compares a
+reference image with a candidate: `holes` (reference pixels the candidate leaves empty),
+`extra` (the opposite), colour error (`mae`, `psnr`) and depth difference over pixels both
+cover. With `block` 4 both images are averaged over 4 x 4 pixels first, which ignores
+pixel-level texture and compares the look at a coarser scale. `npm run measure:quality`
+runs it. Tests: `test/cpu-render.test.ts` (a plane's colour and depth, identical images,
+holes, colour and depth differences).
+
+Here: mesh 08OF4060 built with threshold factors 4, 10 and 16 (`kawazu-s4`, `-s10`, `-s16`),
+reference the z17 tiles (identical in the three builds), candidate their z16 or z15 tiles,
+three views (the showcase view, z18.5 pitch 60, and a top view at z17.5). Time: about 3 s
+per run.
+
+### Measurements (view 1, the showcase view; block 4)
+
+| candidate | splats | holes | mae (0-255) | psnr dB | depth median (m) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| factor 4, z16 | 198,878 | 0.35 % | 3.5 | 33.0 | 0.58 |
+| factor 10, z16 | 102,341 | 0.62 % | 4.6 | 31.2 | 0.87 |
+| factor 16, z16 | 76,969 | 0.81 % | 5.1 | 30.5 | 0.97 |
+| factor 4, z15 | 48,452 | 0.80 % | 5.4 | 29.6 | 1.05 |
+| factor 10, z15 | 15,854 | 2.39 % | 7.4 | 27.3 | 1.57 |
+| factor 16, z15 | 10,405 | 4.18 % | 8.5 | 26.4 | 2.10 |
+
+The other two views order the candidates the same way. At block 1 (pixel level) the
+errors are larger (mae 7.6 to 13.5) and the order is the same.
+
+### Observations
+- The measure ranks the candidates as expected: more merging, higher error; z15 worse than
+  z16. It separates what E011 judged "the same by eye": factor 10 at z16 costs about one
+  grey level of mean error and 0.3 points of holes against factor 4, for half the splats.
+- The reference is the finest tiles built (49 cm cells, merged), not the point cloud, so this
+  measures the loss of going coarser in the pyramid, not the loss against the data.
+- depthP95 (8 to 19 m) is dominated by canopy, where the two sets see different layers; use
+  the median.
+- Not yet checked: a threshold on these numbers that matches what a viewer calls
+  "visibly different" (the images agree with the eye at factor 4 to 10, not tested beyond).
+
+### Decision
+Keep. It is the tool for B-2 to B-4 (sparse rule at z17, encoding changes that quantize more,
+per-area maxzoom): change one thing, render, read the table.

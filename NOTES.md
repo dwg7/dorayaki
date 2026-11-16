@@ -688,3 +688,30 @@ with `curl -sI -H 'Origin: https://dwg7.unopengis.org' <tile>` and bump `?v=`.
 (110,972,600 B, SHA-256 `90afb84f...`, matched on the host). Tiles 15/29030/13002 and
 17/116123/52009 returned 200 with the Pages origin; the first is byte-identical to the
 local file. The TileJSON URL is versioned `?v=20261117` (new edge-cache key).
+
+## 2026-11-16: PMTiles writer gets leaf directories
+
+The writer used to throw when the root directory did not fit in the first 16 KiB. It
+now moves entries into equal leaf directories (starting at 4,096 entries, growing by 20 %
+until the root fits); small archives are byte-identical to before. A test writes 40,001
+tiles (uncompressed and gzip directories) and reads samples back with the reference
+`pmtiles` reader. Not tried: stars' Martin reading such an archive. The writer still builds
+the whole archive in one `Uint8Array`, so an archive of tens of gigabytes needs a
+streaming writer (found while doing this; not done).
+
+## 2026-11-16: white holes in the data at low zoom with terrain (zoom 12.7)
+
+Seen by hfu at zoom 12.7 on the Pages site: the Kawazu data had white patches. Terrain off: no
+patches (zoom 12.7 and 14.4). Cause: MapLibre builds the terrain from DEM tiles of about the map's
+zoom; at zoom 12.7 the terrain differs from that at zoom 16.6 by -11.7 to +13.7 m (64 points, median
++1.0 m), at 14.5 by -2.3 to +2.7 m (`map.queryTerrainElevation`), so it lies above the splats (which
+sit 2 m below the fine ground) in places and hides them.
+
+Tried, at zoom 12.7, with terrain on: splats lowered by 12 m and by 40 m: *more* white (my first
+change had the sign wrong; the terrain is above the splats, so lowering them hides more). Splats
+raised by 12 m: one small hole left; by 22 m: a few specks. The demo now raises the splats by
+`terrainLift(zoom)` = 9 m per zoom level below 15, capped at 40 m (20.7 m at 12.7; 31.5 m at 11.5;
+none at 15 or above), set on every zoom event when terrain is on (`demo/src/terrain-lift.ts`).
+Looked at zoom 14 and 11.5 (no holes at 14); the slope and cap are tuned by eye on this one area, and
+the 40 m cap is an assumption. A different region needs its own check. Raising the data makes it hover
+over the basemap by up to 20 to 30 m at zoom 12 (a pixel there is about 25 m).
