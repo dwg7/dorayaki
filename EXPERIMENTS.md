@@ -1404,3 +1404,10 @@ an unknown frame, a tile without a plane, a truncated frame.
 ### Decision
 Keep as a first slice behind the flags and the controls. Open: how to get a better class for the airborne data (E020), whether the
 plane is built for the whole area and hosted, and the vivid-colour idea (correcting colours by class).
+
+### E021 follow-up: the whole area with class planes (2026-11-17)
+
+Nine meshes, version 6, `DORAYAKI_CLASS_PLANE=1` (after the review fixes): 84,036,082 bytes against 83,230,961 without planes (+805,121 bytes, +0.97 %);
+all 46 tiles have one plane with the block's count; the planes are 804,972 bytes (0.93 bits per splat; E020 predicted 0.4 to 1 % of the archive from three
+meshes); the archive reads back byte-identical. Classes of the 6,935,498 splats: 64 (several returns) 78.6 %, ground 8.4 %, unclassified 6.0 %, high
+vegetation 3.7 %, medium 2.9 %, low 0.5 %. Not hosted: see documents/kawazu-demo.md.

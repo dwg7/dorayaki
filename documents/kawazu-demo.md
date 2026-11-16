@@ -53,6 +53,16 @@ The archive's centre (the demo's default view) comes from the first tileset give
 `kawazu-m08OF4060` (the loop bridge) first, or the view opens about 300 m north. The first upload of this archive had the
 mesh `08OF4050` first and was replaced the same day by a rewrite with the centre set back (the tile files are unchanged).
 
+## Version 6 with class planes (built 2026-11-17, not hosted yet)
+
+The same content with a class plane in every tile ([class-plane.md](class-plane.md), E021): `demo/tiles/dorayaki-kawazu-cls6.pmtiles`,
+84,036,082 bytes (SHA-256 `bc5193b0...`), 0.97 % more than the hosted 83,230,961 bytes. 46 of 46 tiles carry a plane whose count equals the block's
+(6,935,498 splats; the planes are 804,972 bytes, 0.93 bits per splat: z15 12,507, z16 79,520, z17 712,945), and the archive's 46 tiles are
+byte-identical to the files (reference `pmtiles` reader). The centre is the loop bridge (08OF4060 listed first in the merge). Classes of the splats of the
+area: canopy rule (code 64) 78.6 %, ground 8.4 %, unclassified 6.0 %, high vegetation 3.7 %, medium 2.9 %, low 0.5 %. Built with
+`DORAYAKI_CLASS_PLANE=1 DORAYAKI_BLOCK_VERSION=6` and the recipe below (nine builds 6 min 40 s, merge a few seconds). Replacing the hosted archive
+is the upload procedure under "Hosting on stars" with a new `?v=`.
+
 ## Recipe
 
 Each mesh is built alone, because the voxel accumulators need about 100 bytes per
