@@ -1218,3 +1218,31 @@ the quantization.
 ### Decision
 Version 6 is kept opt-in. The hosted Kawazu archive stays version 5 until hfu decides to replace it (a build
 and upload as before; the TileJSON version parameter must change).
+
+## E018: a softer, more Gaussian-splat-like look (`?look=soft`)
+
+### Question
+Splats are drawn as flat, opaque, hard-edged ellipses. Can they be drawn so that they look like Gaussian splats (soft
+overlapping blobs), without sorting millions of splats per frame?
+
+### Method
+Two passes per frame over the same tiles (demo/src/surfel-layer.ts, gpu-surfels.ts): first an opaque pass of splats shrunk
+by `coreScale` (default 0.8) that writes depth, then a pass of splats grown by `softScale` (default 1.4) with a Gaussian
+falloff, `0.95 * exp(-falloff * r2)` over the quad (r2 = 1 at its edge), premultiplied alpha blending, depth test against
+the cores, no depth write. Splats overlap their neighbours with soft edges, and nothing is sorted: the order dependence is
+confined to the feathered rims. `?softcore=`, `?softscale=`, `?softfalloff=` change the three numbers. The default look is
+unchanged (one opaque pass).
+
+### Observations (looked at, one browser, Kawazu archive, zoom 18.5, bearing -30, pitch 60)
+- Defaults (0.8, 1.4, 3.5): edges between splats melt into each other; the picture is slightly softer than the flat one and
+  otherwise the same. The difference is small.
+- 0.5, 2, 7: foliage becomes a soft, painterly texture while the bridge and the road stay legible: much closer to the look of
+  Gaussian splat demos. But where ground splats are sparse, the shrunken cores leave gaps and the feathered splats over the
+  basemap show as a regular pattern of grey dots (lower left of the picture).
+- Cost not measured (two draw calls per tile instead of one; at 1.6 million splats the render time reading was 0).
+- Shading is still the fixed two-sided Lambert of the flat look; 3D Gaussian splatting has none (colours are baked), so a
+  flatter, unshaded variant is a next knob. Not tried.
+- Not done: a sorted, depth-correct blend (true splat compositing), which would need sorting per frame.
+
+### Decision
+Open: hfu to judge by eye (`?fixture=kawazu-stars&look=soft` locally, and with the three tuning flags).

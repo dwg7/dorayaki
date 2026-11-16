@@ -231,6 +231,13 @@ map.on("load", () => {
   const makeLayer = (): SurfelLayer => {
     const l = new SurfelLayer("surfels");
     if (lod > 0) l.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+    if (flag("look", tileset) === "soft") {
+      l.look = "soft"; // Gaussian-feathered splats (E018); `?softcore=`, `?softscale=`, `?softfalloff=` tune it
+      const num = (name: string, fallback: number): number => { const v = Number(flag(name, tileset)); return v > 0 ? v : fallback; };
+      l.coreScale = num("softcore", l.coreScale);
+      l.softScale = num("softscale", l.softScale);
+      l.softFalloff = num("softfalloff", l.softFalloff);
+    }
     if (mixed) l.drawAllTiles = true; // the streamer chose tiles of several zooms by distance
     if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
     l.setZOffset(dz + zoomLift());

@@ -58,10 +58,20 @@ const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in vec2 v_corner;
 in vec3 v_color;
+uniform float u_soft;       // 1: Gaussian-feathered, blended pass (the soft look); 0: opaque
+uniform float u_falloff;    // exponent of the Gaussian falloff over the quad (soft pass)
 out vec4 fragColor;
 void main() {
-  if (dot(v_corner, v_corner) > 1.0) discard;
-  fragColor = vec4(v_color, 1.0); // opaque, so already premultiplied
+  float r2 = dot(v_corner, v_corner);
+  if (r2 > 1.0) discard;
+  if (u_soft > 0.5) {
+    // Gaussian weight of the distance from the centre (r2 = 1 at the quad's edge), premultiplied.
+    float a = 0.95 * exp(-u_falloff * r2);
+    if (a < 0.02) discard;
+    fragColor = vec4(v_color * a, a);
+  } else {
+    fragColor = vec4(v_color, 1.0); // opaque, so already premultiplied
+  }
 }`;
 
 /**
@@ -194,6 +204,8 @@ export interface SurfelProgram {
   uLight: WebGLUniformLocation;
   uRight: WebGLUniformLocation;
   uUp: WebGLUniformLocation;
+  uSoft: WebGLUniformLocation;
+  uFalloff: WebGLUniformLocation;
   /** Only in the program that decodes packed records. */
   uZOrigin?: WebGLUniformLocation;
   uZStep?: WebGLUniformLocation;
@@ -273,6 +285,8 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
     uLight: uniform("u_light"),
     uRight: uniform("u_right"),
     uUp: uniform("u_up"),
+    uSoft: uniform("u_soft"),
+    uFalloff: uniform("u_falloff"),
     ...(packed ? { uZOrigin: uniform("u_z_origin"), uZStep: uniform("u_z_step") } : {}),
     ...(kind === 12 ? { uScaleBase: uniform("u_scale_base") } : {}),
   };
@@ -353,6 +367,14 @@ export interface DrawOptions {
   /** Factor on every semi-axis (default 1: the 2-sigma ellipse). */
   extent?: number;
   depthTest: boolean;
+  /**
+   * The soft look (E018): `"core"` draws opaque splats shrunk by `coreScale` (they carry the depth), `"soft"` draws
+   * Gaussian-feathered, alpha-blended splats grown by `softScale` on top, testing depth but not writing it. Default
+   * `"flat"`: opaque splats of the full extent.
+   */
+  pass?: "flat" | "core" | "soft";
+  /** Exponent of the Gaussian falloff over the quad in the soft pass (default 3.5: 2.7 sigma at the quad's edge). */
+  falloff?: number;
 }
 
 export function drawSurfels(
@@ -372,17 +394,29 @@ export function drawSurfels(
     gl.uniform1f(p.uZStep, b.z?.step ?? 1);
   }
   if (p.uScaleBase) gl.uniform1f(p.uScaleBase, b.z?.scaleBase ?? 0);
+  const soft = opts.pass === "soft";
+  gl.uniform1f(p.uSoft, soft ? 1 : 0);
+  gl.uniform1f(p.uFalloff, opts.falloff ?? 3.5);
   if (opts.depthTest) {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);
-    gl.depthMask(true);
+    gl.depthMask(!soft);
   } else {
     gl.disable(gl.DEPTH_TEST);
   }
   gl.disable(gl.CULL_FACE); // splats are two-sided
+  const blendWas = gl.isEnabled(gl.BLEND);
+  if (soft) {
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); // premultiplied
+  }
   gl.bindVertexArray(b.vao);
   gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.min(b.count, opts.count ?? b.count));
   gl.bindVertexArray(null);
+  if (soft) {
+    if (!blendWas) gl.disable(gl.BLEND);
+    gl.depthMask(true);
+  }
 }
 
 export function deleteSurfelBuffers(gl: WebGL2RenderingContext, b: SurfelBuffers): void {

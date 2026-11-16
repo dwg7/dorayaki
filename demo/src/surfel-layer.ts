@@ -76,6 +76,16 @@ export class SurfelLayer implements CustomLayerInterface {
    * mixed-selection.ts). Off: draw the tiles of the one zoom picked from the map zoom.
    */
   drawAllTiles = false;
+  /**
+   * `"soft"` (`?look=soft`, E018): every splat is drawn twice, an opaque core that carries the depth, then a larger
+   * Gaussian-feathered blended splat on top, so neighbours melt into each other. `"flat"`: opaque ellipses.
+   */
+  look: "flat" | "soft" = "flat";
+  /** Soft look: the core's scale and the feathered splat's scale, as factors on the semi-axes. */
+  coreScale = 0.8;
+  softScale = 1.4;
+  /** Soft look: exponent of the Gaussian falloff over the feathered quad (3.5 = Gaussian at 2.7 sigma across). */
+  softFalloff = 3.5;
   /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
   extent = 1;
 
@@ -158,22 +168,28 @@ export class SurfelLayer implements CustomLayerInterface {
     const zoom = selectZoom(this.tiles.map((t) => t.tile.z), displayZoom);
     let drawn = 0, count = 0;
     let plan: TileDraw = { count: 0, levelsDrawn: 1, minRadius: 0 };
-    for (const t of this.tiles) {
-      if (!t.buffers || (!this.drawAllTiles && t.tile.z !== zoom)) continue;
-      plan = drawPlan(t, displayZoom);
-      const matrix = Float32Array.from(multiplyMat4(options.defaultProjectionData.mainMatrix, t.model));
-      const program = t.packed === 16 ? this.packedProgram : t.packed === 12 ? this.packed12Program : this.program;
-      if (!program) continue;
-      drawSurfels(gl, program, t.buffers, {
-        matrix,
-        tileWidthMetres: t.widthMetres,
-        count: plan.count,
-        minRadius: plan.minRadius,
-        extent: this.extent,
-        depthTest: this.depthTest,
-      });
-      drawn++;
-      count += plan.count;
+    const passes: Array<{ pass: "flat" | "core" | "soft"; scale: number }> = this.look === "soft"
+      ? [{ pass: "core", scale: this.coreScale }, { pass: "soft", scale: this.softScale }]
+      : [{ pass: "flat", scale: 1 }];
+    for (const [pi, { pass, scale }] of passes.entries()) {
+      for (const t of this.tiles) {
+        if (!t.buffers || (!this.drawAllTiles && t.tile.z !== zoom)) continue;
+        plan = drawPlan(t, displayZoom);
+        const matrix = Float32Array.from(multiplyMat4(options.defaultProjectionData.mainMatrix, t.model));
+        const program = t.packed === 16 ? this.packedProgram : t.packed === 12 ? this.packed12Program : this.program;
+        if (!program) continue;
+        drawSurfels(gl, program, t.buffers, {
+          matrix,
+          tileWidthMetres: t.widthMetres,
+          count: plan.count,
+          minRadius: plan.minRadius,
+          extent: this.extent * scale,
+          depthTest: this.depthTest,
+          pass,
+          falloff: this.softFalloff,
+        });
+        if (pi === 0) { drawn++; count += plan.count; }
+      }
     }
     this.lastDraw = { zoom, tiles: drawn, surfels: count, levelsDrawn: plan.levelsDrawn, minRadius: plan.minRadius };
     this.lastRenderMs = performance.now() - t0;
