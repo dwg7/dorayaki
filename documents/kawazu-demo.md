@@ -94,7 +94,8 @@ This writes `demo/tiles/kawazu/` (raw tiles and TileJSON, for the local demo) an
 1.23 GB) and 269 s in all. Tiles in the archive are raw because stars' Martin 1.14
 cannot read gzip MLT tiles; `DORAYAKI_TILE_COMPRESSION=gzip` would make them about
 30 % smaller (see below). Mesh seams are not reconciled (a voxel cut by the edge
-between two meshes is fitted in each).
+between two meshes is fitted in each), and neighbouring meshes place the same ground point up to 1.8 m apart (the local frame ignores grid
+convergence; E022, [tile-aligned-build.md](tile-aligned-build.md)).
 
 Verified: the archive's 46 directory entries each equal the file on disk and decode
 to 6,935,498 splats.

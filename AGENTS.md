@@ -214,6 +214,8 @@ npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size t
 npm run measure:omission  # E002: omission strategies on the Numazu data
 npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
 npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
+npm run measure:frame -- <zone> <meshA.las> <meshB.las>   # E022: how far apart two neighbouring meshes place the same ground point (grid convergence)
+npm run prototype:tile-scatter -- <file.las> <zone> [maxpoints]   # E022: scatter one LAS file into z17 tile frames, accuracy, one tile accumulated and merged
 npm run measure:encoding -- <tileset dir> <zoom>   # E016: entropy per field, gzip/brotli of the block as stored and rearranged
 npm run measure:precision -- <tileset dir> <zoom>  # E016: which precision reductions are visually free (software renderer)
 DORAYAKI_CLASS_PLANE=1 npm run build:tileset -- ...   # also write a class plane (E021); merge:tilesets joins the planes
@@ -276,6 +278,8 @@ scripts/measure-stream.ts    streaming voxelisation of a LAS file (chunked read)
 scripts/build-tileset.ts     streaming tileset builder for a LAS file of any size (one level per tile)
 demo/src/cpu-render.ts       software renderer (Node) for measurement: same camera model as MapLibre, flat colour
 demo/src/image-metrics.ts    compare two renderings: holes, extra, colour error, depth difference
+scripts/measure-frame.ts     E022 jog between neighbouring meshes
+scripts/prototype-tile-scatter.ts  E022 prototype of a tile-aligned build's first stages (documents/tile-aligned-build.md)
 scripts/measure-quality.ts   E012/E015 quality comparison between tile zooms, tilesets, or the mixed-zoom choice
 demo/src/camera.ts           map view camera model, effective zoom, visible ground bounds
 demo/src/mixed-selection.ts  tiles of several zooms by distance from the camera (?mixed=1)

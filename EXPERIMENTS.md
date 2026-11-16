@@ -1411,3 +1411,41 @@ Nine meshes, version 6, `DORAYAKI_CLASS_PLANE=1` (after the review fixes): 84,03
 all 46 tiles have one plane with the block's count; the planes are 804,972 bytes (0.93 bits per splat; E020 predicted 0.4 to 1 % of the archive from three
 meshes); the archive reads back byte-identical. Classes of the 6,935,498 splats: 64 (several returns) 78.6 %, ground 8.4 %, unclassified 6.0 %, high
 vegetation 3.7 %, medium 2.9 %, low 0.5 %. Not hosted: see documents/kawazu-demo.md.
+
+## E022: a tile-aligned parallel build (study)
+
+### Question
+Can the build be partitioned by output tile so that it runs in parallel without seams, and what does it cost? (hfu asked for a study of a
+parallel build at tile boundaries.) Design: documents/tile-aligned-build.md.
+
+### Method
+Reading the build (`scripts/build-tileset.ts`, `src/pointcloud/pyramid.ts`, `src/gaussian/to-surfels.ts` `placeGaussians`); the cost per mesh from
+the manifests of the nine class-plane builds; `npm run measure:frame` (two neighbouring meshes, the real `placeGaussians`); and
+`npm run prototype:tile-scatter` (scatter of one LAS file into z17 tile frames, accuracy against the exact conversion, one tile accumulated and merged).
+
+### Measurements
+- **A defect found in the present build: the same ground point is placed differently by neighbouring meshes.** The local frame of a mesh is
+  east/north metres around its centre, which ignores the meridian convergence (grid north is 0.2496 degrees from true north at Kawazu). Mesh
+  08OF4061 against 08OF4060 (400 m east): -0.408 m east, **-1.765 m north**. Mesh 08OF4050 against 08OF4060 (300 m north): +1.311 m east,
+  **+1.056 m north**. Against the exact conversion, 4,000 points of 08OF4062: present frame 0.633 m mean, 1.624 m worst.
+- The voxel size differs between rows of meshes: 0.490393, 0.490406, 0.490420 m at z17 (and 0.980799 / 0.980853 at z16, 1.961652 at z15: not
+  exactly 2 and 4 times).
+- Cost per mesh (nine meshes, 476 million points, 6 min 40 s in all; accumulate / total seconds, rss in GB): 08OF4050 15.8 / 46.9, 0.72; 4051 6.9 / 38.3,
+  0.96; 4052 9.0 / 47.6, 0.72; 4060 33.1 / 60.5, 0.53; 4061 6.1 / 30.8, 0.62; 4062 8.1 / 46.6, 0.78; 4070 6.7 / 33.7, 0.75; 4071 16.8 / 46.2, 0.76; 4072 8.4 / 41.2,
+  1.53. Accumulating the points is 111 s of 392 s (28 %); merge, placement and encoding 281 s (72 %), 25 to 39 s per mesh whatever the number of points.
+- Tile-frame projection (affine from three exact conversions, anchored near the tile centre; tile chosen by a coarse frame on a 1 km grid then confirmed):
+  mean error 0.77 mm, worst 2.17 mm over 4,000 sampled points of 18,206,201; 141 points were still outside their tile after three steps (0.0008 %).
+- Scatter of that file: 7.3 s, 2.5 million points per second; 6 z17 tiles; the densest holds 8,131,001 points.
+- Stage 2 on the first 3 million points of the densest tile (cell 49.04 cm): 1,056,986 voxels, accumulate 1.1 s, adaptive merge 3.3 s, 115,458 Gaussians,
+  memory 0.35 -> 1.07 GB.
+
+### Observations
+- In a tile-aligned grid no adaptive merge group crosses a tile edge (512 cells per tile side, groups of 8), so a z17 tile's three zooms depend on its own points
+  only: no halo and no seam. The z16 and z15 pieces join by position.
+- The present build's cost is dominated by merge and encoding, which divide across tiles; the scatter pass costs about what the accumulation costs now.
+- Estimated total CPU time stays about 100 hours per 1,000 km2; wall time divides by the cores.
+- Not measured: a whole tile (only 3 of 8.1 million points), the gather, scatter disk size at scale, the effect on the DEM shift and on the demo's terrain lift.
+
+### Decision
+Study only. Recommended: build a `TileFrame` module and the tile-local build first (steps 1 and 2 in the design), because they also fix the 1.8 m jogs;
+the orchestrator and the streaming archive writer come after. hfu to decide whether to go ahead.
