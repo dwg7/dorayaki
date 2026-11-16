@@ -71,3 +71,9 @@ that is not a guarantee.
 `src/mlt-frame.ts` imports nothing from `src/surfel-block.ts`; it treats
 bodies as opaque bytes. Callers compose the two:
 `decodeSurfelBlock(extractSurfelBlocks(tile)[0])`.
+
+## Class plane frame (tag 0xD1)
+
+A second experimental frame, 0xD1, may follow the surfel frame in the same tile: one class code per splat, see
+[class-plane.md](class-plane.md). Like 0xD0 it is not an assigned MLT tag; a reader that does not know it skips it by its size.
+`extractClassPlanes(tile)` returns the bodies of the 0xD1 frames.

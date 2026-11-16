@@ -1357,3 +1357,50 @@ Cost for the nine-mesh archive (6,935,498 splats; 83,230,962 bytes as version 6)
 Not a format change yet. The analysis says that the size penalty is small (about 0.4 to 1 % of the archive) if the class is a
 gzip-ed plane beside the 12-byte records, and 2 to 8 % if it is stored plainly. The open design question is where the plane lives (a
 second frame in the tile, or a sidecar archive) and what classes the build can really provide.
+
+## E021: the class plane (design and first slice)
+
+### Question
+E020 found that a class per splat is cheap if it is a compressed plane beside the records. Where does the plane live, what is in it, and
+does it make a real "hide vegetation" button and a false-colour view possible?
+
+### Decisions (documents/class-plane.md)
+- **A second frame in the same tile** (experimental tag 0xD1), not a sidecar archive: one request, the plane cannot get out of step with
+  the block, nothing more to host (hfu wants few Kawazu archives on stars), and a reader that does not know it skips it. The cost
+  is that every client downloads it (about 1 % of the archive).
+- **Class codes are the ASPRS LAS codes** (the palette hfu named: "the standard colours of LAS point classes"), plus codes from 64 up
+  for a build's own rules: 64 = vegetation inferred from several returns (the airborne files have no vegetation class).
+- **One byte per splat, gzip-ed** (E020: 0.99 bit per splat at z17 against 0.71 for a 2-bit plane): simpler, any of 256 codes, 0.25 %
+  of the archive more than the tightest form. Purity is not stored.
+- **Inflate on demand** in the browser (`DecompressionStream`), and the class is an instanced byte attribute on the GPU.
+- The block does not change (versions 5 and 6 both work); the plane's count must equal the block's, else it is ignored.
+
+### Built
+`src/class-plane.ts` (encode, header validation, decode with an injected inflate), `extractClassPlanes` / `wrapClassPlane` in
+`src/mlt-frame.ts`, 18 class slots in the voxel accumulator, `DORAYAKI_CLASS_PLANE=1` in `build:tileset`, planes joined in
+`merge:tilesets`, and in the demo: a "hide vegetation" checkbox and `?hide=` codes, a "colour: by class" select with a legend, a
+vivid palette (`demo/src/class-palette.ts`); the GPU skips hidden classes with a 128-bit mask and colours from a 32-slot palette.
+Tests (`test/class-plane.test.ts`): round trip with and without gzip, zero and one splat, short header, bad magic, version,
+compression, length mismatches (both ways, and a gzip plane whose inflated size is not the count), the plane found in either order beside
+an unknown frame, a tile without a plane, a truncated frame.
+
+### Measurements
+- Mesh 08OF4060 (MMS and airborne, version 6, 802,958 splats): 9,962,817 bytes with the plane against 9,846,006 without: **+116,811
+  bytes, +1.19 %** (1.16 bits per splat; E020 had predicted 0.4 to 1 % from the airborne-heavy 3-mesh mix, and this mesh has the finer MMS
+  vegetation classes).
+- At zoom 17.67 in the browser (four z17 tiles, 682,792 splats): the legend of the classes in view (shares of splats): canopy 62.9 %, high
+  vegetation 14.5 %, medium 8.6 %, ground 7.9 %, unclassified 4.9 %, low 1.2 %. With "colour by class" (zoom 15.96, one z15 tile): high
+  vegetation 35.4 %, canopy 32.0 %, medium 15.7 %, ground 11.2 %, low 3.6 %, unclassified 2.2 %.
+
+### Observations
+- Colour by class works as a false-colour view: ground orange, canopy teal, greens for the vegetation classes; the road shows as a
+  lime ribbon (class 3) and the loop bridge area stands out from the forest.
+- Hiding vegetation by the real class removes the forest and the **loop bridge with its road**: the bridge is classed as vegetation
+  (MMS classes 3 to 5 on the road's surroundings, and the airborne several-returns rule on the structure's edges), and the road's white
+  ribbon in the picture is the basemap showing through. The class quality limits the button, as E020 warned: the data has no
+  building or bridge class.
+- A plane costs 0.1 s per million splats to inflate (not measured separately) and does not change what is drawn until it is used.
+
+### Decision
+Keep as a first slice behind the flags and the controls. Open: how to get a better class for the airborne data (E020), whether the
+plane is built for the whole area and hosted, and the vivid-colour idea (correcting colours by class).

@@ -29,6 +29,12 @@
 export const EXPERIMENTAL_SURFEL_FRAME_TAG = 0xd0;
 
 /**
+ * EXPERIMENTAL local frame tag for a class plane body (src/class-plane.ts): one class code per splat of the tile's Surfel Block.
+ * Not an assigned MLT tag, like 0xD0 above; a reader that does not know it skips the frame.
+ */
+export const EXPERIMENTAL_CLASS_PLANE_FRAME_TAG = 0xd1;
+
+/**
  * Local implementation limit: frame `size` must fit in uint32, so its
  * varint has at most 5 bytes. This limit is Dorayaki's choice, not MLT's.
  */
@@ -169,5 +175,17 @@ export function wrapSurfelBlock(block: Uint8Array): Uint8Array {
 export function extractSurfelBlocks(tile: Uint8Array): Uint8Array[] {
   return readFrames(tile)
     .filter((f) => f.tag === EXPERIMENTAL_SURFEL_FRAME_TAG)
+    .map((f) => f.body);
+}
+
+/** Wrap a class plane body in an experimental class plane frame. */
+export function wrapClassPlane(plane: Uint8Array): Uint8Array {
+  return encodeFrame(EXPERIMENTAL_CLASS_PLANE_FRAME_TAG, plane);
+}
+
+/** Bodies of all experimental class plane frames in the tile, in tile order. Other frames are skipped. */
+export function extractClassPlanes(tile: Uint8Array): Uint8Array[] {
+  return readFrames(tile)
+    .filter((f) => f.tag === EXPERIMENTAL_CLASS_PLANE_FRAME_TAG)
     .map((f) => f.body);
 }

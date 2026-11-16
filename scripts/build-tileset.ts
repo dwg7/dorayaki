@@ -29,6 +29,7 @@ import { dirname } from "node:path";
 import { gzipSync } from "node:zlib";
 
 import { encodeDemoTile } from "../demo/src/demo-tile.js";
+import { CLASS_DERIVED_CANOPY, CLASS_UNCLASSIFIED, encodeClassPlane } from "../src/class-plane.js";
 import { jprcsToLatLng } from "../src/geodesy/jprcs.js";
 import { PmtilesCompression, PmtilesTileType, writePmtiles } from "../src/pmtiles.js";
 import { adaptiveGaussians } from "../src/pointcloud/adaptive.js";
@@ -87,14 +88,25 @@ const origin = jprcsToLatLng(Number(zoneArg), n0, e0);
  * purity in the splat's opacity byte: class slot * 32 + round(share * 31). Slots: LAS class 0..5; 6 = class 1 on a pulse with
  * several returns (airborne canopy); 7 = any other class.
  */
-const classAlpha = process.env.DORAYAKI_CLASS_ALPHA === "1";
-const CLASS_SLOTS = 8;
-const classSlot = (cls: number, returns: number): number => (cls === 1 && ((returns >> 3) & 7) > 1 ? 6 : cls <= 5 ? cls : 7);
+const classAlphaAnalysis = process.env.DORAYAKI_CLASS_ALPHA === "1";
+/**
+ * DORAYAKI_CLASS_PLANE=1 (E021): count the points of every voxel by class and write the dominant class of every splat as a class
+ * plane beside the block (documents/class-plane.md). Slots: LAS class 0..15; 16 = class 1 on a pulse with several returns (derived
+ * canopy, code 64); 17 = any other class (stored as 1). The class travels through the pipeline in the opacity byte of the splat
+ * (slot / 255) and is moved into the plane when the tile is written; the block's opacity is then the usual 0.95.
+ */
+const classPlane = process.env.DORAYAKI_CLASS_PLANE === "1";
+const classAlpha = classAlphaAnalysis || classPlane;
+const CLASS_SLOTS = classPlane ? 18 : 8;
+const classSlot = classPlane
+  ? (cls: number, returns: number): number => (cls === 1 && ((returns >> 3) & 7) > 1 ? 16 : cls <= 15 ? cls : 17)
+  : (cls: number, returns: number): number => (cls === 1 && ((returns >> 3) & 7) > 1 ? 6 : cls <= 5 ? cls : 7);
 const opacityOf = (counts: readonly number[]): number => {
   let total = 0, best = 0;
   counts.forEach((c, i) => { total += c; if (c > counts[best]!) best = i; });
-  return (best * 32 + Math.round((counts[best]! / total) * 31)) / 255;
+  return classPlane ? best / 255 : (best * 32 + Math.round((counts[best]! / total) * 31)) / 255;
 };
+const slotToCode = (slot: number): number => (slot === 16 ? CLASS_DERIVED_CANOPY : slot === 17 ? CLASS_UNCLASSIFIED : slot);
 const sizes = pyramidVoxelSizes(origin, config);
 const accs = new Map(sizes.map((s) => [s, new VoxelAccumulator(s, 16, classAlpha ? CLASS_SLOTS : 0)]));
 const finestSize = sizes[sizes.length - 1]!;
@@ -167,10 +179,17 @@ const manifestTiles: ManifestTile[] = [];
 const archiveTiles: Array<{ z: number; x: number; y: number; data: Uint8Array }> = [];
 const perZoom: Record<number, { gaussians: number; splats: number; bytes: number }> = {};
 for (const [z, g] of Object.entries(pyramid.gaussiansPerZoom)) perZoom[Number(z)] = { gaussians: g, splats: 0, bytes: 0 };
-for (const { tile, splats, levels } of pyramid.tiles) {
+for (const { tile, splats: tileSplats, levels } of pyramid.tiles) {
+  let splats = tileSplats;
   const path = `${OUT}/${tile.z}/${tile.x}/${tile.y}.mlt`;
   mkdirSync(dirname(path), { recursive: true });
-  const data = encodeDemoTile(splats, levels, blockVersion);
+  let plane: Uint8Array | undefined;
+  if (classPlane) {
+    // Move the class out of the opacity byte into the plane; the block keeps the usual opacity.
+    plane = encodeClassPlane(Uint8Array.from(splats, (s) => slotToCode(s.a)), (bytes) => new Uint8Array(gzipSync(bytes, { level: 9 })));
+    splats = splats.map((s) => ({ ...s, a: 242 }));
+  }
+  const data = encodeDemoTile(splats, levels, blockVersion, plane);
   writeFileSync(path, data);
   archiveTiles.push({ ...tile, data });
   manifestTiles.push({ ...tile, levels, bytes: data.byteLength });

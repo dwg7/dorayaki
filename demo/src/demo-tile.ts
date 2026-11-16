@@ -4,7 +4,7 @@ import { generateOverhang } from "../../src/fixtures/overhang.js";
 import { toyGaussianPly } from "../../src/fixtures/toy-gaussians.js";
 import { readPly } from "../../src/gaussian/ply.js";
 import { gaussiansFromPly, placeGaussians } from "../../src/gaussian/to-surfels.js";
-import { concatFrames, encodeFrame, wrapSurfelBlock } from "../../src/mlt-frame.js";
+import { concatFrames, encodeFrame, wrapClassPlane, wrapSurfelBlock } from "../../src/mlt-frame.js";
 import { surfelToSplat } from "../../src/splat.js";
 import { encodeSurfelBlock, type Splat, type Surfel } from "../../src/surfel-block.js";
 import { tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
@@ -75,10 +75,12 @@ export function demoTileSplats(tileset: DemoTileset): TileSurfels<Splat>[] {
 }
 
 /** Bytes of one tile: a synthetic unknown frame, then the surfel frame (with an optional level table). */
-export function encodeDemoTile(splats: readonly Splat[], levels?: readonly number[], version?: 5 | 6): Uint8Array {
+export function encodeDemoTile(splats: readonly Splat[], levels?: readonly number[], version?: 5 | 6, classPlane?: Uint8Array): Uint8Array {
   return concatFrames([
     encodeFrame(DEMO_UNKNOWN_TAG, new TextEncoder().encode("dorayaki demo: unknown frame")),
     wrapSurfelBlock(encodeSurfelBlock(splats, levels, version === undefined ? {} : { version })),
+    // The class plane (src/class-plane.ts), already encoded, follows the block as a second frame.
+    ...(classPlane ? [wrapClassPlane(classPlane)] : []),
   ]);
 }
 
