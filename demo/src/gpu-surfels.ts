@@ -64,6 +64,94 @@ void main() {
   fragColor = vec4(v_color, 1.0); // opaque, so already premultiplied
 }`;
 
+/**
+ * The same drawing from the wire record: one 16-byte record per splat is uploaded as it is (four uints per instance)
+ * and decoded here, which is 3.5 times less GPU memory than the float attributes above. The decoding mirrors
+ * splat-instances.ts (the reference for tests): position (x, y as u16 / 65536, z from a per-tile origin and step),
+ * scales 2^(code / 10 - 16), rotation from 24 bits (smallest three: bits 0-1 index of the largest component, then
+ * the three others at 7 bits, 63 = 0, scaled by 1 / sqrt 2), colour. Axes are ordered by scale code (ties by index);
+ * a splat is round when its largest and smallest codes differ by 5 or less (a ratio below 1.5).
+ */
+const PACKED_VERTEX_SHADER = `#version 300 es
+precision highp float;
+precision highp int;
+uniform mat4 u_matrix;
+uniform float u_tile_width;
+uniform float u_min_radius;
+uniform float u_extent;
+uniform vec3 u_light;
+uniform vec3 u_right;
+uniform vec3 u_up;
+uniform float u_z_origin;   // metres, of the tile's block
+uniform float u_z_step;     // metres per z code
+in vec2 a_corner;
+in uvec4 a_rec;             // the 16-byte record as four little-endian words
+out vec2 v_corner;
+out vec3 v_color;
+const float QUAT_RANGE = 0.70710678118654752;
+void main() {
+  uint w0 = a_rec.x, w1 = a_rec.y, w2 = a_rec.z, w3 = a_rec.w;
+  vec3 pos = vec3(float(w0 & 0xFFFFu) / 65536.0, float(w0 >> 16) / 65536.0, u_z_origin + float(w1 & 0xFFFFu) * u_z_step);
+  uint codes[3] = uint[3](w1 >> 16 & 255u, w1 >> 24, w2 & 255u);
+  float sc[3];
+  for (int i = 0; i < 3; i++) sc[i] = exp2(float(codes[i]) / 10.0 - 16.0);
+  // Rotation: columns of the matrix of the unit quaternion (w, x, y, z).
+  uint qb = (w2 >> 8) & 0xFFFFFFu;
+  int largest = int(qb & 3u);
+  float q[4];
+  float sumSq = 0.0;
+  uint shift = 2u;
+  for (int i = 0; i < 4; i++) {
+    if (i == largest) { q[i] = 0.0; continue; }
+    float v = (float((qb >> shift) & 127u) - 63.0) / 63.0 * QUAT_RANGE;
+    q[i] = v;
+    sumSq += v * v;
+    shift += 7u;
+  }
+  q[largest] = sqrt(max(0.0, 1.0 - sumSq));
+  float inv = 1.0 / length(vec4(q[0], q[1], q[2], q[3]));
+  float qw = q[0] * inv, qx = q[1] * inv, qy = q[2] * inv, qz = q[3] * inv;
+  vec3 axes[3];
+  axes[0] = vec3(1.0 - 2.0 * (qy * qy + qz * qz), 2.0 * (qx * qy + qw * qz), 2.0 * (qx * qz - qw * qy));
+  axes[1] = vec3(2.0 * (qx * qy - qw * qz), 1.0 - 2.0 * (qx * qx + qz * qz), 2.0 * (qy * qz + qw * qx));
+  axes[2] = vec3(2.0 * (qx * qz + qw * qy), 2.0 * (qy * qz - qw * qx), 1.0 - 2.0 * (qx * qx + qy * qy));
+  // Rank of each axis by scale code, shortest first; ties keep index order.
+  int rank[3];
+  rank[0] = int(codes[1] < codes[0]) + int(codes[2] < codes[0]);
+  rank[1] = int(codes[0] <= codes[1]) + int(codes[2] < codes[1]);
+  rank[2] = int(codes[0] <= codes[2]) + int(codes[1] <= codes[2]);
+  vec3 an, aa, ab;
+  float sa = 0.0, sb = 0.0;
+  for (int i = 0; i < 3; i++) {
+    if (rank[i] == 0) an = axes[i];
+    else if (rank[i] == 1) { aa = axes[i]; sa = sc[i]; }
+    else { ab = axes[i]; sb = sc[i]; }
+  }
+  uint cmin = min(codes[0], min(codes[1], codes[2]));
+  uint cmax = max(codes[0], max(codes[1], codes[2]));
+  vec3 centre = vec3(pos.xy * u_tile_width, pos.z);
+  vec3 u, v;
+  float shade;
+  if (cmax - cmin <= 5u) {
+    float r = max(2.0 * sqrt(sa * sb) * u_extent, u_min_radius);
+    u = u_right * r;
+    v = u_up * r;
+    shade = 0.8;
+  } else {
+    u = aa * 2.0 * sa;
+    v = ab * 2.0 * sb;
+    float lu = max(length(u), 1e-9);
+    float lv = max(length(v), 1e-9);
+    u *= u_extent * max(1.0, u_min_radius / (lu * u_extent));
+    v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
+    shade = 0.35 + 0.65 * abs(dot(normalize(an), u_light));
+  }
+  vec3 p = centre + a_corner.x * u + a_corner.y * v;
+  gl_Position = u_matrix * vec4(p, 1.0);
+  v_corner = a_corner;
+  v_color = vec3(float(w3 & 255u), float((w3 >> 8) & 255u), float((w3 >> 16) & 255u)) / 255.0 * shade;
+}`;
+
 /** Light direction in the local metric frame (east, south, up): from the north-west, above. */
 const LIGHT = normalize3(-0.4, -0.5, 0.75);
 
@@ -76,12 +164,17 @@ export interface SurfelProgram {
   uLight: WebGLUniformLocation;
   uRight: WebGLUniformLocation;
   uUp: WebGLUniformLocation;
+  /** Only in the program that decodes packed records. */
+  uZOrigin?: WebGLUniformLocation;
+  uZStep?: WebGLUniformLocation;
 }
 
 export interface SurfelBuffers {
   vao: WebGLVertexArrayObject;
   buffers: WebGLBuffer[];
   count: number;
+  /** Set for packed records: the block's z origin and step, metres. */
+  z?: { origin: number; step: number };
 }
 
 function normalize3(x: number, y: number, z: number): [number, number, number] {
@@ -103,22 +196,27 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
 }
 
 // Fixed attribute locations so the VAO does not depend on the program.
-const LOC = { corner: 0, position: 1, axisU: 2, axisV: 3, normal: 4, round: 5, color: 6 } as const;
+const LOC = { corner: 0, position: 1, axisU: 2, axisV: 3, normal: 4, round: 5, color: 6, record: 1 } as const;
 
-export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
-  const vs = compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
+/** `packed`: the program that decodes 16-byte records (see PACKED_VERTEX_SHADER); default: float attributes. */
+export function createSurfelProgram(gl: WebGL2RenderingContext, packed = false): SurfelProgram {
+  const vs = compile(gl, gl.VERTEX_SHADER, packed ? PACKED_VERTEX_SHADER : VERTEX_SHADER);
   const fs = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
   const program = gl.createProgram();
   if (!program) throw new Error("createProgram failed");
   gl.attachShader(program, vs);
   gl.attachShader(program, fs);
   gl.bindAttribLocation(program, LOC.corner, "a_corner");
-  gl.bindAttribLocation(program, LOC.position, "a_position");
-  gl.bindAttribLocation(program, LOC.axisU, "a_axis_u");
-  gl.bindAttribLocation(program, LOC.axisV, "a_axis_v");
-  gl.bindAttribLocation(program, LOC.normal, "a_normal");
-  gl.bindAttribLocation(program, LOC.round, "a_round");
-  gl.bindAttribLocation(program, LOC.color, "a_color");
+  if (packed) {
+    gl.bindAttribLocation(program, LOC.record, "a_rec");
+  } else {
+    gl.bindAttribLocation(program, LOC.position, "a_position");
+    gl.bindAttribLocation(program, LOC.axisU, "a_axis_u");
+    gl.bindAttribLocation(program, LOC.axisV, "a_axis_v");
+    gl.bindAttribLocation(program, LOC.normal, "a_normal");
+    gl.bindAttribLocation(program, LOC.round, "a_round");
+    gl.bindAttribLocation(program, LOC.color, "a_color");
+  }
   gl.linkProgram(program);
   gl.deleteShader(vs);
   gl.deleteShader(fs);
@@ -139,7 +237,35 @@ export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
     uLight: uniform("u_light"),
     uRight: uniform("u_right"),
     uUp: uniform("u_up"),
+    ...(packed ? { uZOrigin: uniform("u_z_origin"), uZStep: uniform("u_z_step") } : {}),
   };
+}
+
+/** Upload a block's 16-byte records as they are (PackedBlock in src/surfel-block.ts); draw them with a packed program. */
+export function uploadPacked(
+  gl: WebGL2RenderingContext, records: Uint8Array, count: number, zOrigin: number, zStep: number,
+): SurfelBuffers {
+  const vao = gl.createVertexArray();
+  if (!vao) throw new Error("createVertexArray failed");
+  gl.bindVertexArray(vao);
+  const buffers: WebGLBuffer[] = [];
+  const corners = gl.createBuffer();
+  const rec = gl.createBuffer();
+  if (!corners || !rec) throw new Error("createBuffer failed");
+  buffers.push(corners, rec);
+  gl.bindBuffer(gl.ARRAY_BUFFER, corners);
+  gl.bufferData(gl.ARRAY_BUFFER, Float32Array.of(-1, -1, 1, -1, -1, 1, 1, 1), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(LOC.corner);
+  gl.vertexAttribPointer(LOC.corner, 2, gl.FLOAT, false, 0, 0);
+  gl.vertexAttribDivisor(LOC.corner, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, rec);
+  gl.bufferData(gl.ARRAY_BUFFER, records, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(LOC.record);
+  gl.vertexAttribIPointer(LOC.record, 4, gl.UNSIGNED_INT, 16, 0);
+  gl.vertexAttribDivisor(LOC.record, 1);
+  gl.bindVertexArray(null);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  return { vao, buffers, count, z: { origin: zOrigin, step: zStep } };
 }
 
 export function uploadSplats(gl: WebGL2RenderingContext, splats: readonly Splat[]): SurfelBuffers {
@@ -203,6 +329,10 @@ export function drawSurfels(
   gl.uniform3fv(p.uLight, LIGHT);
   gl.uniform3fv(p.uRight, right);
   gl.uniform3fv(p.uUp, up);
+  if (p.uZOrigin && p.uZStep) {
+    gl.uniform1f(p.uZOrigin, b.z?.origin ?? 0);
+    gl.uniform1f(p.uZStep, b.z?.step ?? 1);
+  }
   if (opts.depthTest) {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);

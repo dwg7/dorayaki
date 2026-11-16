@@ -11,7 +11,7 @@
  */
 import type { CustomLayerInterface, CustomRenderMethodInput, Map as MapLibreMap } from "maplibre-gl";
 
-import type { Splat } from "../../src/surfel-block.js";
+import type { PackedBlock, Splat } from "../../src/surfel-block.js";
 import { tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 import {
   createSurfelProgram,
@@ -19,6 +19,7 @@ import {
   deleteSurfelProgram,
   drawSurfels,
   uploadInstances,
+  uploadPacked,
   uploadSplats,
   type SurfelBuffers,
   type SurfelProgram,
@@ -32,6 +33,8 @@ export interface LayerTile {
   /** The tile's contents: decoded splats, or instance data already built from them (smaller to hold). */
   splats?: readonly Splat[];
   instances?: SplatInstances;
+  /** Or the block's 16-byte records, uploaded as they are and decoded in the vertex shader (the smallest form on the GPU). */
+  packed?: Pick<PackedBlock, "count" | "records" | "zOrigin" | "zStep">;
   /** Level table; omitted means one level holding every surfel. */
   levels?: readonly number[];
 }
@@ -52,6 +55,8 @@ interface TileState {
   widthMetres: number;
   model: Mat4;
   buffers: SurfelBuffers | undefined;
+  /** Drawn with the program that decodes packed records. */
+  packed: boolean;
 }
 
 export class SurfelLayer implements CustomLayerInterface {
@@ -75,6 +80,7 @@ export class SurfelLayer implements CustomLayerInterface {
   private zOffset = 0;
   private map: MapLibreMap | undefined;
   private program: SurfelProgram | undefined;
+  private packedProgram: SurfelProgram | undefined;
   /** Summary of the most recent frame (for status display). */
   lastDraw: DrawSummary | undefined;
   /** Milliseconds spent creating the program and uploading tiles' buffers, summed over every upload. */
@@ -106,16 +112,18 @@ export class SurfelLayer implements CustomLayerInterface {
     const t0 = performance.now();
     const address = (t: TileAddress): string => `${t.z}/${t.x}/${t.y}`;
     const have = new Map(this.tiles.map((t) => [address(t.tile), t]));
-    const states = next.map(({ tile, splats, instances, levels }): TileState => {
+    const states = next.map(({ tile, splats, instances, packed, levels }): TileState => {
       const kept = have.get(address(tile));
       if (kept) { have.delete(address(tile)); return kept; }
       const widthMetres = tileWidthMetres(tile);
       const model = metricToMercatorMatrix(tile, widthMetres);
       if (this.zOffset) model[14] = this.zOffset * model[10]!;
       // The decoded splats are only needed for the upload; the state keeps none.
-      const count = instances ? instances.count : (splats ?? []).length;
-      const buffers = instances ? uploadInstances(gl, instances) : uploadSplats(gl, splats ?? []);
-      return { tile, splats: [], levels: levels ?? [count], widthMetres, model, buffers };
+      const count = packed ? packed.count : instances ? instances.count : (splats ?? []).length;
+      const buffers = packed
+        ? uploadPacked(gl, packed.records, packed.count, packed.zOrigin, packed.zStep)
+        : instances ? uploadInstances(gl, instances) : uploadSplats(gl, splats ?? []);
+      return { tile, splats: [], levels: levels ?? [count], widthMetres, model, buffers, packed: !!packed };
     });
     for (const gone of have.values()) if (gone.buffers) deleteSurfelBuffers(gl, gone.buffers);
     this.tiles = states;
@@ -127,6 +135,7 @@ export class SurfelLayer implements CustomLayerInterface {
     this.map = map;
     const t0 = performance.now();
     this.program = createSurfelProgram(gl);
+    this.packedProgram = createSurfelProgram(gl, true);
     this.uploadMs = performance.now() - t0;
     this.applyPending(gl);
     const info = gl.getExtension("WEBGL_debug_renderer_info");
@@ -134,7 +143,7 @@ export class SurfelLayer implements CustomLayerInterface {
   }
 
   render(gl: WebGL2RenderingContext, options: CustomRenderMethodInput): void {
-    if (!this.program || !this.map) return;
+    if (!this.program || !this.packedProgram || !this.map) return;
     this.applyPending(gl);
     const t0 = performance.now();
     const displayZoom = this.zoomOverride ?? this.map.getZoom();
@@ -146,7 +155,9 @@ export class SurfelLayer implements CustomLayerInterface {
       if (!t.buffers || t.tile.z !== zoom) continue;
       plan = drawPlan(t, displayZoom);
       const matrix = Float32Array.from(multiplyMat4(options.defaultProjectionData.mainMatrix, t.model));
-      drawSurfels(gl, this.program, t.buffers, {
+      const program = t.packed ? this.packedProgram : this.program;
+      if (!program) continue;
+      drawSurfels(gl, program, t.buffers, {
         matrix,
         tileWidthMetres: t.widthMetres,
         count: plan.count,
@@ -167,7 +178,9 @@ export class SurfelLayer implements CustomLayerInterface {
       t.buffers = undefined;
     }
     if (this.program) deleteSurfelProgram(gl, this.program);
+    if (this.packedProgram) deleteSurfelProgram(gl, this.packedProgram);
     this.program = undefined;
+    this.packedProgram = undefined;
     this.map = undefined;
   }
 

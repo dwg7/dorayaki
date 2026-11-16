@@ -3,7 +3,8 @@
  */
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type ExpressionSpecification } from "maplibre-gl";
 
-import { decodeSurfelTileWithLevels } from "./decode-tile.js";
+import { decodeSurfelTileWithLevels, packSurfelTile } from "./decode-tile.js";
+import type { PackedBlock } from "../../src/surfel-block.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
@@ -154,12 +155,15 @@ interface LoadedTile {
   byteLength: number;
   count: number;
   levels: number[];
-  /** Until the layer has taken it. */
+  /** Until the layer has taken it: the block's 16-byte records (default), or float instance data (`?gpu=legacy`). */
+  packed: PackedBlock | undefined;
   instances: SplatInstances | undefined;
 }
 
 /** Load-time measurements, summed over every tile loaded (E001 in EXPERIMENTS.md). */
 const timings = { fetchMs: 0, decodeMs: 0 };
+/** Each set handed to the layer: when (ms since the page started), zoom, tiles, bytes (`dorayaki.deliveries`). */
+const deliveries: Array<{ ms: number; zoom: number; tiles: number; bytes: number }> = [];
 async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   const t0 = performance.now();
   // Tiles listed from TileJSON bounds may not exist (204/404); those come back as null.
@@ -167,10 +171,15 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   timings.fetchMs += performance.now() - t0;
   if (!bytes) return null;
   const t1 = performance.now();
+  if (flag("gpu", tileset) !== "legacy") {
+    const packed = packSurfelTile(bytes); // no Splat objects: the records go to the GPU as they are
+    timings.decodeMs += performance.now() - t1;
+    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, instances: undefined };
+  }
   const decoded = decodeSurfelTileWithLevels(bytes);
   const instances = splatInstances(decoded.splats); // the Splat objects become garbage here
   timings.decodeMs += performance.now() - t1;
-  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, instances };
+  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, packed: undefined, instances };
 }
 
 map.on("load", () => {
@@ -230,14 +239,16 @@ map.on("load", () => {
   let summary = "loading…";
   const streamer = new TileStreamer<LoadedTile>({
     candidates: tiles,
+    staged: flag("staged", tileset) !== "0", // show the next coarser zoom while the first set loads (`?staged=0` switches it off)
     load: loadTile,
     onProgress: ({ zoom, wanted, done }) => {
       if (done < wanted) setStatus(`${summary} Loading z${zoom}: ${done}/${wanted} tile(s)…`);
     },
     onReady: (set, zoom) => {
+      deliveries.push({ ms: Math.round(performance.now()), zoom, tiles: set.length, bytes: set.reduce((n, x) => n + x.data.byteLength, 0) });
       loaded = set.map((x) => x.data);
-      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
-      for (const t of loaded) t.instances = undefined; // the layer owns the data now; do not keep a second copy
+      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
+      for (const t of loaded) { t.instances = undefined; t.packed = undefined; } // the layer owns the data now; do not keep a second copy
       const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.count, 0);
       summary = `${loaded.length} tile(s) of ${tileset} at z${zoom}: ${bytes} bytes, ${count} surfels.`;
@@ -324,6 +335,7 @@ map.on("load", () => {
     fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
   });
   (window as unknown as { dorayaki: unknown }).dorayaki = {
+    deliveries,
     map, get layer() { return layer; }, get loaded() { return loaded; }, timings, report, measureFrames, holeFraction, refresh,
   };
 });

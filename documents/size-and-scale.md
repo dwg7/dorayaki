@@ -107,18 +107,19 @@ practical to stream over the internet but are fine from a local file or a
 fast network. What limits the browser is memory and CPU, not the network:
 
 - Memory (E011): the decoded Splat objects were about 280 bytes each in the JS heap and were kept (739 MB at
-  2.65 million splats); the demo now keeps only the GPU copy (56 bytes per splat, about 150 MB at that size) and
+  2.65 million splats); the demo now keeps only the GPU copy (56 bytes per splat at the time, about 150 MB at that size; 16 bytes since E013) and
   the heap stays at 230 to 420 MB.
 - Decode time measured with the pane visible: 389,000 splats decoded in 90 ms
   (about 0.23 us each), uploaded in 84 ms; fetching the 6 MB set from the
   local server took 131 ms. A 700,000-splat tile is therefore a fraction of a
   second to decode. (The first load of the same page measured while the pane
   was hidden took 669 ms to decode; see NOTES.md.)
-- GPU memory per splat is currently 56 bytes (position, two axes and a normal
-  as float32, a flag and a colour), so a 700,000-splat tile is about 39 MB and
-  ten of them about 390 MB. The wire record is 16 bytes. Uploading the 16-byte
-  records and decoding in the vertex shader would cut this by 3.5 times; that
-  is proposed, not implemented.
+- GPU memory per splat is **16 bytes** (E013): the block's wire record is uploaded as it
+  is and decoded in the vertex shader, so a 700,000-splat tile is about 11 MB and ten of
+  them about 110 MB. Before E013 it was 56 bytes (position, two axes and a normal as
+  float32, a flag and a colour; 39 MB and 390 MB); that path is still there as
+  `?gpu=legacy`. Not measured: the GPU's own memory use (the sizes are the buffers'
+  byte lengths).
 - The demo used to fetch and upload every tile of a tileset when the page opened.
   It now loads only the tiles in view (the nearest nine of the selected zoom,
   documents/demo-and-site.md); a prefecture-sized archive additionally needs a

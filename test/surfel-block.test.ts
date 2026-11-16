@@ -12,6 +12,7 @@ import {
   encodeScale,
   encodeSurfelBlock,
   packQuaternion,
+  packedSurfelBlock,
   unpackQuaternion,
   type Splat,
   type SurfelBlockErrorCode,
@@ -326,4 +327,45 @@ test("version 4 blocks (whole records) are still decoded", () => {
   for (let i = 0; i < splats.length; i++) for (let b = 0; b < SURFEL_RECORD_BYTES; b++) v4[base + i * SURFEL_RECORD_BYTES + b] = v5[base + b * splats.length + i]!;
   new DataView(v4.buffer).setUint16(4, 4, true);
   assert.deepEqual(decodeSurfelBlock(v4), decodeSurfelBlock(v5));
+});
+
+describe("packedSurfelBlock", () => {
+  const splats: Splat[] = [
+    ONE,
+    { ...ONE, x: 0.75, y: 0.125, z: 101.5, sx: 0.5, sy: 0.25, sz: 0.0625, qw: 0.5, qx: 0.5, qy: 0.5, qz: 0.5, r: 1, g: 2, b: 3, a: 4 },
+    { ...ONE, x: 0.5, y: 0.5, z: 99.25, r: 200, g: 100, b: 50, a: 255 },
+  ];
+  const v5 = encodeSurfelBlock(splats, [2, 1]);
+
+  test("holds whole 16-byte records equal to the decoded splats' fields", () => {
+    const p = packedSurfelBlock(v5);
+    assert.equal(p.count, 3);
+    assert.deepEqual(p.levels, [2, 1]);
+    assert.equal(p.records.byteLength, 3 * SURFEL_RECORD_BYTES);
+    const decoded = decodeSurfelBlock(v5);
+    decoded.forEach((s, i) => {
+      const r = p.records.subarray(i * 16, i * 16 + 16);
+      assert.equal((r[0]! | (r[1]! << 8)) / 65536, s.x);
+      assert.equal((r[2]! | (r[3]! << 8)) / 65536, s.y);
+      assert.equal(Math.fround(p.zOrigin + (r[4]! | (r[5]! << 8)) * p.zStep), s.z);
+      assert.equal(decodeScale(r[6]!), s.sx);
+      assert.equal(decodeScale(r[7]!), s.sy);
+      assert.equal(decodeScale(r[8]!), s.sz);
+      assert.deepEqual(unpackQuaternion(r[9]! | (r[10]! << 8) | (r[11]! << 16)), [s.qw, s.qx, s.qy, s.qz]);
+      assert.deepEqual([r[12], r[13], r[14], r[15]], [s.r, s.g, s.b, s.a]);
+    });
+  });
+
+  test("a version 4 block gives the same records", () => {
+    const base = SURFEL_BLOCK_HEADER_BYTES + 4 * 2;
+    const v4 = new Uint8Array(v5);
+    for (let i = 0; i < splats.length; i++) for (let b = 0; b < SURFEL_RECORD_BYTES; b++) v4[base + i * SURFEL_RECORD_BYTES + b] = v5[base + b * splats.length + i]!;
+    new DataView(v4.buffer).setUint16(4, 4, true);
+    assert.deepEqual(packedSurfelBlock(v4).records, packedSurfelBlock(v5).records);
+  });
+
+  test("rejects what the decoder rejects", () => {
+    assert.throws(() => packedSurfelBlock(v5.subarray(0, v5.length - 1)), SurfelBlockError);
+    assert.throws(() => packedSurfelBlock(new Uint8Array(10)), SurfelBlockError);
+  });
 });

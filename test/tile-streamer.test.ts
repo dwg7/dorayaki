@@ -84,3 +84,53 @@ test("reset forgets the held tiles so the next update loads them again", async (
   await tick();
   assert.deepEqual(ready, [1, 1]);
 });
+
+test("staged: the first delivery shows the next coarser zoom, then the target replaces it", async () => {
+  const L = manualLoader();
+  const ready: Array<[number, string[]]> = [];
+  const s = new TileStreamer<string>({ candidates: [A, B, C], load: L.load, staged: true, onReady: (set, z) => ready.push([z, set.map((x) => x.data)]) });
+  s.update(17.2, bothOf(A, B));
+  assert.deepEqual([...L.calls].sort(), [key(A), key(B), key(C)].sort(), "both the target and the coarser tiles are requested");
+  L.finish(C);
+  await tick();
+  assert.deepEqual(ready, [[16, [key(C)]]], "the coarser set is shown while the target loads");
+  L.finish(A);
+  await tick();
+  assert.equal(ready.length, 1, "still waiting for B");
+  L.finish(B);
+  await tick();
+  assert.deepEqual(ready[1], [17, [key(A), key(B)]]);
+});
+
+test("staged: nothing coarser is shown if the target arrives first, or after the first delivery", async () => {
+  const L = manualLoader();
+  const ready: number[] = [];
+  const s = new TileStreamer<string>({ candidates: [A, B, C], load: L.load, staged: true, onReady: (_set, z) => ready.push(z) });
+  s.update(17.2, bothOf(A, B));
+  L.finish(A); L.finish(B);
+  await tick();
+  assert.deepEqual(ready, [17]);
+  L.finish(C); // the coarse set completes late: not delivered
+  await tick();
+  assert.deepEqual(ready, [17]);
+  // A later move to another zoom does not stage again (the layer already shows something).
+  const calls = L.calls.length;
+  s.update(16.2, around(C));
+  assert.equal(L.calls.length, calls, "C is held, nothing new to load, and no coarser stage is requested");
+});
+
+test("staged: reset makes the next update stage again", async () => {
+  const L = manualLoader();
+  const ready: number[] = [];
+  const s = new TileStreamer<string>({ candidates: [A, B, C], load: L.load, staged: true, onReady: (_set, z) => ready.push(z) });
+  s.update(17.2, bothOf(A, B));
+  L.finish(A); L.finish(B); L.finish(C);
+  await tick();
+  s.reset();
+  s.update(17.2, bothOf(A, B));
+  L.finish(C); // the reset dropped everything, so all three are loaded again; the coarse set arrives first
+  await tick();
+  L.finish(A); L.finish(B);
+  await tick();
+  assert.deepEqual(ready.slice(1), [16, 17], "after reset the coarse set is delivered first, then the target");
+});

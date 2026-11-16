@@ -311,14 +311,27 @@ export function decodeSurfelBlock(bytes: Uint8Array): Splat[] {
   return decodeSurfelBlockWithLevels(bytes).splats;
 }
 
+/** A block's header, validated, with where its records start. */
+export interface SurfelBlockLayout {
+  version: number;
+  count: number;
+  levels: number[];
+  zOrigin: number;
+  zStep: number;
+  /** Byte offset of the first record (or plane). */
+  tableEnd: number;
+  /** True for version 5 (byte planes), false for version 4 (whole records). */
+  planar: boolean;
+}
+
 /**
- * Decode a Surfel Block with its level table.
+ * Validate a Surfel Block's header, level table and length.
  *
  * The input must contain exactly one block: header, level table, and
  * `count` records, with no trailing bytes. Any violation throws
- * SurfelBlockError; the decoder never reads outside `bytes`.
+ * SurfelBlockError; nothing is read outside `bytes`.
  */
-export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
+export function readSurfelBlockLayout(bytes: Uint8Array): SurfelBlockLayout {
   if (bytes.byteLength < SURFEL_BLOCK_HEADER_BYTES) {
     throw new SurfelBlockError(
       "TRUNCATED_HEADER",
@@ -370,8 +383,16 @@ export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
   }
   checkLevels(levels, count);
 
+  return { version, count, levels, zOrigin, zStep, tableEnd, planar: version === SURFEL_BLOCK_VERSION };
+}
+
+/**
+ * Decode a Surfel Block with its level table (see readSurfelBlockLayout for what is
+ * validated).
+ */
+export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
+  const { count, levels, zOrigin, zStep, tableEnd, planar } = readSurfelBlockLayout(bytes);
   const splats: Splat[] = new Array(count);
-  const planar = version === SURFEL_BLOCK_VERSION;
   const get = planar
     ? (plane: number, i: number): number => bytes[tableEnd + plane * count + i]!
     : (plane: number, i: number): number => bytes[tableEnd + i * SURFEL_RECORD_BYTES + plane]!;
@@ -393,4 +414,25 @@ export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
     };
   }
   return { splats, levels };
+}
+
+/** A block's records as whole 16-byte records, without making Splat objects (for uploading to the GPU as they are). */
+export interface PackedBlock {
+  count: number;
+  levels: number[];
+  zOrigin: number;
+  zStep: number;
+  /** count x 16 bytes, the wire record of version 4: x, y, z (u16 each), 3 scale codes, 3 rotation bytes, r, g, b, a. */
+  records: Uint8Array;
+}
+
+export function packedSurfelBlock(bytes: Uint8Array): PackedBlock {
+  const { count, levels, zOrigin, zStep, tableEnd, planar } = readSurfelBlockLayout(bytes);
+  if (!planar) return { count, levels, zOrigin, zStep, records: bytes.slice(tableEnd, tableEnd + count * SURFEL_RECORD_BYTES) };
+  const records = new Uint8Array(count * SURFEL_RECORD_BYTES);
+  for (let plane = 0; plane < SURFEL_RECORD_BYTES; plane++) {
+    const from = tableEnd + plane * count;
+    for (let i = 0; i < count; i++) records[i * SURFEL_RECORD_BYTES + plane] = bytes[from + i]!;
+  }
+  return { count, levels, zOrigin, zStep, records };
 }
