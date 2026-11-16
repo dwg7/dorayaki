@@ -113,13 +113,6 @@ Other things checked, not used: `2019/ALB` covers meshes `08NE`, `NF`, `OE`,
 `OF`, `PE` (bathymetry). The 2019 MMS ground-and-structures data of zone 08
 is 1,795 zips, 1.56 TB in all.
 
-Vegetation (E017): `@v3+4+5` marks the points of those classes as vegetation (the MMS files classify vegetation as 3, 4
-and 5), `@vr` marks the points whose pulse has more than one return (the airborne files have only classes 1 and 2, so
-canopy is told by its multiple returns). A voxel keeps the share of its points that are vegetation, merged Gaussians keep
-the share of all their points, and with `DORAYAKI_VEGETATION_OPACITY=<0..1>` the Gaussian's opacity (the alpha byte,
-0.95 by default) goes from 0.95 for a share of 0 to that value for a share of 1. The tile size does not change. The demo
-draws the alpha as screen-door transparency with `?veg=1`.
-
 ## Merging tilesets built apart
 
 `scripts/merge-tilesets.ts` (`npm run merge:tilesets`) joins tilesets of

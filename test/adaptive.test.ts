@@ -88,27 +88,3 @@ test("the sparse rule merges lightly supported voxels whatever their shape", () 
   assert.ok(withSparse.length < without.length / 2, `${withSparse.length} against ${without.length}`);
   assert.equal(totalSupport(withSparse), 300);
 });
-
-test("vegetation share sets the opacity: all-vegetation voxels get the vegetation opacity, mixed ones in between, none by default", () => {
-  const acc = new VoxelAccumulator(1);
-  // Voxel A: 4 vegetation points; voxel B: 4 ground points; voxel C: 2 of 4 are vegetation.
-  for (let i = 0; i < 4; i++) acc.add(0.1 + i * 0.1, 0.5, 0.5, 0.2, 0.5, 0.2, 1);
-  for (let i = 0; i < 4; i++) acc.add(5.1 + i * 0.1, 0.5, 0.5, 0.5, 0.5, 0.5, 0);
-  for (let i = 0; i < 4; i++) acc.add(10.1 + i * 0.1, 0.5, 0.5, 0.3, 0.6, 0.3, i < 2 ? 1 : 0);
-  const none = acc.toGaussians({});
-  assert.deepEqual(none.map((g) => g.opacity), [0.95, 0.95, 0.95], "without vegetationOpacity nothing changes");
-  const withVeg = acc.toGaussians({ vegetationOpacity: 0.45 }).map((g) => +g.opacity.toFixed(3));
-  assert.deepEqual(withVeg, [0.45, 0.95, 0.7]);
-  const merged = adaptiveGaussians(acc, { maxLevel: 0, thickness: 1, colourTolerance: 1, vegetationOpacity: 0.45 }).gaussians.map((g) => +g.opacity.toFixed(3));
-  assert.deepEqual(merged, [0.45, 0.95, 0.7]);
-});
-
-test("merging keeps the vegetation share of all the points", () => {
-  const acc = new VoxelAccumulator(1);
-  // Two neighbouring voxels, one vegetation and one ground, merged into one cell of size 2.
-  for (let i = 0; i < 4; i++) acc.add(0.1 + i * 0.2, 0.5, 0.5, 0.4, 0.4, 0.4, 1);
-  for (let i = 0; i < 4; i++) acc.add(1.1 + i * 0.2, 0.5, 0.5, 0.4, 0.4, 0.4, 0);
-  const r = adaptiveGaussians(acc, { maxLevel: 1, thickness: 5, colourTolerance: 1, vegetationOpacity: 0.35 });
-  assert.equal(r.gaussians.length, 1);
-  assert.ok(Math.abs(r.gaussians[0]!.opacity - 0.65) < 1e-9, `opacity ${r.gaussians[0]!.opacity}`);
-});

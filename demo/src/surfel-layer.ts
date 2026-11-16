@@ -76,8 +76,6 @@ export class SurfelLayer implements CustomLayerInterface {
    * mixed-selection.ts). Off: draw the tiles of the one zoom picked from the map zoom.
    */
   drawAllTiles = false;
-  /** Draw each splat on a share of its pixels equal to its opacity (`?veg=1`, E017). */
-  stochastic = false;
   /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
   extent = 1;
 
@@ -171,7 +169,6 @@ export class SurfelLayer implements CustomLayerInterface {
         minRadius: plan.minRadius,
         extent: this.extent,
         depthTest: this.depthTest,
-        stochastic: this.stochastic,
       });
       drawn++;
       count += plan.count;

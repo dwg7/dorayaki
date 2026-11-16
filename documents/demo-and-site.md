@@ -43,7 +43,6 @@ All optional; the camera is in the fragment, the rest in the query.
 | `?lod=<zoom>` | choose tiles and levels as if the map were at this zoom |
 | `?terrainshift=<metres>` | lower the terrain by this much (default 2): the DEM lies up to 2.4 m above the point cloud's ground and would hide splats there (E010) |
 | `?terrain=<exaggeration>` | add MapLibre terrain from stars' `mapterhorn-japan-bridge` Terrarium DEM. Needed for data far above sea level: without terrain the camera is relative to 0 m and high data vanishes or is magnified (NOTES.md) |
-| `?veg=1` | draw each splat's opacity (the alpha byte) as screen-door transparency: a splat covers a share of its pixels equal to its opacity (E017); opacities from 0.94 up are opaque. The `kawazu-veg` dev tileset turns it on |
 | `?mixed=1` | draw tiles of several zooms at once, chosen by distance from the camera (`mixed-selection.ts`, at most 24 tiles; E015), instead of the nearest nine tiles of one zoom |
 | `?staged=0` | switch off the staged first display: the next coarser zoom is shown while the first set of tiles loads (E014) |
 | `?gpu=legacy` | draw from float instance data (56 bytes per splat) instead of the packed 16-byte records, to compare the two (E013) |

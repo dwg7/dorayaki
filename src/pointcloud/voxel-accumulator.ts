@@ -18,8 +18,8 @@ import { gaussianFromMoments } from "./voxel-gaussians.js";
 const CHUNK_BITS = 16;
 const CHUNK = 1 << CHUNK_BITS;
 const CHUNK_MASK = CHUNK - 1;
-/** Doubles per voxel: n, Σd (3), Σddᵀ (6), Σrgb (3), Σvegetation weight (1). */
-const STRIDE = 14;
+/** Doubles per voxel: n, Σd (3), Σddᵀ (6), Σrgb (3). */
+const STRIDE = 13;
 
 export interface AccumulatorFit {
   /** Voxels with fewer points are dropped (default 1). */
@@ -27,8 +27,6 @@ export interface AccumulatorFit {
   minScale?: number;
   degenerateScale?: number;
   opacity?: number;
-  /** Opacity of a voxel whose points are all vegetation; in between it follows the vegetation share (default: `opacity`, so no effect). */
-  vegetationOpacity?: number;
 }
 
 export class VoxelAccumulator {
@@ -56,8 +54,8 @@ export class VoxelAccumulator {
     return this.table.byteLength + this.keys.length * CHUNK * (3 * 4 + STRIDE * 8);
   }
 
-  /** Add one point (local metres; colour channels in 0..1; `vegetation`: 1 for a vegetation point, 0 otherwise, or a weight between). */
-  add(x: number, y: number, z: number, r: number, g: number, b: number, vegetation = 0): void {
+  /** Add one point (local metres; colour channels in 0..1). */
+  add(x: number, y: number, z: number, r: number, g: number, b: number): void {
     const size = this.size;
     const ix = Math.floor(x / size), iy = Math.floor(y / size), iz = Math.floor(z / size);
     if (!(Math.abs(ix) < 2 ** 31 && Math.abs(iy) < 2 ** 31 && Math.abs(iz) < 2 ** 31)) {
@@ -72,7 +70,6 @@ export class VoxelAccumulator {
     chunk[o + 4]! += dx * dx; chunk[o + 5]! += dx * dy; chunk[o + 6]! += dx * dz;
     chunk[o + 7]! += dy * dy; chunk[o + 8]! += dy * dz; chunk[o + 9]! += dz * dz;
     chunk[o + 10]! += r; chunk[o + 11]! += g; chunk[o + 12]! += b;
-    chunk[o + 13]! += vegetation;
     this.points++;
   }
 
@@ -145,8 +142,6 @@ export class VoxelAccumulator {
       mean: [number, number, number],
       cov: [number, number, number, number, number, number],
       colour: [number, number, number],
-      /** Share of the voxel's points that are vegetation, 0..1. */
-      vegetation: number,
     ) => void,
   ): void {
     for (const id of this.sortedIds()) {
@@ -162,7 +157,6 @@ export class VoxelAccumulator {
         [s[o + 4]! / n - mdx * mdx, s[o + 5]! / n - mdx * mdy, s[o + 6]! / n - mdx * mdz,
           s[o + 7]! / n - mdy * mdy, s[o + 8]! / n - mdy * mdz, s[o + 9]! / n - mdz * mdz],
         [s[o + 10]! / n, s[o + 11]! / n, s[o + 12]! / n],
-        s[o + 13]! / n,
       );
     }
   }
@@ -175,7 +169,6 @@ export class VoxelAccumulator {
       degenerateScale: fit.degenerateScale ?? fit.minScale ?? 0.001,
       opacity: fit.opacity ?? 0.95,
     };
-    const vegetationOpacity = fit.vegetationOpacity ?? options.opacity;
     const out: Gaussian[] = [];
     for (const id of this.sortedIds()) {
       const s = this.sums[id >> CHUNK_BITS]!;
@@ -192,7 +185,7 @@ export class VoxelAccumulator {
         [s[o + 4]! / n - mdx * mdx, s[o + 5]! / n - mdx * mdy, s[o + 6]! / n - mdx * mdz,
           s[o + 7]! / n - mdy * mdy, s[o + 8]! / n - mdy * mdz, s[o + 9]! / n - mdz * mdz],
         [s[o + 10]! / n, s[o + 11]! / n, s[o + 12]! / n],
-        { ...options, opacity: options.opacity + (vegetationOpacity - options.opacity) * (s[o + 13]! / n) },
+        options,
       ));
     }
     return out;

@@ -1168,4 +1168,10 @@ mesh without it).
 - The alpha byte is now used, so the idea of dropping it in a tighter encoding (E016) becomes one or two bits.
 
 ### Decision
-Open until the picture is judged by eye (`?fixture=kawazu-veg` against `?fixture=kawazu-s10`, same camera).
+Abandoned and reverted (hfu, after looking at `kawazu-veg` against `kawazu-s10`: the transparency did not work as
+hoped; no further reason was recorded, and none was measured). The code (vegetation share in the accumulator and the
+merge, the `@v`/`@vr` filters, the screen-door shader, `?veg=1`) was removed again; this entry and the class and return
+histograms above stay. The local build `demo/tiles/kawazu-veg` was deleted. If the idea returns: the classes in the data
+make the vegetation share cheap to compute (E017 method), and what to try differently is the way transparency is drawn
+(sorted blending instead of screen-door noise) and the opacity, neither of which was explored.
+- The alpha byte stays unused and constant, so the note in E016 about dropping it applies again.
