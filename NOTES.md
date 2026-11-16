@@ -723,3 +723,18 @@ version 5 file (110,972,600 B). Pages (PR 18, merged the evening before) already
 of that site was checked first (6 z17 tiles, 25,460,650 B, 1,591,264 splats, as before). The first upload had the wrong
 centre (the merge takes it from the first tileset: mesh 08OF4050 had been listed first); fixed by writing the archive
 again from the same tile files with the centre of 08OF4060. TileJSON URL: `?v=20261117v6b`.
+
+## 2026-11-17: review of the class plane
+
+An independent review (ten findings) and a review of the specification changed the class plane: codes are 0 to 127 (128 to 255 reserved and
+rejected), a reader inflates at most `count` bytes, the builder refuses `DORAYAKI_CLASS_PLANE=1` without the adaptive merge (it would have written
+code 242 for every splat), the merge refuses to join planes of the wrong length, the demo computes the vegetation guess only while a class
+feature is on, and the legend is cleared. Inflating the planes of 785,133 splats took 305 ms in the browser (the earlier note of 0.1 s per million
+splats was not measured; it was about 0.39 s). Details and the table of findings: documents/class-plane.md "Review".
+
+## 2026-11-17 (evening): the Kawazu archive on stars has class planes
+
+`dorayaki-kawazu.pmtiles` on stars is now the version 6 build with class planes (84,036,082 B, SHA-256 `bc5193b0...`, equal on the host); served tiles z15 and z17
+byte-identical to the local files; TileJSON `?v=20261117c`; centre the loop bridge. The earlier file (83,230,962 B, SHA `9f416dcb...`) is kept locally as
+`demo/tiles/dorayaki-kawazu-v6b.pmtiles`. Until the site that points at `?v=20261117c` is merged, the live site (still on `?v=20261117v6b`) gets cached plane-less
+tiles for up to four hours and, for tiles not in the edge cache, tiles with planes: both decode.

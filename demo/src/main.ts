@@ -58,7 +58,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-s4": "tiles/kawazu-s4/tilejson.json",
         "kawazu-s10": "tiles/kawazu-s10/tilejson.json",
         "kawazu-s16": "tiles/kawazu-s16/tilejson.json",
-        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu?v=20261117v6b",
+        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu?v=20261117c",
         "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
         "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
         "kawazu-ad-t20-c20": "tiles/kawazu-ad-t20-c20/tilejson.json",
@@ -182,13 +182,20 @@ interface LoadedTile {
   /** Its decoded class codes, once decoded. */
   classCodes?: Uint8Array;
   classesRequested?: boolean;
+  /** The tile got the guess of vegetation.ts instead of a class plane (made only while a class feature was on). */
+  guessed?: boolean;
   instances: SplatInstances | undefined;
 }
 
 /** Load-time measurements, summed over every tile loaded (E001 in EXPERIMENTS.md). */
-const timings = { fetchMs: 0, decodeMs: 0 };
+const timings = { fetchMs: 0, decodeMs: 0, classMs: 0, classSplats: 0 };
 /** Each set handed to the layer: when (ms since the page started), zoom, tiles, bytes (`dorayaki.deliveries`). */
 const deliveries: Array<{ ms: number; zoom: number; tiles: number; bytes: number }> = [];
+/** Class codes to hide: vegetation when the checkbox is on, plus `?hide=3,4,...` (codes 0 to 127). */
+const extraHide = (flag("hide", tileset) ?? "").split(",").filter((c) => c.trim() !== "").map(Number).filter((c) => Number.isInteger(c) && c >= 0 && c < 128);
+const hideCodes = (): number[] => [...(hideVegEl.checked ? VEGETATION_CLASSES : []), ...extraHide];
+/** Whether a class feature (hide, colour by class) is on. */
+const classesNeeded = (): boolean => hideCodes().length > 0 || colourEl.value === "class";
 /** The vegetation guess (vegetation.ts): `?vegh=` metres above the local ground, `?vegcell=` cell metres, `?vegshape=0` ignores the shape. */
 const vegNumber = (name: string, fallback: number): number => { const v = Number(flag(name, tileset)); return v > 0 ? v : fallback; };
 const vegOptions = { minHeight: vegNumber("vegh", 2), cellMetres: vegNumber("vegcell", 4), roundOnly: flag("vegshape", tileset) !== "0" };
@@ -209,8 +216,11 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
       if (p.count === packed.count) classPlane = { ...p, payload: p.payload.slice() }; // a copy: do not keep the whole tile alive
     }
     // Without a class plane, a guess from the splats stands in for the classes.
-    const classes = classPlane ? undefined : Uint8Array.from(vegetationFlags(packed, tileWidthMetres(tile), vegOptions), (f) => (f ? CLASS_DERIVED_CANOPY : CLASS_UNCLASSIFIED));
-    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, classes, classPlane, instances: undefined };
+    // Without a class plane the guess stands in for the classes, but only when a class feature is on (it costs a pass over the splats);
+    // switching one on later reloads the tiles.
+    const guessed = !classPlane && classesNeeded();
+    const classes = guessed ? Uint8Array.from(vegetationFlags(packed, tileWidthMetres(tile), vegOptions), (f) => (f ? CLASS_DERIVED_CANOPY : CLASS_UNCLASSIFIED)) : undefined;
+    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, classes, classPlane, guessed, instances: undefined };
   }
   const decoded = decodeSurfelTileWithLevels(bytes);
   const instances = splatInstances(decoded.splats); // the Splat objects become garbage here
@@ -259,9 +269,6 @@ map.on("load", () => {
   // With terrain on, MapLibre's terrain at low zoom is coarser than the ground and lies above it in places, covering
   // the splats; raise them by a zoom-dependent amount (terrain-lift.ts). `?dz=` raises everything by dz metres (debug).
   const zoomLift = (): number => (terrain > 0 ? terrainLift(map.getZoom()) : 0);
-  // Class codes to hide: vegetation when the checkbox is on, plus `?hide=3,4,...`.
-  const extraHide = (flag("hide", tileset) ?? "").split(",").filter((c) => c.trim() !== "").map(Number).filter((c) => Number.isInteger(c) && c >= 0);
-  const hideCodes = (): number[] => [...(hideVegEl.checked ? VEGETATION_CLASSES : []), ...extraHide];
   const makeLayer = (): SurfelLayer => {
     const l = new SurfelLayer("surfels");
     if (lod > 0) l.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
@@ -278,15 +285,21 @@ map.on("load", () => {
     if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
     l.setZOffset(dz + zoomLift());
     l.setDepthTest(depthEl.checked);
-    l.hideClasses = hideCodes();
+    l.setHideClasses(hideCodes());
     l.classColour = colourEl.value === "class";
     map.addLayer(l, "tile-outline"); // keep the 2D tile outlines visible on top
     return l;
   };
   let layer = makeLayer();
   depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
-  hideVegEl.addEventListener("change", () => { layer.setHideClasses(hideCodes()); void ensureClasses(); });
-  colourEl.addEventListener("change", () => { layer.setClassColour(colourEl.value === "class"); void ensureClasses(); });
+  // A class feature was switched: tiles loaded without classes (no plane, and the guess not made because no feature was on) are loaded again.
+  const onClassFeature = (): void => {
+    layer.setHideClasses(hideCodes());
+    layer.setClassColour(colourEl.value === "class");
+    if (classesNeeded() && loaded.some((t) => !t.classPlane && !t.guessed && t.count > 0)) { streamer.reset(); refresh(); } else void ensureClasses();
+  };
+  hideVegEl.addEventListener("change", onClassFeature);
+  colourEl.addEventListener("change", onClassFeature);
 
   // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
   // as a whole when it is complete (documents/demo-and-site.md).
@@ -299,9 +312,20 @@ map.on("load", () => {
   let loaded: LoadedTile[] = [];
   // Class codes: the hide checkbox hides vegetation (plus `?hide=3,4,...` codes), the select colours by class. The class planes of the
   // tiles are inflated only when one of them is used (a tile without a plane has the guess of vegetation.ts instead).
-  const gunzip = async (bytes: Uint8Array): Promise<Uint8Array> =>
-    new Uint8Array(await new Response(new Blob([new Uint8Array(bytes)]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
-  const classesNeeded = (): boolean => hideCodes().length > 0 || colourEl.value === "class";
+  // Inflate a gzip payload but never produce more than `max` bytes (the plane's count): a hostile payload cannot expand without bound.
+  const gunzip = async (bytes: Uint8Array, max: number): Promise<Uint8Array> => {
+    const reader = new Blob([new Uint8Array(bytes)]).stream().pipeThrough(new DecompressionStream("gzip")).getReader();
+    const out = new Uint8Array(max);
+    let n = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (n + value.byteLength > max) { await reader.cancel(); throw new Error(`class plane inflates to more than its ${max} bytes`); }
+      out.set(value, n);
+      n += value.byteLength;
+    }
+    return out.subarray(0, n);
+  };
   const updateLegend = (): void => {
     if (colourEl.value !== "class" && !hideVegEl.checked) { legendEl.textContent = ""; return; }
     const counts = new Map<number, number>();
@@ -314,15 +338,18 @@ map.on("load", () => {
     }).join("<br />");
   };
   async function ensureClasses(): Promise<void> {
-    if (!classesNeeded()) return;
+    if (!classesNeeded()) { updateLegend(); return; }
+    const t0 = performance.now();
     for (const t of loaded) {
       if (!t.classPlane || t.classesRequested) continue;
       t.classesRequested = true;
       try {
         t.classCodes = await decodeClassPlane(t.classPlane, gunzip);
+        timings.classSplats += t.classCodes.byteLength;
         layer.setTileClasses(t.tile, t.classCodes);
       } catch (e) { console.warn(`class plane of ${t.tile.z}/${t.tile.x}/${t.tile.y}:`, e); }
     }
+    timings.classMs += performance.now() - t0;
     updateLegend();
   }
   let summary = "loading…";

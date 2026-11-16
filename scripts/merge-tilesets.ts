@@ -17,7 +17,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 
 import { decodeSurfelTileWithLevels } from "../demo/src/decode-tile.js";
 import { encodeDemoTile } from "../demo/src/demo-tile.js";
-import { decodeClassPlane, encodeClassPlane, readClassPlane } from "../src/class-plane.js";
+import { decodeClassPlane, encodeClassPlane, joinClassCodes, readClassPlane } from "../src/class-plane.js";
 import { extractClassPlanes } from "../src/mlt-frame.js";
 import { PmtilesCompression, PmtilesTileType, writePmtiles } from "../src/pmtiles.js";
 import type { Splat } from "../src/surfel-block.js";
@@ -49,18 +49,21 @@ const perZoom: Record<number, { tiles: number; splats: number; bytes: number }> 
 for (const e of [...byAddress.values()].sort((a, b) => a.z - b.z || a.x - b.x || a.y - b.y)) {
   const splats: Splat[] = [];
   // A loop, not push(...array): spreading hundreds of thousands of arguments overflows the stack.
-  const classes: Uint8Array[] = [];
-  let everyTileHasClasses = true;
+  // The class planes of the source tiles are joined in the order of their splats; a tile without a plane, or with a plane of another
+  // length than its splats, drops the plane of the merged tile (joinClassCodes).
+  const parts: Array<Uint8Array | undefined> = [];
+  const counts: number[] = [];
   for (const d of e.from) {
     const bytes = new Uint8Array(readFileSync(`${ROOT}/${d}/${e.z}/${e.x}/${e.y}.mlt`));
-    for (const s of decodeSurfelTileWithLevels(bytes).splats) splats.push(s);
-    // The class planes of the source tiles are joined in the same order as their splats; a missing one drops the plane.
+    const decoded = decodeSurfelTileWithLevels(bytes).splats;
+    for (const s of decoded) splats.push(s);
+    counts.push(decoded.length);
     const [plane] = extractClassPlanes(bytes);
-    if (plane) classes.push(await decodeClassPlane(readClassPlane(plane), (b) => new Uint8Array(gunzipSync(b)))); else everyTileHasClasses = false;
+    parts.push(plane ? await decodeClassPlane(readClassPlane(plane), (b, max) => new Uint8Array(gunzipSync(b, { maxOutputLength: Math.max(1, max) }))) : undefined);
   }
-  const classPlane = everyTileHasClasses && classes.length > 0
-    ? encodeClassPlane(Uint8Array.from(classes.flatMap((c) => [...c])), (b) => new Uint8Array(gzipSync(b, { level: 9 })))
-    : undefined;
+  const joined = joinClassCodes(parts, counts);
+  if (!joined && parts.some((p) => p)) console.warn(`${e.z}/${e.x}/${e.y}: class planes dropped (a source tile has none, or one of another length than its splats)`);
+  const classPlane = joined ? encodeClassPlane(joined, (b) => new Uint8Array(gzipSync(b, { level: 9 }))) : undefined;
   const data = encodeDemoTile(splats, [splats.length], process.env.DORAYAKI_BLOCK_VERSION === "6" ? 6 : undefined, classPlane);
   const path = `${OUT}/${e.z}/${e.x}/${e.y}.mlt`;
   mkdirSync(dirname(path), { recursive: true });

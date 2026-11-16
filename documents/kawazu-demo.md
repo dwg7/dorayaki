@@ -21,8 +21,8 @@ lowered by 2 m ([adaptive-merging.md](adaptive-merging.md), E010).
 | input | 476,004,940 points: LP 148.2 million in 9 files, MMS 327.8 million in 4 files (LAS 1.2 format 3) |
 | zooms | z15 (4 tiles), z16 (12), z17 (30): 46 tiles |
 | splats | z15 84,477; z16 678,826; z17 6,172,195; total 6,935,498 |
-| archive | **83,230,962 bytes** (Surfel Block version 6), raw tiles, gzip directories; SHA-256 `9f416dcb7558e81d38a915c25ff6a9685a0f1277666d592e7ba47c9a02165e5f` |
-| per area | 77 B/m2 (z17 alone 69 B/m2) |
+| archive | **84,036,082 bytes** (Surfel Block version 6 with class planes), raw tiles, gzip directories; SHA-256 `bc5193b0d34c11b43c02e46b479dd4904e57b88e1ed0597a8d359b796b4376c1` |
+| per area | 78 B/m2 with the class planes (77 without; z17 alone 69) |
 | tiles | z15 1,014,034 B, z16 8,146,845, z17 74,068,696; largest tile 5.4 MB (z17) |
 | bounds | 138.93585, 34.78674, 138.95233, 34.79802 (west, south, east, north); centre 138.93930, 34.79176 |
 | served | `https://stars.optgeo.org/dorayaki-kawazu` (TileJSON, zoom 15 to 17), `.../{z}/{x}/{y}` |
@@ -45,13 +45,23 @@ The hosted archive is the same content as the factor-10 build written as Surfel 
 1,014,034, z16 8,146,845, z17 74,068,696; 46 tiles, 6,935,498 splats). It was built with
 `DORAYAKI_BLOCK_VERSION=6` on every `build:tileset` and on `merge:tilesets`, and checked tile by tile against the files
 (46 of 46 byte-identical, read with the reference `pmtiles` reader) before and after the upload. The TileJSON URL is now
-`?v=20261117v6b`. Version 5 data (the earlier archive, SHA-256 `90afb84f...`, 110,972,600 bytes) is kept only locally
+`?v=20261117c`. Version 5 data (the earlier archive, SHA-256 `90afb84f...`, 110,972,600 bytes) is kept only locally
 as `demo/tiles/dorayaki-kawazu-v2.pmtiles`; the live site reads both versions. A browser that still has the older page
 bundle cached cannot read version 6 tiles (it reports an unsupported version) until it reloads.
 
 The archive's centre (the demo's default view) comes from the first tileset given to `merge:tilesets`: put
 `kawazu-m08OF4060` (the loop bridge) first, or the view opens about 300 m north. The first upload of this archive had the
 mesh `08OF4050` first and was replaced the same day by a rewrite with the centre set back (the tile files are unchanged).
+
+## Version 6 with class planes (hosted 2026-11-17)
+
+The same content with a class plane in every tile ([class-plane.md](class-plane.md), E021): `demo/tiles/dorayaki-kawazu-cls6.pmtiles`,
+84,036,082 bytes (SHA-256 `bc5193b0...`), 0.97 % more than the hosted 83,230,961 bytes. 46 of 46 tiles carry a plane whose count equals the block's
+(6,935,498 splats; the planes are 804,972 bytes, 0.93 bits per splat: z15 12,507, z16 79,520, z17 712,945), and the archive's 46 tiles are
+byte-identical to the files (reference `pmtiles` reader). The centre is the loop bridge (08OF4060 listed first in the merge). Classes of the splats of the
+area: canopy rule (code 64) 78.6 %, ground 8.4 %, unclassified 6.0 %, high vegetation 3.7 %, medium 2.9 %, low 0.5 %. Built with
+`DORAYAKI_CLASS_PLANE=1 DORAYAKI_BLOCK_VERSION=6` and the recipe below (nine builds 6 min 40 s, merge a few seconds). It is the hosted archive since the evening of 2026-11-17 (SHA-256 equal on the host, served tiles byte-identical to the local files, TileJSON `?v=20261117c`); the
+version 6 archive without planes (83,230,962 bytes, SHA-256 `9f416dcb...`) is kept only locally as `demo/tiles/dorayaki-kawazu-v6b.pmtiles`.
 
 ## Recipe
 
@@ -115,7 +125,7 @@ History (stars holds only one Kawazu archive):
   dev tileset `kawazu-single`.
 - 2026-11-17: the version 6 archive (83,230,961 B, SHA-256 `3395c2c3...`) replaced the factor-10 version 5 archive
   (`rm`, 8 s pause, `mv -n`); its centre was wrong (see above), so a rewrite with the right centre (83,230,962 B,
-  `9f416dcb...`) replaced it minutes later, and the TileJSON URL moved to `?v=20261117v6b`. Both uploads: SHA-256 equal on
+  `9f416dcb...`) replaced it minutes later, and the TileJSON URL moved to `?v=20261117c`. Both uploads: SHA-256 equal on
   the host, tiles served with the Pages origin byte-identical to the local files.
 - 2026-11-16 (later): the factor-10 area archive (110,972,600 B, SHA-256 matched on
   the host) replaced the factor-4 file the same way (`rm`, 8 s pause, `mv -n`); the
@@ -140,8 +150,8 @@ the same name, the live site (origin `dwg7.unopengis.org`) was still served old 
 for up to four hours: 20 of the 46 tiles had the old single-mesh content or a
 cached 404 (checked with `curl -sI -H 'Origin: ...'`; a different origin or a
 `?cb=` query saw the new files). Martin copies a query of the TileJSON request into
-its tile template, so requesting `https://stars.optgeo.org/dorayaki-kawazu?v=20261117v6b`
-gives tile URLs ending in `?v=20261117v6b`, which miss the stale entries (the four tiles
+its tile template, so requesting `https://stars.optgeo.org/dorayaki-kawazu?v=20261117c`
+gives tile URLs ending in `?v=20261117c`, which miss the stale entries (the four tiles
 and the formerly cached 404 tested were served with the new sizes). The site is built
 with a versioned URL; bump `v` whenever the archive behind a name is replaced.
 
@@ -149,7 +159,7 @@ The site is rebuilt with:
 
 ```sh
 DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu \
-DORAYAKI_KAWAZU_TILEJSON='https://stars.optgeo.org/dorayaki-kawazu?v=20261117v6b' npm run site
+DORAYAKI_KAWAZU_TILEJSON='https://stars.optgeo.org/dorayaki-kawazu?v=20261117c' npm run site
 ```
 
 The demo opens Kawazu with terrain on (lowered by 2 m) and splat scale 1.3 by

@@ -19,6 +19,7 @@ import {
   deleteSurfelProgram,
   drawSurfels,
   uploadInstances,
+  hideMaskOf,
   setBufferClasses,
   uploadPacked,
   uploadSplats,
@@ -91,8 +92,8 @@ export class SurfelLayer implements CustomLayerInterface {
   softFalloff = 6.5;
   /** Strength of the shading, 0..1 (`?shade=`; 0 draws the colours as stored, like a 3D Gaussian splat). */
   shade = 1;
-  /** Class codes whose splats are not drawn (the demo's checkbox, `?hide=`; E021). */
-  hideClasses: readonly number[] = [];
+  /** The class codes whose splats are not drawn, as a 128-bit mask (set with setHideClasses; the demo's checkbox, `?hide=`; E021). */
+  private hideMask: Uint32Array<ArrayBuffer> = new Uint32Array(4);
   /** Colour by class (`?colour=class`): the palette of class-palette.ts instead of the stored colours. */
   classColour = false;
   private pendingClasses = new Map<string, { tile: TileAddress; codes: Uint8Array }>();
@@ -209,7 +210,7 @@ export class SurfelLayer implements CustomLayerInterface {
           pass,
           falloff: this.softFalloff,
           shade: this.shade,
-          hideClasses: this.hideClasses,
+          hideMask: this.hideMask,
           classColour: this.classColour,
         });
         if (pi === 0) { drawn++; count += plan.count; }
@@ -250,7 +251,7 @@ export class SurfelLayer implements CustomLayerInterface {
   }
 
   setHideClasses(codes: readonly number[]): void {
-    this.hideClasses = codes;
+    this.hideMask = hideMaskOf(codes);
     this.map?.triggerRepaint();
   }
 
