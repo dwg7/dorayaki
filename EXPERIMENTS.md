@@ -1132,3 +1132,40 @@ No change produced more than 0.23 % holes.
 ### Decision
 Open. Not yet: a combined run of the reductions, the format change itself, the alpha question (hfu's idea: vegetation more
 transparent, which would use the alpha byte instead of dropping it).
+
+## E017: vegetation more transparent (hfu's idea)
+
+### Question
+Can vegetation be told from ground, and drawn more transparent, so that the ground and structures under a canopy show
+through?
+
+### Method
+Data: class and return histograms (sampled) of the Kawazu LAS files: airborne LP 08OF4060: class 1 (unclassified) 90 %,
+class 2 (ground) 10 %, return numbers 1 to 5; MMS 08OF4060: class 2 14 %, 3 (low vegetation) 23 %, 4 13 %, 5 50 %.
+`VoxelAccumulator` keeps a vegetation weight sum per voxel (14 doubles per voxel instead of 13); `adaptiveGaussians` merges
+it exactly; the Gaussian's opacity goes from 0.95 to `vegetationOpacity` with the share. The builder marks vegetation per
+file: `@v3+4+5` (class) or `@vr` (more than one return). The shader draws the alpha as screen-door transparency
+(interleaved gradient noise on the pixel; discarded pixels write no depth, so nothing needs sorting), switched by `?veg=1`;
+opacities from 0.94 up count as opaque, so the default 0.95 is unchanged. Built: mesh 08OF4060, MMS with `@v3+4+5` and
+LP with `@vr`, the recipe of the Kawazu archive, vegetation opacity 0.5: `kawazu-veg` (dev tileset; `kawazu-s10` is the same
+mesh without it).
+
+### Measurements
+- Size: 13,127,290 bytes against 13,127,262 for `kawazu-s10`: no change (the alpha byte was already there).
+- Alpha of the z17 splats (702,139): 88.3 % in [0.5, 0.625), 6.0 % in [0.625, 0.75), 3.1 % in [0.75, 0.875), 2.6 % opaque.
+  So about nine tenths of this mesh's splats are mostly vegetation by these rules.
+- Build 53 s, 0.32 GB peak.
+- Tests: the opacity follows the share (all, none, half), and merging keeps the share of all points.
+
+### Observations
+- With `?veg=1` the vegetation is drawn as a dither pattern, visible at close range (zoom 18 and above) and finer at a
+  distance; the road and the loop bridge stand out more than with opaque forest.
+- Not judged: whether 0.5 is the right opacity, whether the dither is acceptable, whether the ground under the canopy
+  shows (the browser view was being moved by hand while I looked, so no side-by-side of the same camera was taken).
+  The software renderer of E012 ignores opacity, so there is no number yet.
+- Classes by return count mark any multi-return pulse, so tree-like edges of buildings are vegetation by this rule; no
+  check was made against the structures in the mesh.
+- The alpha byte is now used, so the idea of dropping it in a tighter encoding (E016) becomes one or two bits.
+
+### Decision
+Open until the picture is judged by eye (`?fixture=kawazu-veg` against `?fixture=kawazu-s10`, same camera).

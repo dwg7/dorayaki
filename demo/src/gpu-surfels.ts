@@ -31,6 +31,7 @@ in float a_round;           // 1: camera-facing disc of radius |a_axis_u|
 in vec4 a_color;
 out vec2 v_corner;
 out vec3 v_color;
+out float v_alpha;
 void main() {
   vec3 centre = vec3(a_position.xy * u_tile_width, a_position.z);
   vec3 u = a_axis_u;
@@ -52,15 +53,25 @@ void main() {
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
   v_color = a_color.rgb * shade;
+  v_alpha = a_color.a;
 }`;
 
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in vec2 v_corner;
 in vec3 v_color;
+in float v_alpha;
+uniform float u_stochastic; // 1: draw a splat only on a share of its pixels equal to its opacity (E017)
 out vec4 fragColor;
 void main() {
   if (dot(v_corner, v_corner) > 1.0) discard;
+  // Screen-door transparency: no sorting, depth is written only where the splat is drawn. Opacities from 0.94 up
+  // (the 0.95 every splat carries by default) count as opaque.
+  float a = v_alpha < 0.94 ? v_alpha : 1.0;
+  if (u_stochastic > 0.5 && a < 1.0) {
+    float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))); // interleaved gradient noise
+    if (noise > a) discard;
+  }
   fragColor = vec4(v_color, 1.0); // opaque, so already premultiplied
 }`;
 
@@ -88,6 +99,7 @@ in vec2 a_corner;
 in uvec4 a_rec;             // the 16-byte record as four little-endian words
 out vec2 v_corner;
 out vec3 v_color;
+out float v_alpha;
 const float QUAT_RANGE = 0.70710678118654752;
 void main() {
   uint w0 = a_rec.x, w1 = a_rec.y, w2 = a_rec.z, w3 = a_rec.w;
@@ -150,6 +162,7 @@ void main() {
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
   v_color = vec3(float(w3 & 255u), float((w3 >> 8) & 255u), float((w3 >> 16) & 255u)) / 255.0 * shade;
+  v_alpha = float(w3 >> 24) / 255.0;
 }`;
 
 /** Light direction in the local metric frame (east, south, up): from the north-west, above. */
@@ -165,6 +178,7 @@ export interface SurfelProgram {
   uRight: WebGLUniformLocation;
   uUp: WebGLUniformLocation;
   /** Only in the program that decodes packed records. */
+  uStochastic?: WebGLUniformLocation;
   uZOrigin?: WebGLUniformLocation;
   uZStep?: WebGLUniformLocation;
 }
@@ -228,6 +242,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, packed = false):
     if (!loc) throw new Error(`missing uniform ${name}`);
     return loc;
   };
+  const stochastic = gl.getUniformLocation(program, "u_stochastic");
   return {
     program,
     uMatrix: uniform("u_matrix"),
@@ -237,6 +252,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, packed = false):
     uLight: uniform("u_light"),
     uRight: uniform("u_right"),
     uUp: uniform("u_up"),
+    ...(stochastic ? { uStochastic: stochastic } : {}),
     ...(packed ? { uZOrigin: uniform("u_z_origin"), uZStep: uniform("u_z_step") } : {}),
   };
 }
@@ -315,6 +331,8 @@ export interface DrawOptions {
   /** Factor on every semi-axis (default 1: the 2-sigma ellipse). */
   extent?: number;
   depthTest: boolean;
+  /** Screen-door transparency from each splat's opacity (default off: every splat is opaque). */
+  stochastic?: boolean;
 }
 
 export function drawSurfels(
@@ -329,6 +347,7 @@ export function drawSurfels(
   gl.uniform3fv(p.uLight, LIGHT);
   gl.uniform3fv(p.uRight, right);
   gl.uniform3fv(p.uUp, up);
+  if (p.uStochastic) gl.uniform1f(p.uStochastic, opts.stochastic ? 1 : 0);
   if (p.uZOrigin && p.uZStep) {
     gl.uniform1f(p.uZOrigin, b.z?.origin ?? 0);
     gl.uniform1f(p.uZStep, b.z?.step ?? 1);

@@ -44,17 +44,26 @@ const config: PyramidConfig = {
 };
 const OUT = `demo/tiles/${name}`;
 
-/** `path@c2+1@first` -> path and a point filter (all points when no filter is given). */
-function parseSpec(spec: string): { path: string; keep: (cls: number, returns: number) => boolean } {
+/**
+ * `path@c2+1@first` -> path and a point filter (all points when no filter is given). `@v3+4+5` marks the points of
+ * those classes as vegetation, `@vr` the points whose pulse has more than one return (airborne data has no vegetation
+ * class): the vegetation share of a voxel sets its opacity when DORAYAKI_VEGETATION_OPACITY is given (E017).
+ */
+function parseSpec(spec: string): { path: string; keep: (cls: number, returns: number) => boolean; vegetation: (cls: number, returns: number) => number } {
   const [path, ...filters] = spec.split("@");
   let classes: Set<number> | undefined;
   let which: "first" | "last" | undefined;
+  let vegClasses: Set<number> | undefined;
+  let vegByReturns = false;
   for (const f of filters) {
-    if (f.startsWith("c")) classes = new Set(f.slice(1).split("+").map(Number));
+    if (f === "vr") vegByReturns = true;
+    else if (f.startsWith("v")) vegClasses = new Set(f.slice(1).split("+").map(Number));
+    else if (f.startsWith("c")) classes = new Set(f.slice(1).split("+").map(Number));
     else if (f === "first" || f === "last") which = f;
-    else throw new Error(`unknown filter @${f}; use @c<class>[+<class>...], @first or @last`);
+    else throw new Error(`unknown filter @${f}; use @c<class>[+<class>...], @first, @last, @v<class>[+<class>...] or @vr`);
   }
   return {
+    vegetation: (cls, returns) => (vegClasses?.has(cls) || (vegByReturns && ((returns >> 3) & 7) > 1) ? 1 : 0),
     path: path!,
     keep: (cls, returns) => {
       if (classes && !classes.has(cls)) return false;
@@ -83,11 +92,13 @@ const origin = jprcsToLatLng(Number(zoneArg), n0, e0);
 const sizes = pyramidVoxelSizes(origin, config);
 const accs = new Map(sizes.map((s) => [s, new VoxelAccumulator(s)]));
 const finestSize = sizes[sizes.length - 1]!;
+const vegetationOpacity = process.env.DORAYAKI_VEGETATION_OPACITY === undefined ? undefined : Number(process.env.DORAYAKI_VEGETATION_OPACITY);
 const adaptive = process.env.DORAYAKI_ADAPTIVE_LEVELS === undefined ? undefined : {
   maxLevel: Number(process.env.DORAYAKI_ADAPTIVE_LEVELS),
   thickness: Number(process.env.DORAYAKI_ADAPTIVE_THICKNESS ?? 0.05),
   colourTolerance: Number(process.env.DORAYAKI_ADAPTIVE_COLOUR ?? 0.1),
   sparseSupport: Number(process.env.DORAYAKI_ADAPTIVE_SPARSE ?? 0),
+  ...(vegetationOpacity === undefined ? {} : { vegetationOpacity }),
 };
 // The sparse threshold is multiplied by this for each zoom below the maxzoom (cells there are 4 times
 // the area, so they hold about 4 times the points); 1 keeps one threshold for every zoom (E009).
@@ -117,11 +128,13 @@ for (const [fi, f] of files.entries()) {
       got += r;
     }
     const keep = specs[fi]!.keep;
+    const vegetation = specs[fi]!.vegetation;
     forEachLasRecord(buf, header, n, (x, y, z, c, r, g, b, returns) => {
       if (!keep(c, returns)) return;
       const lx = x - e0, ly = y - n0;
       const cr = (r >> 8) / 255, cg = (g >> 8) / 255, cb = (b >> 8) / 255;
-      for (const a of list) a.add(lx, ly, z, cr, cg, cb);
+      const veg = vegetation(c, returns);
+      for (const a of list) a.add(lx, ly, z, cr, cg, cb, veg);
     });
     fileDone += n;
   }
@@ -139,7 +152,7 @@ const pyramid = buildPyramidFrom(
       if (voxel === finestSize) adaptiveLevels = r.perLevel;
       return r.gaussians;
     }
-    return accs.get(voxel)!.toGaussians({ minPoints: 1, minScale: 0.001, degenerateScale: voxel / 4 });
+    return accs.get(voxel)!.toGaussians({ minPoints: 1, minScale: 0.001, degenerateScale: voxel / 4, ...(vegetationOpacity === undefined ? {} : { vegetationOpacity }) });
   },
   origin, config,
 );

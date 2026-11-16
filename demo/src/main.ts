@@ -48,6 +48,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-single": "tiles/kawazu-single/tilejson.json",
         "kawazu-sc4": "tiles/kawazu-sc4/tilejson.json",
         "kawazu-v2": "tiles/kawazu-v2/tilejson.json",
+        "kawazu-veg": "tiles/kawazu-veg/tilejson.json",
         "kawazu-s4": "tiles/kawazu-s4/tilejson.json",
         "kawazu-s10": "tiles/kawazu-s10/tilejson.json",
         "kawazu-s16": "tiles/kawazu-s16/tilejson.json",
@@ -80,6 +81,7 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-stars": { terrain: "1", extent: "1.3" },
   "kawazu-sc4": { terrain: "1", extent: "1.3" },
   "kawazu-v2": { terrain: "1", extent: "1.3" },
+  "kawazu-veg": { terrain: "1", extent: "1.3", veg: "1" },
   "kawazu-s4": { terrain: "1", extent: "1.3" },
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
@@ -229,6 +231,7 @@ map.on("load", () => {
   const makeLayer = (): SurfelLayer => {
     const l = new SurfelLayer("surfels");
     if (lod > 0) l.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+    if (flag("veg", tileset) === "1") l.stochastic = true; // opacity as screen-door transparency (vegetation, E017)
     if (mixed) l.drawAllTiles = true; // the streamer chose tiles of several zooms by distance
     if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
     l.setZOffset(dz + zoomLift());
