@@ -723,3 +723,11 @@ version 5 file (110,972,600 B). Pages (PR 18, merged the evening before) already
 of that site was checked first (6 z17 tiles, 25,460,650 B, 1,591,264 splats, as before). The first upload had the wrong
 centre (the merge takes it from the first tileset: mesh 08OF4050 had been listed first); fixed by writing the archive
 again from the same tile files with the centre of 08OF4060. TileJSON URL: `?v=20261117v6b`.
+
+## 2026-11-17: review of the class plane
+
+An independent review (ten findings) and a review of the specification changed the class plane: codes are 0 to 127 (128 to 255 reserved and
+rejected), a reader inflates at most `count` bytes, the builder refuses `DORAYAKI_CLASS_PLANE=1` without the adaptive merge (it would have written
+code 242 for every splat), the merge refuses to join planes of the wrong length, the demo computes the vegetation guess only while a class
+feature is on, and the legend is cleared. Inflating the planes of 785,133 splats took 305 ms in the browser (the earlier note of 0.1 s per million
+splats was not measured; it was about 0.39 s). Details and the table of findings: documents/class-plane.md "Review".

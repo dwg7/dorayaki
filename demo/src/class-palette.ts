@@ -5,8 +5,8 @@
  */
 export interface ClassStyle { name: string; rgb: [number, number, number] }
 
-/** Palette slot of a class code in the shader: codes 0 to 30 are their own slot, 64 and above share slot 31 (see classIndex in gpu-surfels.ts). */
-export const CLASS_PALETTE_SLOTS = 32;
+/** One palette entry per class code (CLASS_CODE_LIMIT in src/class-plane.ts). */
+export const CLASS_PALETTE_SLOTS = 128;
 
 const STYLES = new Map<number, ClassStyle>([
   [0, { name: "never classified", rgb: [120, 120, 130] }],
@@ -28,16 +28,12 @@ const UNKNOWN: ClassStyle = { name: "other", rgb: [255, 0, 200] };
 
 export const classStyle = (code: number): ClassStyle => STYLES.get(code) ?? UNKNOWN;
 
-/** Slot of a class code in the palette array: codes 0 to 30 map to themselves, 31 and above (64 and up) to slot 31. */
-export const classSlotOf = (code: number): number => (code >= 64 ? 31 : Math.min(code, 30));
-
-/** The palette as 32 rgb triples in 0..1, indexed by classSlotOf. */
+/** The palette as one rgb triple in 0..1 per class code 0 to 127 (CLASS_PALETTE_SLOTS), indexed by the code. */
 export function classPaletteArray(): Float32Array {
   const out = new Float32Array(CLASS_PALETTE_SLOTS * 3);
-  for (let slot = 0; slot < CLASS_PALETTE_SLOTS; slot++) {
-    const code = slot === 31 ? 64 : slot;
+  for (let code = 0; code < CLASS_PALETTE_SLOTS; code++) {
     const [r, g, b] = classStyle(code).rgb;
-    out.set([r / 255, g / 255, b / 255], slot * 3);
+    out.set([r / 255, g / 255, b / 255], code * 3);
   }
   return out;
 }

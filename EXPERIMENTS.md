@@ -1370,7 +1370,7 @@ does it make a real "hide vegetation" button and a false-colour view possible?
   is that every client downloads it (about 1 % of the archive).
 - **Class codes are the ASPRS LAS codes** (the palette hfu named: "the standard colours of LAS point classes"), plus codes from 64 up
   for a build's own rules: 64 = vegetation inferred from several returns (the airborne files have no vegetation class).
-- **One byte per splat, gzip-ed** (E020: 0.99 bit per splat at z17 against 0.71 for a 2-bit plane): simpler, any of 256 codes, 0.25 %
+- **One byte per splat, gzip-ed** (E020: 0.99 bit per splat at z17 against 0.71 for a 2-bit plane): simpler, any of 128 codes (codes 128 to 255 are reserved after the review), 0.25 %
   of the archive more than the tightest form. Purity is not stored.
 - **Inflate on demand** in the browser (`DecompressionStream`), and the class is an instanced byte attribute on the GPU.
 - The block does not change (versions 5 and 6 both work); the plane's count must equal the block's, else it is ignored.
@@ -1399,7 +1399,7 @@ an unknown frame, a tile without a plane, a truncated frame.
   (MMS classes 3 to 5 on the road's surroundings, and the airborne several-returns rule on the structure's edges), and the road's white
   ribbon in the picture is the basemap showing through. The class quality limits the button, as E020 warned: the data has no
   building or bridge class.
-- A plane costs 0.1 s per million splats to inflate (not measured separately) and does not change what is drawn until it is used.
+- Inflating the planes of four z17 tiles and one z16 set (785,133 splats) took 305 ms in the browser, about 0.39 s per million splats, measured after the review fixes; a plane does not change what is drawn until it is used.
 
 ### Decision
 Keep as a first slice behind the flags and the controls. Open: how to get a better class for the airborne data (E020), whether the

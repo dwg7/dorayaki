@@ -27,8 +27,7 @@ uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the co
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
 uniform float u_class_colour; // 1: colour by class instead of the stored colour
-uniform vec3 u_palette[32]; // colour of a class slot, see classSlotOf in class-palette.ts
-uint classIndex(uint code) { return code >= 64u ? 31u : min(code, 30u); }
+uniform vec3 u_palette[128]; // colour of class code c (class-palette.ts)
 bool hidden(float cls) {
   uint code = uint(cls + 0.5);
   return u_has_class > 0.5 && code < 128u && ((u_hide_mask[code >> 5u] >> (code & 31u)) & 1u) == 1u;
@@ -64,7 +63,7 @@ void main() {
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
-  vec3 base = (u_class_colour > 0.5 && u_has_class > 0.5) ? u_palette[classIndex(uint(a_class + 0.5))] : a_color.rgb;
+  vec3 base = (u_class_colour > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : a_color.rgb;
   v_color = base * shade;
 }`;
 
@@ -144,8 +143,7 @@ uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the co
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
 uniform float u_class_colour; // 1: colour by class instead of the stored colour
-uniform vec3 u_palette[32]; // colour of a class slot, see classSlotOf in class-palette.ts
-uint classIndex(uint code) { return code >= 64u ? 31u : min(code, 30u); }
+uniform vec3 u_palette[128]; // colour of class code c (class-palette.ts)
 bool hidden(float cls) {
   uint code = uint(cls + 0.5);
   return u_has_class > 0.5 && code < 128u && ((u_hide_mask[code >> 5u] >> (code & 31u)) & 1u) == 1u;
@@ -214,13 +212,21 @@ ${decode}
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
-  vec3 base = (u_class_colour > 0.5 && u_has_class > 0.5) ? u_palette[classIndex(uint(a_class + 0.5))] : rgb;
+  vec3 base = (u_class_colour > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : rgb;
   v_color = base * shade;
 }`;
 }
 
 /** Light direction in the local metric frame (east, south, up): from the north-west, above. */
 const PALETTE = classPaletteArray();
+const NO_HIDDEN_CLASSES = new Uint32Array(4);
+
+/** The 128-bit mask of class codes to skip, as four uint32 words (codes outside 0..127 are ignored). */
+export function hideMaskOf(codes: readonly number[]): Uint32Array<ArrayBuffer> {
+  const mask = new Uint32Array(4);
+  for (const code of codes) if (Number.isInteger(code) && code >= 0 && code < 128) mask[code >> 5]! |= 1 << (code & 31);
+  return mask;
+}
 const LIGHT = normalize3(-0.4, -0.5, 0.75);
 
 export interface SurfelProgram {
@@ -252,6 +258,8 @@ export interface SurfelBuffers {
   count: number;
   /** The tile has per-splat class codes in the `a_class` attribute. */
   hasClasses?: boolean;
+  /** The buffer of the class attribute (inside `buffers`), when there is one. */
+  classBuffer?: WebGLBuffer;
   /** Set for packed records: the block's z origin and step, metres. */
   z?: { origin: number; step: number; scaleBase: number };
 }
@@ -356,10 +364,11 @@ export function uploadPacked(
   gl.enableVertexAttribArray(LOC.record);
   gl.vertexAttribIPointer(LOC.record, recordBytes / 4, gl.UNSIGNED_INT, recordBytes, 0);
   gl.vertexAttribDivisor(LOC.record, 1);
-  if (classes) attachClasses(gl, vao, buffers, classes);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return { vao, buffers, count, ...(classes ? { hasClasses: true } : {}), z: { origin: zOrigin, step: zStep, scaleBase } };
+  const out: SurfelBuffers = { vao, buffers, count, z: { origin: zOrigin, step: zStep, scaleBase } };
+  if (classes) attachClasses(gl, out, classes);
+  return out;
 }
 
 export function uploadSplats(gl: WebGL2RenderingContext, splats: readonly Splat[]): SurfelBuffers {
@@ -415,8 +424,8 @@ export interface DrawOptions {
    * `"flat"`: opaque splats of the full extent.
    */
   pass?: "flat" | "core" | "soft";
-  /** Class codes whose splats are skipped (needs the tile's class codes, E021). */
-  hideClasses?: readonly number[];
+  /** Bit c of the 128 bits: skip the splats of class code c (hideMaskOf; needs the tile's class codes, E021). */
+  hideMask?: Uint32Array;
   /** Colour by class (palette in class-palette.ts) instead of the stored colour, for tiles that have class codes. */
   classColour?: boolean;
   /** Strength of the shading, 0..1 (default 1: the fixed Lambert light; 0: colours as stored). */
@@ -445,9 +454,7 @@ export function drawSurfels(
   const soft = opts.pass === "soft";
   gl.uniform1f(p.uSoft, soft ? 1 : 0);
   gl.uniform1f(p.uShade, opts.shade ?? 1);
-  const mask = new Uint32Array(4);
-  for (const code of opts.hideClasses ?? []) if (code >= 0 && code < 128) mask[code >> 5]! |= 1 << (code & 31);
-  gl.uniform4uiv(p.uHideMask, mask);
+  gl.uniform4uiv(p.uHideMask, opts.hideMask ?? NO_HIDDEN_CLASSES);
   gl.uniform1f(p.uHasClass, b.hasClasses ? 1 : 0);
   gl.uniform1f(p.uClassColour, opts.classColour ? 1 : 0);
   gl.uniform3fv(p.uPalette, PALETTE);
@@ -474,11 +481,18 @@ export function drawSurfels(
   }
 }
 
-function attachClasses(gl: WebGL2RenderingContext, vao: WebGLVertexArrayObject, buffers: WebGLBuffer[], classes: Uint8Array): void {
+/** Make `classes` the tile's class attribute (one byte per splat); a class buffer the tile already has is deleted. */
+function attachClasses(gl: WebGL2RenderingContext, b: SurfelBuffers, classes: Uint8Array): void {
   const buffer = gl.createBuffer();
   if (!buffer) throw new Error("createBuffer failed");
-  buffers.push(buffer);
-  gl.bindVertexArray(vao);
+  if (b.classBuffer) {
+    gl.deleteBuffer(b.classBuffer);
+    const i = b.buffers.indexOf(b.classBuffer);
+    if (i >= 0) b.buffers.splice(i, 1);
+  }
+  b.buffers.push(buffer);
+  b.classBuffer = buffer;
+  gl.bindVertexArray(b.vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
   gl.bufferData(gl.ARRAY_BUFFER, classes, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(LOC.cls);
@@ -486,13 +500,13 @@ function attachClasses(gl: WebGL2RenderingContext, vao: WebGLVertexArrayObject, 
   gl.vertexAttribDivisor(LOC.cls, 1);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  b.hasClasses = true;
 }
 
 /** Give a tile that is already on the GPU its class codes (they arrive after the tile, once the class plane is inflated). */
 export function setBufferClasses(gl: WebGL2RenderingContext, b: SurfelBuffers, classes: Uint8Array): void {
   if (classes.byteLength !== b.count) return; // a plane of another block: ignore
-  attachClasses(gl, b.vao, b.buffers, classes);
-  b.hasClasses = true;
+  attachClasses(gl, b, classes);
 }
 
 export function deleteSurfelBuffers(gl: WebGL2RenderingContext, b: SurfelBuffers): void {
