@@ -715,3 +715,11 @@ none at 15 or above), set on every zoom event when terrain is on (`demo/src/terr
 Looked at zoom 14 and 11.5 (no holes at 14); the slope and cap are tuned by eye on this one area, and
 the 40 m cap is an assumption. A different region needs its own check. Raising the data makes it hover
 over the basemap by up to 20 to 30 m at zoom 12 (a pixel there is about 25 m).
+
+## 2026-11-17: the Kawazu archive on stars is Surfel Block version 6
+
+`dorayaki-kawazu.pmtiles` on stars is now the version 6 build (83,230,962 B, SHA-256 `9f416dcb...`), replacing the
+version 5 file (110,972,600 B). Pages (PR 18, merged the evening before) already read version 6; the version 5 data
+of that site was checked first (6 z17 tiles, 25,460,650 B, 1,591,264 splats, as before). The first upload had the wrong
+centre (the merge takes it from the first tileset: mesh 08OF4050 had been listed first); fixed by writing the archive
+again from the same tile files with the centre of 08OF4060. TileJSON URL: `?v=20261117v6b`.

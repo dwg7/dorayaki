@@ -90,7 +90,7 @@ decodes and uploads only those. The previous set keeps being drawn until every
 tile of the new set has arrived, then the whole set is swapped (no holes; the status
 line shows "Loading z17: 6/12 tile(s)"). A tile's 16-byte records are taken from the block as they are (no Splat objects) and uploaded to the GPU, where the vertex shader decodes them (E013; `?gpu=legacy` builds 56-byte float instance data instead); the layer drops its copy after the upload, so the JS heap stays near 230 to 420 MB at the Kawazu views (E011). If the WebGL context is lost and restored, MapLibre does not bring the custom layer back: the demo adds a new layer and loads the tiles again. A tile already in flight or held is reused;
 tiles outside the new set are freed (a tile seen again is fetched again, usually
-from the browser's HTTP cache). Kawazu's nine-mesh set (46 tiles, 111 MB) has 12 tiles at z17; before the cap of nine,
+from the browser's HTTP cache). Kawazu's nine-mesh set (46 tiles, 83 MB) has 12 tiles at z17; before the cap of nine,
 zoom 17.6 requested 12 (59 MB). At the showcase view (zoom 16.6) the page fetches 10.8 MB (E011).
 
 ## Terrain at low zoom
