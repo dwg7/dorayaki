@@ -1,6 +1,6 @@
 # Tile-aligned, parallel build (design study, E022)
 
-Status: a **study**, not an implementation. The measurements and the two scripts behind it are in E022 (EXPERIMENTS.md):
+Status: a **study**; step 1 of the plan, the `TileFramer` module, is implemented (`src/geodesy/tile-frame.ts`, E022 follow-up). The rest is not. The measurements and the two scripts behind it are in E022 (EXPERIMENTS.md):
 `npm run measure:frame` and `npm run prototype:tile-scatter`. Nothing here changes the hosted archive or the tile format.
 
 ## Why look at it
@@ -76,6 +76,28 @@ changes is that it divides by the number of cores (about 6 hours on 16 cores, 1.
 Tile partition against mesh partition with a halo: both need one scatter pass; a mesh partition would still need the 8 m halo of its
 neighbours, a per-mesh frame with its convergence error, and a serial merge. The tile partition has none of them.
 
+## TileFramer (step 1)
+
+```ts
+const framer = new TileFramer(zone, 17);          // plane rectangular zone 1..19, zoom of the tiles
+const loc = framer.locate(easting, northing);     // { x, y, east, south, widthMetres, clamped }
+```
+
+- `locate` returns the z17 tile of a plane point and its position in that tile's frame: metres east and south of the north-west corner, in
+  [0, widthMetres). `widthMetres` is `tileWidthMetres` of the tile (true metres at its centre latitude).
+- The frame of a tile is an affine map from plane coordinates to tile units, fitted from five exact conversions (the anchor and central
+  differences 50 m either side) at the plane point that the exact conversion maps to the tile's centre. That point is found by six Newton steps from a
+  fixed start, so **the frame depends only on the tile**: processes that see different points first still agree on every frame, bit for bit.
+- A coarse frame on a 1 km grid of plane coordinates chooses the tile; the tile's own frame confirms it. A point that falls outside there steps to
+  the neighbour it falls in, at most three times, and then is clamped into the last tile (`clamped: true`, under 0.001 % of the points in the airborne and MMS
+  files tried): every point goes to exactly one tile.
+- Accuracy against the exact conversion (`jprcs.ts`): **z17: 0.61 mm mean and 1.69 mm worst over 4,000 points of 18.2 million (08OF4062); at most 5 mm in
+  the tests (3,000 random points around Kawazu)**; the frames of the two tiles on either side of an edge differ by under 5 mm there. A z15 tile (1 km) is
+  centimetres off at its corners (under 5 cm in the test): the error grows with the square of the width, so the plan uses z17 frames only and derives
+  z16 and z15 from the z17 tile's own build. The flat frame of the present build is over 0.5 m off over one mesh (test).
+- Throughput in JavaScript, including 4,000 exact checks and a per-tile map lookup: 2.4 million points per second on airborne points, 3.3 on MMS points.
+- The conversion takes the survey convention (x northing, y easting); a LAS file stores the easting in X and the northing in Y.
+
 ## Risks and open questions
 
 - **The first archive after the change moves** (by up to a metre inside a mesh, 1.8 m across seams): the DEM shift of 2 m (E010, the DEM against the
@@ -90,7 +112,7 @@ neighbours, a per-mesh frame with its convergence error, and a serial merge. The
 
 ## Proposed next steps (each small enough for one change)
 
-1. A `TileFrame` module (`src/geodesy/tile-frame.ts`): the fitted frame with the step-and-clamp rule, tested against the exact conversion.
+1. **Done**: `TileFramer` (`src/geodesy/tile-frame.ts`, `test/tile-frame.test.ts`): the fitted frame per tile, anchored deterministically at the tile's centre, the step-and-clamp rule, tested against the exact conversion. See "TileFramer" below.
 2. The tile-local build as a function (`points of one tile -> z17, z16, z15 pieces`), run on the prototype's densest tile and compared with the
    present build of the same area after undoing the rotation: same splat counts within the seam strip, same colors.
 3. Scatter to shard files and a tile job runner (processes, a manifest), on the nine Kawazu meshes: compare the archive with the present one

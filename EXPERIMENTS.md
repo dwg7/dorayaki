@@ -1449,3 +1449,16 @@ the manifests of the nine class-plane builds; `npm run measure:frame` (two neigh
 ### Decision
 Study only. Recommended: build a `TileFrame` module and the tile-local build first (steps 1 and 2 in the design), because they also fix the 1.8 m jogs;
 the orchestrator and the streaming archive writer come after. hfu to decide whether to go ahead.
+
+### E022 follow-up: the TileFramer module (2026-11-17)
+
+`src/geodesy/tile-frame.ts` (`TileFramer`, `fitAffine`, `planePointOfTileUnits`, `exactTileUnits`) with `test/tile-frame.test.ts` (nine tests; 237 in all):
+the frame of a tile depends only on the tile (deterministic Newton start), a coarse 1 km frame chooses the tile, the tile's frame confirms it, a point
+outside after three steps is clamped. Tests: the affine fit within 3 mm over 200 m; the tile centre found to better than a micrometre; 3,000 random points
+around Kawazu within 5 mm of the exact conversion and in the tile the exact conversion gives (at most 3 disagreeing, all within 1 cm of an edge); the frames
+of two tiles on either side of an edge within 5 mm; edge points assigned to exactly one tile and the same in any order of the points; a frame that never
+accepts a point leads to a clamp, not a loss; z15 within 5 cm of z17 (its tile is 1 km wide); a zone XII point at the zone origin; the present flat frame
+more than 0.5 m off over a mesh against under 5 mm for the tile frame; unknown zones and silly zooms refused.
+`prototype:tile-scatter` now uses the module. Airborne 08OF4062 (18,206,201 points): 7.5 s, 2.43 million points per second; error 0.61 mm mean and 1.69 mm worst
+over 4,000 exact checks (the flat frame: 0.633 m and 1.624 m); 69 points clamped (0.0004 %). First 20 million points of the MMS file 08OF4060: 6.0 s, 3.32 million
+points per second, 3 z17 tiles, 57 points clamped.

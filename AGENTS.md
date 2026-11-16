@@ -253,6 +253,7 @@ src/pointcloud/voxel-accumulator.ts  the same fit, streaming: memory grows with 
 src/pointcloud/adaptive.ts   E005: merge coplanar, same-color voxel Gaussians into larger splats
 src/pointcloud/pyramid.ts    tile pyramid from a point cloud: aggregated zooms + maxzoom levels
 src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
+src/geodesy/tile-frame.ts    TileFramer: plane point -> z17 tile and tile-local metres (E022, documents/tile-aligned-build.md)
 scripts/build-numazu-demo.ts builds the numazu tileset from data/ (not committed)
 src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
