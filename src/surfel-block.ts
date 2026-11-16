@@ -503,7 +503,8 @@ function putBits(buf: Uint8Array, base: number, off: number, len: number, value:
   for (let i = 0; i < len; i++) if ((value >> i) & 1) buf[base + ((off + i) >> 3)]! |= 1 << ((off + i) & 7);
 }
 
-function getBits(buf: Uint8Array, base: number, off: number, len: number): number {
+/** `len` bits at bit `off` of the record starting at byte `base` (little-endian, least significant bit first). */
+export function readBits(buf: Uint8Array, base: number, off: number, len: number): number {
   let v = 0;
   for (let i = 0; i < len; i++) v |= ((buf[base + ((off + i) >> 3)]! >> ((off + i) & 7)) & 1) << i;
   return v;
@@ -578,13 +579,13 @@ function decodeSurfelBlockV6(bytes: Uint8Array, layout: SurfelBlockLayout): Surf
   const splats: Splat[] = new Array(count);
   for (let i = 0; i < count; i++) {
     const o = tableEnd + i * SURFEL_RECORD_BYTES_V6;
-    const [qw, qx, qy, qz] = unpackQuaternionBits(getBits(bytes, o, F.quat.off, F.quat.len), V6_QUAT_COMPONENT_BITS);
-    const scale = (f: { off: number; len: number }) => 2 ** (scaleLog2Min + getBits(bytes, o, f.off, f.len) / V6_SCALE_STEPS_PER_OCTAVE);
-    const colour = (f: { off: number; len: number }) => Math.round((getBits(bytes, o, f.off, f.len) * 255) / colourMax);
+    const [qw, qx, qy, qz] = unpackQuaternionBits(readBits(bytes, o, F.quat.off, F.quat.len), V6_QUAT_COMPONENT_BITS);
+    const scale = (f: { off: number; len: number }) => 2 ** (scaleLog2Min + readBits(bytes, o, f.off, f.len) / V6_SCALE_STEPS_PER_OCTAVE);
+    const colour = (f: { off: number; len: number }) => Math.round((readBits(bytes, o, f.off, f.len) * 255) / colourMax);
     splats[i] = {
-      x: getBits(bytes, o, F.x.off, F.x.len) / xyScale,
-      y: getBits(bytes, o, F.y.off, F.y.len) / xyScale,
-      z: Math.fround(zOrigin + getBits(bytes, o, F.z.off, F.z.len) * zStep),
+      x: readBits(bytes, o, F.x.off, F.x.len) / xyScale,
+      y: readBits(bytes, o, F.y.off, F.y.len) / xyScale,
+      z: Math.fround(zOrigin + readBits(bytes, o, F.z.off, F.z.len) * zStep),
       sx: scale(F.sx), sy: scale(F.sy), sz: scale(F.sz),
       qw, qx, qy, qz,
       r: colour(F.r), g: colour(F.g), b: colour(F.b), a: alpha,

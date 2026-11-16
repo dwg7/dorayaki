@@ -1252,3 +1252,40 @@ unchanged (one opaque pass).
 
 ### Decision
 Open: hfu to judge by eye (`?fixture=kawazu-stars&look=soft`, with `&shade=0`).
+
+## E019: a button to take vegetation away; what bare ground looks like
+
+### Question
+hfu asked for a button that removes vegetation, to see what the ground looks like in the soft look (E018).
+
+### Method
+1. A guess from the splats alone (`demo/src/vegetation.ts`, a "hide vegetation (guess)" checkbox, `?hideveg=1`): the tile is cut
+   into cells of 4 m; the ground of a cell is the lowest splat in it and its eight neighbours; a splat is vegetation when it is
+   more than 2 m above that and round (largest scale below 1.5 times the smallest, as the shader's disc rule). Computed when a
+   tile loads, one flag byte per splat, uploaded as an instanced attribute (`a_veg`), skipped in the vertex shader
+   (`u_hide_veg`). Works with versions 5 and 6.
+2. The real classification: the tileset builder already filters by LAS class. Mesh 08OF4060 built with `@c2` on both the MMS and
+   the airborne file (class 2 is ground in both): `kawazu-ground`, version 6, same recipe.
+
+### Measurements
+- The guess flags 11.0 % of the z17 splats of the nine-mesh archive (10.8 % at z16). Without the shape test it would flag
+  98.8 %: **the height test does not work on this terrain**: the lowest splat of a 12 m window on a 45 degree slope is 10 m below
+  the others, so nearly everything is "above ground". Heights 1, 3 m and cells of 8 m change the share by 0.2 points: the shape
+  test decides. Time: about 0.2 s per 1.2 million splats in Node.
+- Bare ground (`@c2`): 52,570 z17 splats (7.5 % of 702,139), 806,679 bytes for the mesh against 13.1 MB.
+- Seen in the browser (soft look, no shading, zoom 17.67, pitch 60): with the guess on, the forest loses its speckle but the
+  canopy surface stays: it is round blobs that go, not the canopy. With `kawazu-ground` the trees are gone: the slopes, the
+  road bed, the bridge piers and the stream bed show as bare earth, with white gaps where the ground splats are too sparse to
+  cover (laser returns on the ground under dense canopy are few).
+
+### Observations
+- The splats alone do not tell vegetation from ground here; the classification of the point cloud does. The checkbox is kept as
+  an honest, weak guess; for ground use the class.
+- A ground-only archive of the whole 1.08 km2 would be about 7 to 10 MB (the mesh is 0.8 MB), small enough to host beside the
+  full one. Not built.
+- A real button needs the class in the tiles (a class code per splat: the alpha byte of version 5 is free for it; version 6
+  has one opacity per block and no spare bits). It would serve the vivid-colour and the false-colour ideas as well (colour by
+  class). Not done.
+
+### Decision
+Open. The checkbox and the guess stay in the branch as an experiment; the next step, if hfu wants it, is the class per splat.

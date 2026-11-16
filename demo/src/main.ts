@@ -5,7 +5,7 @@ import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type ExpressionSpe
 
 import { decodeSurfelTileWithLevels, packSurfelTile } from "./decode-tile.js";
 import type { PackedBlock } from "../../src/surfel-block.js";
-import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
+import { tileLatitude, tileLongitude, tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
 import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
@@ -13,6 +13,7 @@ import { SurfelLayer } from "./surfel-layer.js";
 import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
 import { terrainLift } from "./terrain-lift.js";
+import { vegetationFlags } from "./vegetation.js";
 import { selectMixedTiles } from "./mixed-selection.js";
 import type { View } from "./camera.js";
 import type { LngLatBoundsArray } from "./tile-view.js";
@@ -49,6 +50,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-sc4": "tiles/kawazu-sc4/tilejson.json",
         "kawazu-v2": "tiles/kawazu-v2/tilejson.json",
         "kawazu-v6": "tiles/kawazu-v6/tilejson.json",
+        "kawazu-ground": "tiles/kawazu-ground/tilejson.json",
         "kawazu-s4": "tiles/kawazu-s4/tilejson.json",
         "kawazu-s10": "tiles/kawazu-s10/tilejson.json",
         "kawazu-s16": "tiles/kawazu-s16/tilejson.json",
@@ -82,6 +84,7 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-sc4": { terrain: "1", extent: "1.3" },
   "kawazu-v2": { terrain: "1", extent: "1.3" },
   "kawazu-v6": { terrain: "1", extent: "1.3" },
+  "kawazu-ground": { terrain: "1", extent: "1.3" },
   "kawazu-s4": { terrain: "1", extent: "1.3" },
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
@@ -116,6 +119,8 @@ toggleEl.addEventListener("click", () => {
 
 const statusEl = document.getElementById("status") as HTMLElement;
 const depthEl = document.getElementById("depth") as HTMLInputElement;
+const hideVegEl = document.getElementById("hideveg") as HTMLInputElement;
+hideVegEl.checked = new URLSearchParams(location.search).get("hideveg") === "1";
 const setStatus = (text: string): void => {
   statusEl.textContent = text;
 };
@@ -162,6 +167,8 @@ interface LoadedTile {
   levels: number[];
   /** Until the layer has taken it: the block's 16-byte records (default), or float instance data (`?gpu=legacy`). */
   packed: PackedBlock | undefined;
+  /** Per-splat vegetation guess for the packed records (vegetation.ts); handed over with them. */
+  vegetation: Uint8Array | undefined;
   instances: SplatInstances | undefined;
 }
 
@@ -169,6 +176,9 @@ interface LoadedTile {
 const timings = { fetchMs: 0, decodeMs: 0 };
 /** Each set handed to the layer: when (ms since the page started), zoom, tiles, bytes (`dorayaki.deliveries`). */
 const deliveries: Array<{ ms: number; zoom: number; tiles: number; bytes: number }> = [];
+/** The vegetation guess (vegetation.ts): `?vegh=` metres above the local ground, `?vegcell=` cell metres, `?vegshape=0` ignores the shape. */
+const vegNumber = (name: string, fallback: number): number => { const v = Number(flag(name, tileset)); return v > 0 ? v : fallback; };
+const vegOptions = { minHeight: vegNumber("vegh", 2), cellMetres: vegNumber("vegcell", 4), roundOnly: flag("vegshape", tileset) !== "0" };
 async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   const t0 = performance.now();
   // Tiles listed from TileJSON bounds may not exist (204/404); those come back as null.
@@ -179,12 +189,13 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   if (flag("gpu", tileset) !== "legacy") {
     const packed = packSurfelTile(bytes); // no Splat objects: the records go to the GPU as they are
     timings.decodeMs += performance.now() - t1;
-    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, instances: undefined };
+    const vegetation = vegetationFlags(packed, tileWidthMetres(tile), vegOptions);
+    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, vegetation, instances: undefined };
   }
   const decoded = decodeSurfelTileWithLevels(bytes);
   const instances = splatInstances(decoded.splats); // the Splat objects become garbage here
   timings.decodeMs += performance.now() - t1;
-  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, packed: undefined, instances };
+  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, packed: undefined, vegetation: undefined, instances };
 }
 
 map.on("load", () => {
@@ -244,11 +255,13 @@ map.on("load", () => {
     if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
     l.setZOffset(dz + zoomLift());
     l.setDepthTest(depthEl.checked);
+    l.hideVegetation = hideVegEl.checked;
     map.addLayer(l, "tile-outline"); // keep the 2D tile outlines visible on top
     return l;
   };
   let layer = makeLayer();
   depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
+  hideVegEl.addEventListener("change", () => layer.setHideVegetation(hideVegEl.checked));
 
   // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
   // as a whole when it is complete (documents/demo-and-site.md).
@@ -271,8 +284,8 @@ map.on("load", () => {
     onReady: (set, zoom) => {
       deliveries.push({ ms: Math.round(performance.now()), zoom, tiles: set.length, bytes: set.reduce((n, x) => n + x.data.byteLength, 0) });
       loaded = set.map((x) => x.data);
-      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
-      for (const t of loaded) { t.instances = undefined; t.packed = undefined; } // the layer owns the data now; do not keep a second copy
+      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.vegetation ? { vegetation: t.vegetation } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
+      for (const t of loaded) { t.instances = undefined; t.packed = undefined; t.vegetation = undefined; } // the layer owns the data now; do not keep a second copy
       const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.count, 0);
       summary = `${loaded.length} tile(s) of ${tileset} at z${zoom}: ${bytes} bytes, ${count} surfels.`;
