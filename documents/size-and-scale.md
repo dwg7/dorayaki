@@ -91,12 +91,13 @@ area other than this mesh.
 
 On 3 x 3 meshes (1.08 km2, 476 million points) with the same recipe: 220.0 MB
 (204 B/m2) when the sparse threshold is the same at every zoom, 132.0 MB
-(122 B/m2) when it is multiplied by 4 per zoom step, and **111.0 MB (103 B/m2)**
+(122 B/m2) when it is multiplied by 4 per zoom step, and 111.0 MB (103 B/m2)
 when it is multiplied by 10 (E011; the hosted archive). The size follows the area
 (10 to 14 MB per mesh); the largest tile is 7.2 MB (z17), 2.65 MB (z16 with factor 10).
 As a scale for the prefecture, extrapolated from this one valley: about 0.95 TB at
 122 B/m2, about 0.8 TB at 103 B/m2; 0.71 TB for z17 alone (z17 is the same in both).
-Loading all 46 tiles of the factor-4 build (8.25 million splats) at once took 0.8 s
+With the 12-byte records of Surfel Block version 6 (E016) the same archive is **83.2 MB (77 B/m2)**, exactly 0.75 of
+version 5; for the prefecture, extrapolated from this one valley, that is about 0.6 TB (7,780 km2 at 77 B/m2). Loading all 46 tiles of the factor-4 build (8.25 million splats) at once took 0.8 s
 to fetch, 3.2 s to decode and 2.1 s to upload on an Apple M1; it was not repeated for
 the factor-10 build.
 

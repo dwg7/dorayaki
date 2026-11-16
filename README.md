@@ -44,7 +44,7 @@ scales, a rotation and a colour. Here it is quantized into **16 bytes**.
   [EXPERIMENTS.md](EXPERIMENTS.md).
 - **Real data, large.** The Kawazu loop bridge and the valley below it: 476
   million points (mobile mapping and airborne laser, 1.08 km2, nine survey
-  meshes) become a 111 MB PMTiles archive of 6.94 million splats (about 103 bytes
+  meshes) become an 83 MB PMTiles archive of 6.94 million splats (about 77 bytes
   per square metre), served from stars. The demo loads only the tiles in view.
   Vegetation is kept as coarse blobs; flat, evenly coloured ground as large
   splats. See [documents/kawazu-demo.md](documents/kawazu-demo.md),
@@ -61,7 +61,7 @@ scales, a rotation and a colour. Here it is quantized into **16 bytes**.
 2. Gaussians are assigned to the one tile containing their centre. Zoom
    levels below the maximum hold coarser aggregates; the level of detail is
    the ordinary tile zoom hierarchy.
-3. Each tile's splats are packed into a **Surfel Block** (`DSRF`, version 5)
+3. Each tile's splats are packed into a **Surfel Block** (`DSRF`, version 5 or 6; the hosted Kawazu archive is version 6, 12 bytes per splat)
    and wrapped in an **experimental MapLibre Tile frame**.
 4. The browser fetches `z/x/y`, unwraps the frame, decodes the block, and
    draws instanced ellipses (round splats face the camera).
@@ -75,7 +75,7 @@ malformed lengths; the renderer only sees decoded splats.
 Please read this before depending on anything here.
 
 - **Not a specification.** The byte layout changes without notice and
-  version numbers rise freely (it is at version 5; breaking changes are
+  version numbers rise freely (it is at version 6, opt-in, and 5; breaking changes are
   stated in the format document).
 - **Not an MLT assignment.** Frame tag `0xD0` is a local, unassigned value
   chosen for the experiment. The upstream MapLibre Tile implementation is
@@ -144,8 +144,8 @@ Source layout: `src/surfel-block.ts` (codec), `src/mlt-frame.ts` (frame),
 オーバーハング、樹冠のように、同じ水平位置に複数の高さがあるものも保持できます。
 沼津の MMS 点群(976,195点)は、既定の `coarse` で 603 KB の PMTiles
 (同じ点の COPC の 0.12 倍。粗い表現であり可逆ではありません)になります。
-河津ループ橋と谷(1.08 km²、4.76 億点、航空レーザーと MMS)は、111 MB の PMTiles
-(約 103 B/m²)で、stars から配信しています。表示範囲のタイルだけを読み込みます。
+河津ループ橋と谷(1.08 km²、4.76 億点、航空レーザーと MMS)は、83 MB の PMTiles
+(約 77 B/m²)で、stars から配信しています。表示範囲のタイルだけを読み込みます。
 サイズの県全体への換算は、この谷 1 か所からの外挿です。
 [ブラウザで試す](https://dwg7.unopengis.org/dorayaki/)。
 
