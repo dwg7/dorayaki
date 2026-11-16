@@ -233,8 +233,8 @@ describe("decoder rejects malformed input", () => {
   });
 
   test("unsupported version", () => {
-    // Versions 1-3 used a 12- or 16-byte header and 32-byte records; 4 stored whole records, 5 stores byte planes.
-    for (const version of [0, 1, 2, 3, 6]) assertRejects(rawBlock({ version, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
+    // Versions 1-3 used a 12- or 16-byte header and 32-byte records; 4 stored whole records, 5 stores byte planes, 6 bit-packed 12-byte records.
+    for (const version of [0, 1, 2, 3, 7]) assertRejects(rawBlock({ version, count: 0, recordBytes: 0 }), "UNSUPPORTED_VERSION");
   });
 
   test("unexpected record size", () => {
@@ -367,5 +367,92 @@ describe("packedSurfelBlock", () => {
   test("rejects what the decoder rejects", () => {
     assert.throws(() => packedSurfelBlock(v5.subarray(0, v5.length - 1)), SurfelBlockError);
     assert.throws(() => packedSurfelBlock(new Uint8Array(10)), SurfelBlockError);
+  });
+});
+
+describe("version 6 (12-byte bit-packed records)", () => {
+  const rand = (() => { let a = 12345; return () => ((a = (a * 1664525 + 1013904223) >>> 0) / 2 ** 32); })();
+  const many: Splat[] = Array.from({ length: 300 }, (_, i) => {
+    const w = rand() * 2 - 1, x = rand() * 2 - 1, y = rand() * 2 - 1, z = rand() * 2 - 1, n = Math.hypot(w, x, y, z) || 1;
+    return {
+      x: rand() * 0.999, y: rand() * 0.999, z: 100 + rand() * 250,
+      sx: 2 ** (-8 + rand() * 10), sy: 2 ** (-8 + rand() * 10), sz: 2 ** (-8 + rand() * 10),
+      qw: w / n, qx: x / n, qy: y / n, qz: z / n,
+      r: Math.floor(rand() * 256), g: Math.floor(rand() * 256), b: Math.floor(rand() * 256), a: 242 + (i * 0),
+    };
+  });
+  const v6 = (s: Splat[], levels?: number[]) => encodeSurfelBlock(s, levels ?? [s.length], { version: 6 });
+
+  test("size: 40-byte header, 4 bytes per level, 12 bytes per splat", () => {
+    assert.equal(v6(many).byteLength, 40 + 4 + 12 * many.length);
+    assert.equal(v6([]).byteLength, 40 + 4);
+    assert.equal(v6(many, [100, 200]).byteLength, 40 + 8 + 12 * many.length);
+  });
+
+  test("round trip is within the quantization steps", () => {
+    const back = decodeSurfelBlock(v6(many));
+    assert.equal(back.length, many.length);
+    const zRange = Math.max(...many.map((s) => s.z)) - Math.min(...many.map((s) => s.z));
+    const zStep = Math.max(0.001, Math.ceil((zRange / 16383) * 1000 + 1e-9) / 1000);
+    many.forEach((s, i) => {
+      const d = back[i]!;
+      assert.ok(Math.abs(d.x - s.x) <= 1 / 16384 + 1e-12 && Math.abs(d.y - s.y) <= 1 / 16384 + 1e-12, `xy ${i}`);
+      assert.ok(Math.abs(d.z - s.z) <= zStep / 2 + 1e-4, `z ${i}: ${d.z} vs ${s.z}`);
+      for (const k of ["sx", "sy", "sz"] as const) assert.ok(Math.abs(Math.log2(d[k] / s[k])) <= 1 / 12 + 1e-9, `${k} ${i}`);
+      for (const k of ["r", "g", "b"] as const) assert.ok(Math.abs(d[k] - s[k]) <= 255 / 63 / 2 + 1, `${k} ${i}`);
+      assert.equal(d.a, 242);
+      const dot = Math.abs(d.qw * s.qw + d.qx * s.qx + d.qy * s.qy + d.qz * s.qz);
+      assert.ok(dot > Math.cos((8 * Math.PI) / 180), `rotation ${i}: ${(Math.acos(Math.min(1, dot)) * 180 / Math.PI).toFixed(1)} degrees`);
+    });
+  });
+
+  test("zero and one splat, and a level table, round trip", () => {
+    const zero = decodeSurfelBlockWithLevels(v6([]));
+    assert.deepEqual(zero.splats, []);
+    assert.deepEqual(zero.levels, [0]);
+    const one = decodeSurfelBlockWithLevels(v6([ONE], [1]));
+    assert.equal(one.splats.length, 1);
+    assert.equal(one.splats[0]!.sx, 0.125 * 1, "the smallest scale of the block is exact");
+    assert.equal(one.splats[0]!.x, 0.25);
+    assert.equal(one.splats[0]!.y, 0.5);
+    assert.equal(one.splats[0]!.z, 100);
+    const lv = decodeSurfelBlockWithLevels(v6(many, [100, 200]));
+    assert.deepEqual(lv.levels, [100, 200]);
+  });
+
+  test("deterministic output, and the same splats as the version 5 block within its larger steps", () => {
+    assert.deepEqual(v6(many), v6(many));
+    const a = decodeSurfelBlock(v6(many)), b = decodeSurfelBlock(encodeSurfelBlock(many));
+    a.forEach((s, i) => assert.ok(Math.abs(s.x - b[i]!.x) < 1 / 8000 && Math.abs(Math.log2(s.sx / b[i]!.sx)) < 0.2));
+  });
+
+  test("a block of splats with different opacities is rejected", () => {
+    assert.throws(() => v6([ONE, { ...ONE, a: 10 }]), (e: unknown) => e instanceof SurfelBlockError && e.code === "INVALID_VALUE");
+  });
+
+  test("malformed version 6 input is rejected: truncated, trailing, bad record size, short header", () => {
+    const good = v6(many);
+    assertRejects(good.subarray(0, good.length - 1), "TRUNCATED_RECORDS");
+    assertRejects(Uint8Array.from([...good, 0]), "TRAILING_BYTES");
+    assertRejects(good.subarray(0, 39), "TRUNCATED_HEADER");
+    const bad = new Uint8Array(good); new DataView(bad.buffer).setUint16(6, 16, true);
+    assertRejects(bad, "BAD_RECORD_SIZE");
+  });
+
+  test("packedSurfelBlock gives the 12-byte records and the scale base", () => {
+    const p = packedSurfelBlock(v6(many, [100, 200]));
+    assert.equal(p.recordBytes, 12);
+    assert.equal(p.count, 300);
+    assert.equal(p.records.byteLength, 300 * 12);
+    assert.deepEqual(p.levels, [100, 200]);
+    assert.equal(p.scaleLog2Min, Math.fround(Math.min(...many.flatMap((s) => [Math.log2(s.sx), Math.log2(s.sy), Math.log2(s.sz)]))));
+    assert.equal(packedSurfelBlock(encodeSurfelBlock(many)).recordBytes, 16);
+  });
+
+  test("scales above 21 octaves over the smallest clamp instead of wrapping", () => {
+    const wide = [{ ...ONE, sx: 2 ** -10, sy: 2 ** -10, sz: 2 ** -10 }, { ...ONE, x: 0.5, sx: 2 ** 20, sy: 2 ** 20, sz: 2 ** 20 }];
+    const back = decodeSurfelBlock(v6(wide));
+    // The base is the smallest scale (2^-10 m, from the first splat); code 127 is 127 / 6 = 21.17 octaves above it.
+    assert.ok(Math.abs(Math.log2(back[1]!.sx) - (-10 + 127 / 6)) < 1e-9, `clamped scale 2^${Math.log2(back[1]!.sx).toFixed(2)}`);
   });
 });

@@ -77,6 +77,22 @@ export const SURFEL_BLOCK_VERSION_AOS = 4;
 /** Fixed part of the header; the level table (4 bytes per level) follows it. */
 export const SURFEL_BLOCK_HEADER_BYTES = 32;
 export const SURFEL_RECORD_BYTES = 16;
+
+/** Version 6: whole 12-byte records of bit-packed fields (see V6_FIELDS), a 40-byte header, one opacity per block. */
+export const SURFEL_BLOCK_VERSION_V6 = 6;
+export const SURFEL_BLOCK_HEADER_BYTES_V6 = 40;
+export const SURFEL_RECORD_BYTES_V6 = 12;
+/** Bit offset and width of each field in a version 6 record, counted from the least significant bit of the little-endian record. */
+export const V6_FIELDS = {
+  x: { off: 0, len: 13 }, y: { off: 13, len: 13 }, z: { off: 26, len: 14 },
+  sx: { off: 40, len: 7 }, sy: { off: 47, len: 7 }, sz: { off: 54, len: 7 },
+  quat: { off: 61, len: 17 },
+  r: { off: 78, len: 6 }, g: { off: 84, len: 6 }, b: { off: 90, len: 6 },
+} as const;
+/** Version 6 scale code c (0..127) means 2^(scaleLog2Min + c / V6_SCALE_STEPS_PER_OCTAVE) metres. */
+export const V6_SCALE_STEPS_PER_OCTAVE = 6;
+/** Bits per stored quaternion component in version 6. */
+export const V6_QUAT_COMPONENT_BITS = 5;
 /** Upper bound on the level table size (a sanity limit, not a format need). */
 export const MAX_LEVELS = 64;
 
@@ -120,8 +136,10 @@ export class SurfelBlockError extends Error {
 const COLOR_FIELDS = ["r", "g", "b", "a"] as const;
 
 /** Byte length of an encoded block holding `count` splats in `levelCount` levels. */
-export function surfelBlockByteLength(count: number, levelCount = 1): number {
-  return SURFEL_BLOCK_HEADER_BYTES + 4 * levelCount + SURFEL_RECORD_BYTES * count;
+export function surfelBlockByteLength(count: number, levelCount = 1, version: number = SURFEL_BLOCK_VERSION): number {
+  return version === SURFEL_BLOCK_VERSION_V6
+    ? SURFEL_BLOCK_HEADER_BYTES_V6 + 4 * levelCount + SURFEL_RECORD_BYTES_V6 * count
+    : SURFEL_BLOCK_HEADER_BYTES + 4 * levelCount + SURFEL_RECORD_BYTES * count;
 }
 
 /** A decoded block: splats in stored order and the level table. */
@@ -189,6 +207,16 @@ export function decodeScale(code: number): number {
  * rotation, so the largest component is made non-negative.
  */
 export function packQuaternion(qw: number, qx: number, qy: number, qz: number): number {
+  return packQuaternionBits(qw, qx, qy, qz, 7);
+}
+
+/**
+ * packQuaternion with `componentBits` bits per stored component (codes 0..2 * half over [-1/sqrt2, 1/sqrt2], half =
+ * 2^(componentBits - 1) - 1, code half = 0), so 2 + 3 * componentBits bits in all: 7 bits is the 24-bit form of versions
+ * 4 and 5, 5 bits the 17-bit form of version 6.
+ */
+export function packQuaternionBits(qw: number, qx: number, qy: number, qz: number, componentBits: number): number {
+  const QUAT_HALF_STEPS = 2 ** (componentBits - 1) - 1;
   const len = Math.hypot(qw, qx, qy, qz);
   const q = [qw / len, qx / len, qy / len, qz / len];
   let largest = 0;
@@ -216,7 +244,7 @@ export function packQuaternion(qw: number, qx: number, qy: number, qz: number): 
   let shift = 2;
   for (const code of bestCodes) {
     bits |= code << shift;
-    shift += 7;
+    shift += componentBits;
   }
   return bits;
 }
@@ -224,18 +252,24 @@ export function packQuaternion(qw: number, qx: number, qy: number, qz: number): 
 /** Inverse of packQuaternion. Throws if the reserved bit 23 is set or a code is 127. */
 export function unpackQuaternion(bits: number): [number, number, number, number] {
   if (bits & 0x800000) throw new SurfelBlockError("INVALID_VALUE", "reserved quaternion bit is set");
+  return unpackQuaternionBits(bits, 7);
+}
+
+/** Inverse of packQuaternionBits (no reserved bit check). */
+export function unpackQuaternionBits(bits: number, componentBits: number): [number, number, number, number] {
+  const QUAT_HALF_STEPS = 2 ** (componentBits - 1) - 1;
   const largest = bits & 3;
   const q = [0, 0, 0, 0];
   let shift = 2;
   let sumSq = 0;
   for (let i = 0; i < 4; i++) {
     if (i === largest) continue;
-    const code = (bits >> shift) & 0x7f;
-    if (code > 2 * QUAT_HALF_STEPS) throw new SurfelBlockError("INVALID_VALUE", "quaternion code 127 is unused");
+    const code = (bits >> shift) & ((1 << componentBits) - 1);
+    if (code > 2 * QUAT_HALF_STEPS) throw new SurfelBlockError("INVALID_VALUE", `quaternion code ${code} is unused`);
     const v = ((code - QUAT_HALF_STEPS) / QUAT_HALF_STEPS) * QUAT_RANGE;
     q[i] = v;
     sumSq += v * v;
-    shift += 7;
+    shift += componentBits;
   }
   q[largest] = Math.sqrt(Math.max(0, 1 - sumSq));
   const len = Math.hypot(q[0]!, q[1]!, q[2]!, q[3]!);
@@ -254,7 +288,8 @@ export function unpackQuaternion(bits: number): [number, number, number, number]
  * log grid (clamped to 15 µm .. 724 m); rotation to 23 bits. Decoding
  * therefore returns values within those tolerances, not the exact input.
  */
-export function encodeSurfelBlock(splats: readonly Splat[], levels: readonly number[] = [splats.length]): Uint8Array {
+export function encodeSurfelBlock(splats: readonly Splat[], levels: readonly number[] = [splats.length], options: { version?: 5 | 6 } = {}): Uint8Array {
+  if (options.version === 6) return encodeSurfelBlockV6(splats, levels);
   const count = splats.length;
   if (count > MAX_COUNT) {
     throw new SurfelBlockError("TOO_MANY_SURFELS", `count ${count} exceeds uint32`);
@@ -320,8 +355,14 @@ export interface SurfelBlockLayout {
   zStep: number;
   /** Byte offset of the first record (or plane). */
   tableEnd: number;
-  /** True for version 5 (byte planes), false for version 4 (whole records). */
+  /** True for version 5 (byte planes), false for versions 4 and 6 (whole records). */
   planar: boolean;
+  /** 16 for versions 4 and 5, 12 for version 6. */
+  recordBytes: number;
+  /** Version 6: log2 of the metres of scale code 0 (0 otherwise). */
+  scaleLog2Min: number;
+  /** Version 6: the block's one opacity, 0..255 (255 otherwise: those versions store one per record). */
+  alpha: number;
 }
 
 /**
@@ -346,13 +387,22 @@ export function readSurfelBlockLayout(bytes: Uint8Array): SurfelBlockLayout {
     }
   }
   const version = view.getUint16(4, LITTLE_ENDIAN);
-  if (version !== SURFEL_BLOCK_VERSION && version !== SURFEL_BLOCK_VERSION_AOS) {
-    throw new SurfelBlockError("UNSUPPORTED_VERSION", `version ${version}, expected ${SURFEL_BLOCK_VERSION_AOS} or ${SURFEL_BLOCK_VERSION}`);
+  if (version !== SURFEL_BLOCK_VERSION && version !== SURFEL_BLOCK_VERSION_AOS && version !== SURFEL_BLOCK_VERSION_V6) {
+    throw new SurfelBlockError("UNSUPPORTED_VERSION", `version ${version}, expected ${SURFEL_BLOCK_VERSION_AOS}, ${SURFEL_BLOCK_VERSION} or ${SURFEL_BLOCK_VERSION_V6}`);
+  }
+  const v6 = version === SURFEL_BLOCK_VERSION_V6;
+  const headerBytes = v6 ? SURFEL_BLOCK_HEADER_BYTES_V6 : SURFEL_BLOCK_HEADER_BYTES;
+  const recordSize = v6 ? SURFEL_RECORD_BYTES_V6 : SURFEL_RECORD_BYTES;
+  if (bytes.byteLength < headerBytes) {
+    throw new SurfelBlockError("TRUNCATED_HEADER", `need ${headerBytes} header bytes, got ${bytes.byteLength}`);
   }
   const recordBytes = view.getUint16(6, LITTLE_ENDIAN);
-  if (recordBytes !== SURFEL_RECORD_BYTES) {
-    throw new SurfelBlockError("BAD_RECORD_SIZE", `record size ${recordBytes}, expected ${SURFEL_RECORD_BYTES}`);
+  if (recordBytes !== recordSize) {
+    throw new SurfelBlockError("BAD_RECORD_SIZE", `record size ${recordBytes}, expected ${recordSize}`);
   }
+  const scaleLog2Min = v6 ? view.getFloat32(32, LITTLE_ENDIAN) : 0;
+  const alpha = v6 ? bytes[36]! : 255;
+  if (!Number.isFinite(scaleLog2Min)) throw new SurfelBlockError("INVALID_VALUE", `scale base ${scaleLog2Min} is invalid`);
   const count = view.getUint32(8, LITTLE_ENDIAN);
   const levelCount = view.getUint32(12, LITTLE_ENDIAN);
   if (levelCount < 1 || levelCount > MAX_LEVELS) {
@@ -363,12 +413,12 @@ export function readSurfelBlockLayout(bytes: Uint8Array): SurfelBlockLayout {
   if (!Number.isFinite(zOrigin) || !(Number.isFinite(zStep) && zStep > 0)) {
     throw new SurfelBlockError("INVALID_VALUE", `z origin ${zOrigin} or step ${zStep} is invalid`);
   }
-  const tableEnd = SURFEL_BLOCK_HEADER_BYTES + 4 * levelCount;
+  const tableEnd = headerBytes + 4 * levelCount;
   if (bytes.byteLength < tableEnd) {
     throw new SurfelBlockError("TRUNCATED_HEADER", `level table needs ${tableEnd} bytes, got ${bytes.byteLength}`);
   }
-  const levels = Array.from({ length: levelCount }, (_, k) => view.getUint32(SURFEL_BLOCK_HEADER_BYTES + 4 * k, LITTLE_ENDIAN));
-  const expected = surfelBlockByteLength(count, levelCount);
+  const levels = Array.from({ length: levelCount }, (_, k) => view.getUint32(headerBytes + 4 * k, LITTLE_ENDIAN));
+  const expected = surfelBlockByteLength(count, levelCount, version);
   if (bytes.byteLength < expected) {
     throw new SurfelBlockError(
       "TRUNCATED_RECORDS",
@@ -383,7 +433,7 @@ export function readSurfelBlockLayout(bytes: Uint8Array): SurfelBlockLayout {
   }
   checkLevels(levels, count);
 
-  return { version, count, levels, zOrigin, zStep, tableEnd, planar: version === SURFEL_BLOCK_VERSION };
+  return { version, count, levels, zOrigin, zStep, tableEnd, planar: version === SURFEL_BLOCK_VERSION, recordBytes, scaleLog2Min, alpha };
 }
 
 /**
@@ -391,7 +441,9 @@ export function readSurfelBlockLayout(bytes: Uint8Array): SurfelBlockLayout {
  * validated).
  */
 export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
-  const { count, levels, zOrigin, zStep, tableEnd, planar } = readSurfelBlockLayout(bytes);
+  const layout = readSurfelBlockLayout(bytes);
+  if (layout.version === SURFEL_BLOCK_VERSION_V6) return decodeSurfelBlockV6(bytes, layout);
+  const { count, levels, zOrigin, zStep, tableEnd, planar } = layout;
   const splats: Splat[] = new Array(count);
   const get = planar
     ? (plane: number, i: number): number => bytes[tableEnd + plane * count + i]!
@@ -416,23 +468,127 @@ export function decodeSurfelBlockWithLevels(bytes: Uint8Array): SurfelBlock {
   return { splats, levels };
 }
 
-/** A block's records as whole 16-byte records, without making Splat objects (for uploading to the GPU as they are). */
+/** A block's records as whole records (16 bytes for versions 4 and 5, 12 for version 6), without making Splat objects (for uploading to the GPU as they are). */
 export interface PackedBlock {
   count: number;
   levels: number[];
   zOrigin: number;
   zStep: number;
-  /** count x 16 bytes, the wire record of version 4: x, y, z (u16 each), 3 scale codes, 3 rotation bytes, r, g, b, a. */
+  /** 16: the wire record of version 4 (x, y, z as u16, 3 scale codes, 3 rotation bytes, r, g, b, a); 12: the bit-packed record of version 6 (V6_FIELDS). */
+  recordBytes: 16 | 12;
+  /** Version 6: log2 of the metres of scale code 0 (0 for the 16-byte records). */
+  scaleLog2Min: number;
+  /** count x recordBytes bytes. */
   records: Uint8Array;
 }
 
 export function packedSurfelBlock(bytes: Uint8Array): PackedBlock {
-  const { count, levels, zOrigin, zStep, tableEnd, planar } = readSurfelBlockLayout(bytes);
-  if (!planar) return { count, levels, zOrigin, zStep, records: bytes.slice(tableEnd, tableEnd + count * SURFEL_RECORD_BYTES) };
+  const layout = readSurfelBlockLayout(bytes);
+  const { count, levels, zOrigin, zStep, tableEnd, planar } = layout;
+  if (layout.version === SURFEL_BLOCK_VERSION_V6) {
+    return { count, levels, zOrigin, zStep, recordBytes: 12, scaleLog2Min: layout.scaleLog2Min, records: bytes.slice(tableEnd, tableEnd + count * SURFEL_RECORD_BYTES_V6) };
+  }
+  if (!planar) return { count, levels, zOrigin, zStep, recordBytes: 16, scaleLog2Min: 0, records: bytes.slice(tableEnd, tableEnd + count * SURFEL_RECORD_BYTES) };
   const records = new Uint8Array(count * SURFEL_RECORD_BYTES);
   for (let plane = 0; plane < SURFEL_RECORD_BYTES; plane++) {
     const from = tableEnd + plane * count;
     for (let i = 0; i < count; i++) records[i * SURFEL_RECORD_BYTES + plane] = bytes[from + i]!;
   }
-  return { count, levels, zOrigin, zStep, records };
+  return { count, levels, zOrigin, zStep, recordBytes: 16, scaleLog2Min: 0, records };
+}
+
+// ---- Version 6: 12-byte bit-packed records ----------------------------------------------------------------------
+
+function putBits(buf: Uint8Array, base: number, off: number, len: number, value: number): void {
+  for (let i = 0; i < len; i++) if ((value >> i) & 1) buf[base + ((off + i) >> 3)]! |= 1 << ((off + i) & 7);
+}
+
+function getBits(buf: Uint8Array, base: number, off: number, len: number): number {
+  let v = 0;
+  for (let i = 0; i < len; i++) v |= ((buf[base + ((off + i) >> 3)]! >> ((off + i) & 7)) & 1) << i;
+  return v;
+}
+
+/**
+ * Encode splats as a version 6 block: 12-byte records, positions to 1/8192 of the tile, heights to a per-block step
+ * (at least 1 mm, wide enough for 14 bits), scales to 6 steps per octave from the block's smallest scale (7 bits;
+ * larger scales clamp at 21 octaves above it), rotation to 17 bits, colour to 6 bits per channel, one opacity for the
+ * whole block (splats with different opacities are rejected). Lossier than version 5 (E016); a deliberate break.
+ */
+function encodeSurfelBlockV6(splats: readonly Splat[], levels: readonly number[]): Uint8Array {
+  const count = splats.length;
+  if (count > MAX_COUNT) throw new SurfelBlockError("TOO_MANY_SURFELS", `count ${count} exceeds uint32`);
+  checkLevels(levels, count);
+  splats.forEach(validateSplat);
+  const alpha = count > 0 ? splats[0]!.a : 255;
+  if (splats.some((s) => s.a !== alpha)) throw new SurfelBlockError("INVALID_VALUE", "version 6 stores one opacity per block; the splats differ");
+
+  let zMin = Infinity, zMax = -Infinity, minLog2 = Infinity;
+  for (const s of splats) {
+    if (s.z < zMin) zMin = s.z;
+    if (s.z > zMax) zMax = s.z;
+    minLog2 = Math.min(minLog2, Math.log2(s.sx), Math.log2(s.sy), Math.log2(s.sz));
+  }
+  if (count === 0) { zMin = zMax = 0; minLog2 = 0; }
+  const zSteps = 2 ** V6_FIELDS.z.len - 1;
+  const zStep = Math.max(Z_STEP_METRES, Math.ceil(((zMax - zMin) / zSteps) * 1000 + 1e-9) / 1000);
+  const scaleBase = Math.fround(minLog2);
+
+  const bytes = new Uint8Array(surfelBlockByteLength(count, levels.length, SURFEL_BLOCK_VERSION_V6));
+  const view = new DataView(bytes.buffer);
+  bytes.set(SURFEL_BLOCK_MAGIC, 0);
+  view.setUint16(4, SURFEL_BLOCK_VERSION_V6, LITTLE_ENDIAN);
+  view.setUint16(6, SURFEL_RECORD_BYTES_V6, LITTLE_ENDIAN);
+  view.setUint32(8, count, LITTLE_ENDIAN);
+  view.setUint32(12, levels.length, LITTLE_ENDIAN);
+  view.setFloat64(16, zMin, LITTLE_ENDIAN);
+  view.setFloat64(24, zStep, LITTLE_ENDIAN);
+  view.setFloat32(32, scaleBase, LITTLE_ENDIAN);
+  bytes[36] = alpha;
+  levels.forEach((n, k) => view.setUint32(SURFEL_BLOCK_HEADER_BYTES_V6 + 4 * k, n, LITTLE_ENDIAN));
+
+  const F = V6_FIELDS;
+  const xyMax = 2 ** F.x.len - 1;
+  const scaleMax = 2 ** F.sx.len - 1;
+  const colourMax = 2 ** F.r.len - 1;
+  const code = (metres: number) => Math.min(scaleMax, Math.max(0, Math.round((Math.log2(metres) - scaleBase) * V6_SCALE_STEPS_PER_OCTAVE)));
+  const colour = (c: number) => Math.round((c * colourMax) / 255);
+  const base = SURFEL_BLOCK_HEADER_BYTES_V6 + 4 * levels.length;
+  splats.forEach((s, i) => {
+    const o = base + i * SURFEL_RECORD_BYTES_V6;
+    putBits(bytes, o, F.x.off, F.x.len, Math.min(xyMax, Math.round(s.x * (xyMax + 1))));
+    putBits(bytes, o, F.y.off, F.y.len, Math.min(xyMax, Math.round(s.y * (xyMax + 1))));
+    putBits(bytes, o, F.z.off, F.z.len, Math.min(zSteps, Math.round((s.z - zMin) / zStep)));
+    putBits(bytes, o, F.sx.off, F.sx.len, code(s.sx));
+    putBits(bytes, o, F.sy.off, F.sy.len, code(s.sy));
+    putBits(bytes, o, F.sz.off, F.sz.len, code(s.sz));
+    putBits(bytes, o, F.quat.off, F.quat.len, packQuaternionBits(s.qw, s.qx, s.qy, s.qz, V6_QUAT_COMPONENT_BITS));
+    putBits(bytes, o, F.r.off, F.r.len, colour(s.r));
+    putBits(bytes, o, F.g.off, F.g.len, colour(s.g));
+    putBits(bytes, o, F.b.off, F.b.len, colour(s.b));
+  });
+  return bytes;
+}
+
+function decodeSurfelBlockV6(bytes: Uint8Array, layout: SurfelBlockLayout): SurfelBlock {
+  const { count, levels, zOrigin, zStep, tableEnd, scaleLog2Min, alpha } = layout;
+  const F = V6_FIELDS;
+  const xyScale = 2 ** F.x.len;
+  const colourMax = 2 ** F.r.len - 1;
+  const splats: Splat[] = new Array(count);
+  for (let i = 0; i < count; i++) {
+    const o = tableEnd + i * SURFEL_RECORD_BYTES_V6;
+    const [qw, qx, qy, qz] = unpackQuaternionBits(getBits(bytes, o, F.quat.off, F.quat.len), V6_QUAT_COMPONENT_BITS);
+    const scale = (f: { off: number; len: number }) => 2 ** (scaleLog2Min + getBits(bytes, o, f.off, f.len) / V6_SCALE_STEPS_PER_OCTAVE);
+    const colour = (f: { off: number; len: number }) => Math.round((getBits(bytes, o, f.off, f.len) * 255) / colourMax);
+    splats[i] = {
+      x: getBits(bytes, o, F.x.off, F.x.len) / xyScale,
+      y: getBits(bytes, o, F.y.off, F.y.len) / xyScale,
+      z: Math.fround(zOrigin + getBits(bytes, o, F.z.off, F.z.len) * zStep),
+      sx: scale(F.sx), sy: scale(F.sy), sz: scale(F.sz),
+      qw, qx, qy, qz,
+      r: colour(F.r), g: colour(F.g), b: colour(F.b), a: alpha,
+    };
+  }
+  return { splats, levels };
 }

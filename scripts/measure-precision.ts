@@ -51,7 +51,30 @@ const variants: Variant[] = [
   ...[6, 4, 3].map((k): Variant => ({ name: `scale ${k} steps/octave`, bitsSaved: `${(3 * Math.log2(10 / k)).toFixed(1)}`, apply: (s) => ({ ...s, sx: quantScale(s.sx, k), sy: quantScale(s.sy, k), sz: quantScale(s.sz, k) }) })),
   ...[5, 4, 3].map((b): Variant => ({ name: `rotation ${b} bits/component`, bitsSaved: `${3 * (7 - b)}`, apply: (s) => quantQuat(s, b) })),
   ...[6, 5, 4].map((b): Variant => ({ name: `colour ${b} bits/channel`, bitsSaved: `${3 * (8 - b)}`, apply: (s) => ({ ...s, r: quantColour(s.r, b), g: quantColour(s.g, b), b: quantColour(s.b, b) }) })),
+  // The reductions together (the 96-bit record of E016): the biggest single errors were position and rotation.
+  ...[12, 13].map((b): Variant => ({
+    name: `combined: position ${b} bits, height 2 cm, scale 6/octave, rotation 5 bits, colour 6 bits`, bitsSaved: `${2 * (16 - b) + 2.3 + 2.2 + 6 + 6}`,
+    apply: (s, zMin) => {
+      const q = quantQuat(s, 5);
+      const pos = (v: number) => Math.min((2 ** b - 1) / 2 ** b, Math.round(v * 2 ** b) / 2 ** b);
+      return { ...q, x: pos(s.x), y: pos(s.y), z: zMin + Math.round((s.z - zMin) / 0.02) * 0.02,
+        sx: quantScale(s.sx, 6), sy: quantScale(s.sy, 6), sz: quantScale(s.sz, 6),
+        r: quantColour(s.r, 6), g: quantColour(s.g, 6), b: quantColour(s.b, 6) };
+    },
+  })),
 ];
+
+// Range of the scale codes (10 steps per octave) per tile: how many octaves a block's three scales span.
+{
+  const lg = (v: number) => Math.log2(v);
+  const rows = tiles.map((t) => {
+    const all = t.splats.flatMap((p) => [lg(p.sx), lg(p.sy), lg(p.sz)]).sort((a, b) => a - b);
+    const at = (f: number) => all[Math.min(all.length - 1, Math.floor(f * all.length))]!;
+    return { tile: `${z}/${t.x}/${t.y}`, "min log2 m": +all[0]!.toFixed(1), "p0.1": +at(0.001).toFixed(1), "p99.9": +at(0.999).toFixed(1), "max": +all[all.length - 1]!.toFixed(1), "octaves (min..max)": +(all[all.length - 1]! - all[0]!).toFixed(1) };
+  });
+  console.log("scale range per tile (log2 of metres):");
+  console.table(rows);
+}
 
 const defaultViews = "138.939214,34.790766,16.63,128.7,67;138.9392956,34.7917627,18.5,-30,60;138.9392956,34.7917627,17.5,0,0";
 const viewSpecs = (viewsArg ?? defaultViews).split(";").map((v) => v.split(",").map(Number) as [number, number, number, number, number]);
