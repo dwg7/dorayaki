@@ -4,7 +4,7 @@
  * Points are binned into cubic voxels. Each voxel with at least `minPoints`
  * points becomes one Gaussian with the voxel points' mean (position),
  * covariance (eigenvectors give the rotation, sqrt eigenvalues the scales),
- * and mean colour. Opacity is a constant. This is a deterministic
+ * and mean color. Opacity is a constant. This is a deterministic
  * initialisation of the kind 3DGS starts from; there is no photometric
  * optimisation.
  *
@@ -116,14 +116,14 @@ export function fitVoxelGaussians(points: LocalPoints, options: VoxelOptions): G
 
 /**
  * The Gaussian of one voxel from its point count, mean, covariance
- * (xx, xy, xz, yy, yz, zz) and mean colour. Shared by the in-memory fit and
+ * (xx, xy, xz, yy, yz, zz) and mean color. Shared by the in-memory fit and
  * the streaming accumulator (voxel-accumulator.ts).
  */
 export function gaussianFromMoments(
   n: number,
   mean: readonly [number, number, number],
   cov: readonly [number, number, number, number, number, number],
-  colour: readonly [number, number, number],
+  color: readonly [number, number, number],
   options: { minScale: number; degenerateScale: number; opacity: number },
 ): Gaussian {
   const [cxx, cxy, cxz, cyy, cyz, czz] = cov;
@@ -138,7 +138,7 @@ export function gaussianFromMoments(
     position: [mean[0], mean[1], mean[2]],
     scales: values.map((ev) => Math.max(n < 3 ? options.degenerateScale : options.minScale, Math.sqrt(Math.max(0, ev)))) as [number, number, number],
     rotation: quaternionFromAxes(c0, c1, c2),
-    colour: [colour[0], colour[1], colour[2]],
+    color: [color[0], color[1], color[2]],
     opacity: options.opacity,
     support: n,
   };
@@ -149,7 +149,7 @@ export function gaussiansToPlyRows(gaussians: readonly Gaussian[]): number[][] {
   const logit = (p: number) => Math.log(p / (1 - p));
   return gaussians.map((g) => [
     ...g.position, 0, 0, 0,
-    ...g.colour.map((c) => (c - 0.5) / SH_C0),
+    ...g.color.map((c) => (c - 0.5) / SH_C0),
     logit(Math.min(0.999, Math.max(0.001, g.opacity))),
     ...g.scales.map(Math.log),
     ...g.rotation,

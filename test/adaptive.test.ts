@@ -4,12 +4,12 @@ import { test } from "node:test";
 import { adaptiveGaussians } from "../src/pointcloud/adaptive.js";
 import { VoxelAccumulator } from "../src/pointcloud/voxel-accumulator.js";
 
-/** Points on the plane z = z0 over [0, size) x [0, size) metres, `step` apart, colour from `colour(x, y)`. */
-function plane(acc: VoxelAccumulator, size: number, step: number, z0: number, colour: (x: number, y: number) => number): number {
+/** Points on the plane z = z0 over [0, size) x [0, size) metres, `step` apart, color from `color(x, y)`. */
+function plane(acc: VoxelAccumulator, size: number, step: number, z0: number, color: (x: number, y: number) => number): number {
   let n = 0;
   for (let x = step / 2; x < size; x += step) {
     for (let y = step / 2; y < size; y += step) {
-      const c = colour(x, y);
+      const c = color(x, y);
       acc.add(x, y, z0, c, c, c);
       n++;
     }
@@ -17,7 +17,7 @@ function plane(acc: VoxelAccumulator, size: number, step: number, z0: number, co
   return n;
 }
 const totalSupport = (g: readonly { support?: number }[]) => g.reduce((s, q) => s + (q.support ?? 0), 0);
-const OPTIONS = { maxLevel: 4, thickness: 0.05, colourTolerance: 0.1 };
+const OPTIONS = { maxLevel: 4, thickness: 0.05, colorTolerance: 0.1 };
 
 test("maxLevel 0 equals the uniform fit", () => {
   const acc = new VoxelAccumulator(0.5, 4);
@@ -51,13 +51,13 @@ test("parallel planes one metre apart do not merge across the gap", () => {
   }
 });
 
-test("a colour edge stops the merge", () => {
+test("a color edge stops the merge", () => {
   const acc = new VoxelAccumulator(0.5, 4);
   const n = plane(acc, 8, 0.1, 0, (x) => (x < 4 ? 0.1 : 0.9));
   const { gaussians } = adaptiveGaussians(acc, OPTIONS);
   assert.equal(totalSupport(gaussians), n);
   assert.ok(gaussians.length >= 2);
-  for (const g of gaussians) assert.ok(Math.abs(g.colour[0] - 0.1) < 0.02 || Math.abs(g.colour[0] - 0.9) < 0.02, `colour ${g.colour[0]}`);
+  for (const g of gaussians) assert.ok(Math.abs(g.color[0] - 0.1) < 0.02 || Math.abs(g.color[0] - 0.9) < 0.02, `color ${g.color[0]}`);
 });
 
 test("a tilted plane merges; a thick volume does not", () => {
@@ -82,7 +82,7 @@ test("the sparse rule merges lightly supported voxels whatever their shape", () 
   let seed = 11;
   const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
   for (let i = 0; i < 300; i++) acc.add(rnd() * 4, rnd() * 4, rnd() * 4, 0.5, 0.5, 0.5); // ~1 point per voxel
-  const strict = { maxLevel: 3, thickness: 0.01, colourTolerance: 0.01 };
+  const strict = { maxLevel: 3, thickness: 0.01, colorTolerance: 0.01 };
   const without = adaptiveGaussians(acc, strict).gaussians;
   const withSparse = adaptiveGaussians(acc, { ...strict, sparseSupport: 6 }).gaussians;
   assert.ok(withSparse.length < without.length / 2, `${withSparse.length} against ${without.length}`);

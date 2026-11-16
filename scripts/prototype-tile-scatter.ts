@@ -150,7 +150,7 @@ const s0 = performance.now();
 const acc = new VoxelAccumulator(cell);
 for (const [x, y, z, r, g, b] of pts) acc.add(x, y, z, r, g, b);
 const s1 = performance.now();
-const res = adaptiveGaussians(acc, { maxLevel: 3, thickness: 0.2, colourTolerance: 0.2, sparseSupport: 24 });
+const res = adaptiveGaussians(acc, { maxLevel: 3, thickness: 0.2, colorTolerance: 0.2, sparseSupport: 24 });
 const s2 = performance.now();
 console.log(`stage 2 on tile ${Z}/${dx}/${dy}: ${pts.length} points, cell ${(cell * 100).toFixed(2)} cm; accumulate ${((s1 - s0) / 1000).toFixed(1)} s (${acc.voxels} voxels), adaptive merge ${((s2 - s1) / 1000).toFixed(1)} s -> ${res.gaussians.length} Gaussians; rss ${(m0 / 1e9).toFixed(2)} -> ${(process.memoryUsage().rss / 1e9).toFixed(2)} GB`);
 void points;

@@ -69,13 +69,13 @@ Each mesh is built alone, because the voxel accumulators need about 100 bytes pe
 voxel and this machine has 8 GB of RAM; the tilesets are then merged
 (`npm run merge:tilesets`, [large-point-clouds.md](large-point-clouds.md)).
 Cells are tile width / 512 at each zoom (z17: 49 cm). Merging
-([adaptive-merging.md](adaptive-merging.md)) at every zoom: thickness 20 cm, colour
+([adaptive-merging.md](adaptive-merging.md)) at every zoom: thickness 20 cm, color
 tolerance 0.2, three merge levels, the sparse rule at 24 points at z17 multiplied
 by 10 for each zoom below (z16: 240, z15: 2,400).
 
 ```sh
 export DORAYAKI_ADAPTIVE_REFINE=0 DORAYAKI_ADAPTIVE_LEVELS=3 \
-  DORAYAKI_ADAPTIVE_THICKNESS=0.2 DORAYAKI_ADAPTIVE_COLOUR=0.2 \
+  DORAYAKI_ADAPTIVE_THICKNESS=0.2 DORAYAKI_ADAPTIVE_COLOR=0.2 \
   DORAYAKI_ADAPTIVE_SPARSE=24 DORAYAKI_ADAPTIVE_SPARSE_SCALE=10 \
   DORAYAKI_BLOCK_VERSION=6   # the hosted archive; leave it out for version 5
 R=data/virtual-shizuoka

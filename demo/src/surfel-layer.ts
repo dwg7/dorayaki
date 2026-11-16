@@ -90,12 +90,12 @@ export class SurfelLayer implements CustomLayerInterface {
   softScale = 1.8;
   /** Soft look: exponent of the Gaussian falloff over the feathered quad (6.5 = a Gaussian over 3.6 sigma across). */
   softFalloff = 6.5;
-  /** Strength of the shading, 0..1 (`?shade=`; 0 draws the colours as stored, like a 3D Gaussian splat). */
+  /** Strength of the shading, 0..1 (`?shade=`; 0 draws the colors as stored, like a 3D Gaussian splat). */
   shade = 1;
   /** The class codes whose splats are not drawn, as a 128-bit mask (set with setHideClasses; the demo's checkbox, `?hide=`; E021). */
   private hideMask: Uint32Array<ArrayBuffer> = new Uint32Array(4);
-  /** Colour by class (`?colour=class`): the palette of class-palette.ts instead of the stored colours. */
-  classColour = false;
+  /** Color by class (`?color=class`): the palette of class-palette.ts instead of the stored colors. */
+  classColor = false;
   private pendingClasses = new Map<string, { tile: TileAddress; codes: Uint8Array }>();
   /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
   extent = 1;
@@ -211,7 +211,7 @@ export class SurfelLayer implements CustomLayerInterface {
           falloff: this.softFalloff,
           shade: this.shade,
           hideMask: this.hideMask,
-          classColour: this.classColour,
+          classColor: this.classColor,
         });
         if (pi === 0) { drawn++; count += plan.count; }
       }
@@ -255,8 +255,8 @@ export class SurfelLayer implements CustomLayerInterface {
     this.map?.triggerRepaint();
   }
 
-  setClassColour(on: boolean): void {
-    this.classColour = on;
+  setClassColor(on: boolean): void {
+    this.classColor = on;
     this.map?.triggerRepaint();
   }
 

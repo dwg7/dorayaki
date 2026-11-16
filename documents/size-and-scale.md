@@ -118,7 +118,7 @@ fast network. What limits the browser is memory and CPU, not the network:
 - GPU memory per splat is **16 bytes** (E013): the block's wire record is uploaded as it
   is and decoded in the vertex shader, so a 700,000-splat tile is about 11 MB and ten of
   them about 110 MB. Before E013 it was 56 bytes (position, two axes and a normal as
-  float32, a flag and a colour; 39 MB and 390 MB); that path is still there as
+  float32, a flag and a color; 39 MB and 390 MB); that path is still there as
   `?gpu=legacy`. Not measured: the GPU's own memory use (the sizes are the buffers'
   byte lengths).
 - The demo used to fetch and upload every tile of a tileset when the page opened.

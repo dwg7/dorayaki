@@ -331,7 +331,7 @@ A uniform 49 cm grid (`kawazu-50cm`: 318,817 splats at z17, 6.33 MB with
 z16) spends the same number of splats on a flat road as on a tree crown.
 Can the splat count at that size be cut, or the detail raised at the same
 count, by merging neighbouring Gaussians that are nearly coplanar and of the
-same colour?
+same color?
 
 ### Method
 
@@ -340,7 +340,7 @@ voxels of a streaming accumulator. For each merge level (cells double,
 `size · 2^k`) the occupied children of a parent cell are combined exactly
 (parallel-axis moments) and replaced by one Gaussian when (a) the smallest
 standard deviation of the merged points is at most `thickness` and (b) every
-child's mean colour is within `colour` of the merged mean, per channel.
+child's mean color is within `color` of the merged mean, per channel.
 A parent that fails blocks all larger ancestors, so sizes never overlap. The
 result is a flat list of mixed-size Gaussians in one level, not an LOD.
 Aggregated zooms (z16) are unchanged. Counts: `npm run measure:adaptive`;
@@ -351,7 +351,7 @@ MMS mesh 08OF4060 (196.6 M points).
 
 Base 49 cm (318,875 voxels), 4 levels (up to 7.8 m cells):
 
-| thickness | colour 0.1 | colour 0.3 | colour off |
+| thickness | color 0.1 | color 0.3 | color off |
 | ---: | ---: | ---: | ---: |
 | 3 cm | 91 % | 88 % | 87 % |
 | 5 cm | 89 % | 84 % | 83 % |
@@ -360,7 +360,7 @@ Base 49 cm (318,875 voxels), 4 levels (up to 7.8 m cells):
 
 Base 24.5 cm (1,232,448 voxels), 5 levels (up to 7.8 m cells):
 
-| thickness | colour 0.1 | colour 0.2 | colour 0.3 | colour off |
+| thickness | color 0.1 | color 0.2 | color 0.3 | color off |
 | ---: | ---: | ---: | ---: | ---: |
 | 3 cm | 85 % | 82 % | 80 % | 79 % |
 | 5 cm | 80 % | 76 % | 74 % | 72 % |
@@ -369,7 +369,7 @@ Base 24.5 cm (1,232,448 voxels), 5 levels (up to 7.8 m cells):
 
 Tiles built and viewed (zoom 18.6, pitch 55, `?terrain=1`):
 
-| set | base | thickness, colour | splats at z17 | all tiles |
+| set | base | thickness, color | splats at z17 | all tiles |
 | --- | --- | --- | ---: | ---: |
 | `kawazu-50cm` | 49 cm uniform | – | 318,817 | 6.33 MB |
 | `kawazu-ad-t20-c20` | 24.5 cm adaptive | 20 cm, 0.2 | 311,871 | 6.22 MB |
@@ -387,7 +387,7 @@ Tiles built and viewed (zoom 18.6, pitch 55, `?terrain=1`):
   lane markings on the loop road are visible, which the uniform 50 cm set
   blurs. Judged by eye in one browser view; no image metric.
 - 10 cm / 0.2 at 726k splats looks like the 25 cm set (1.23 M).
-- The thickness limit is the dominant parameter; the colour limit moves
+- The thickness limit is the dominant parameter; the color limit moves
   the count by 10 to 25 points of share, mostly at 20 cm.
 - Browser load of these 6 MB sets was slow (tens of seconds) in this
   session; not measured or investigated.
@@ -548,8 +548,8 @@ the adaptive build of MMS + all returns was stopped after 13 minutes.
 - First returns plus ground as a canopy shell, or a column rule (keep the
   highest and the lowest point per column).
 - Adaptive merging on the canopy sets (memory and time of the merge).
-- Whether airborne colours (taken from imagery?) look right next to the
-  MMS colours; they were not compared.
+- Whether airborne colors (taken from imagery?) look right next to the
+  MMS colors; they were not compared.
 - Any area other than this mesh; airborne data of a city or a plain.
 
 ## E008: Encoding low-hanging fruit, and what to do with vegetation
@@ -576,8 +576,8 @@ stored tile, Node zlib gzip level 9, brotli quality 11:
 | Morton-sorted, delta of x, y, z, byte planes, brotli | 60.1 % | 65.5 % |
 
 Brotli compressed bytes by field (merged tile, 395,810 splats): x 436 kB,
-y 460 kB, z 565 kB, three scales 259 + 258 + 267 kB, rotation 925 kB, colour
-and opacity 940 kB. Rotation and colour are 44 % of the compressed bytes;
+y 460 kB, z 565 kB, three scales 259 + 258 + 267 kB, rotation 925 kB, color
+and opacity 940 kB. Rotation and color are 44 % of the compressed bytes;
 positions are about one byte each, close to noise at 16 bits.
 
 - Transposing the records into byte planes is the low-hanging fruit: gzip
@@ -609,13 +609,13 @@ structures), so a rule on shape and support was tried instead of one on class.
 
 `adaptiveGaussians` got a sparse rule (`sparseSupport`, E005 code): a parent is
 also merged when every child has fewer than that many points, whatever the
-thickness and colour. Merging now applies to every zoom. LP = the airborne
+thickness and color. Merging now applies to every zoom. LP = the airborne
 data, all returns, 49 cm base, 3 merge levels (cells up to 3.9 m), thickness
-20 cm, colour 0.2; z16 + z17 tiles (the uniform all-returns set is 70.1 MB):
+20 cm, color 0.2; z16 + z17 tiles (the uniform all-returns set is 70.1 MB):
 
 | sparse support | LP all returns | MMS + LP all returns |
 | ---: | ---: | ---: |
-| off (thickness and colour rules only) | 36.0 MB | – |
+| off (thickness and color rules only) | 36.0 MB | – |
 | 6 | 29.9 MB | – |
 | 12 | 23.3 MB | 26.8 MB |
 | 24 | 16.5 MB | 20.0 MB |
@@ -662,7 +662,7 @@ Nine meshes of 300 m x 400 m, 08OF4050 to 08OF4072 (rows 5 to 7, columns 0 to 2,
 900 m x 1,200 m = 1.08 km2). Airborne LP "Ground" (all returns) for all nine,
 MMS for four (4050, 4060, 4070, 4071); 476,004,940 points in 13 files
 (documents/large-point-clouds.md). Each mesh was built alone with the E008 recipe
-(49 cm cells at z17, three merge levels, thickness 20 cm, colour 0.2, sparse
+(49 cm cells at z17, three merge levels, thickness 20 cm, color 0.2, sparse
 threshold 24; z15 to z17) and the tilesets were joined by `npm run merge:tilesets`
 (8 GB of RAM do not hold the voxels of nine meshes at once). Peak memory per mesh
 build 1.23 GB, 20 to 50 s each, 269 s in all. Mesh seams are not reconciled.
@@ -903,13 +903,13 @@ measured in Node without a browser?
 ### Method
 `demo/src/cpu-render.ts` draws the splats of a set of tiles into an 800 x 600 image with a
 depth buffer, from a map view (lng, lat, zoom, bearing, pitch) with MapLibre's camera model.
-It is a proxy: flat colour, no lighting, no opacity. `demo/src/image-metrics.ts` compares a
+It is a proxy: flat color, no lighting, no opacity. `demo/src/image-metrics.ts` compares a
 reference image with a candidate: `holes` (reference pixels the candidate leaves empty),
-`extra` (the opposite), colour error (`mae`, `psnr`) and depth difference over pixels both
+`extra` (the opposite), color error (`mae`, `psnr`) and depth difference over pixels both
 cover. With `block` 4 both images are averaged over 4 x 4 pixels first, which ignores
 pixel-level texture and compares the look at a coarser scale. `npm run measure:quality`
-runs it. Tests: `test/cpu-render.test.ts` (a plane's colour and depth, identical images,
-holes, colour and depth differences).
+runs it. Tests: `test/cpu-render.test.ts` (a plane's color and depth, identical images,
+holes, color and depth differences).
 
 Here: mesh 08OF4060 built with threshold factors 4, 10 and 16 (`kawazu-s4`, `-s10`, `-s16`),
 reference the z17 tiles (identical in the three builds), candidate their z16 or z15 tiles,
@@ -957,7 +957,7 @@ look the same?
 making Splat objects (version 5 planes are transposed; version 4 is copied). The layer uploads
 them as one `uvec4` attribute per instance and a second program (`PACKED_VERTEX_SHADER` in
 `demo/src/gpu-surfels.ts`) decodes position, scales, rotation (smallest three), axis order,
-roundness and colour as `splat-instances.ts` does. `?gpu=legacy` keeps the old path. Compared in
+roundness and color as `splat-instances.ts` does. `?gpu=legacy` keeps the old path. Compared in
 the browser (Chromium of the Claude desktop app, Apple M1) on the Kawazu archive from stars: the
 canvas of the same camera, averaged over 25 x 25 blocks, in both modes.
 
@@ -1043,7 +1043,7 @@ from the map zoom, among those in view), the same with all tiles of that zoom, a
 Tileset: the nine-mesh Kawazu archive (factor 10; z15, z16 and z17), 800 x 600 renderings, block 4.
 
 ### Measurements (block 4; MB are the tile files' sizes)
-| view | candidate | tiles | MB | holes | colour error (0-255) |
+| view | candidate | tiles | MB | holes | color error (0-255) |
 | --- | --- | --- | ---: | ---: | ---: |
 | zoom 16.63, pitch 67 (showcase) | mixed | z16:7 z17:2 | 20.3 | 0.4 % | 2.8 |
 | | now (nearest 9) | z16:8 | 10.8 | 0.4 % | 3.7 |
@@ -1064,8 +1064,8 @@ of GPU buffers at 16 bytes each); the far ridge and the loop bridge both drawn.
 - In a steeply tilted view at zoom 17.2 the nearest nine z17 tiles leave 87 % of the reference's
   pixels empty; the mixed set leaves 0.3 %, for 12 MB more. This is the case that motivated it.
 - Near views (zoom 18.5, top-down) draw fewer bytes than now (17.8 vs 25.5 MB) because tiles at the
-  edge of the view are taken from a coarser zoom, at 0.9 to 1.2 grey levels of colour error.
-- Views at zoom 16 to 16.6 cost 2 to 3 times the bytes of the single zoom, for a colour error
+  edge of the view are taken from a coarser zoom, at 0.9 to 1.2 grey levels of color error.
+- Views at zoom 16 to 16.6 cost 2 to 3 times the bytes of the single zoom, for a color error
   that is 25 to 60 % lower: the quality is bought with bytes.
 - The simulated view 2 chose 14 tiles (44.3 MB); the browser chose 17 (65.7 MB): the real map's
   bounds are wider than `visibleBounds`, and the canvas is larger. The cost of a view depends on
@@ -1090,7 +1090,7 @@ encoding save, losslessly and with which precision reductions?
 `npm run measure:encoding -- <dir> <zoom>`: per field, zero-order entropy (bits per splat, per tile; an adaptive entropy
 coder would approach it) of the stored value and of simple transforms; gzip and brotli of the block as stored and with the
 fields rearranged. `npm run measure:precision -- <dir> <zoom>`: requantize one field at a time, render original and
-variant from three cameras with the software renderer (E012), compare (colour error, PSNR, holes; block 4; worst of the
+variant from three cameras with the software renderer (E012), compare (color error, PSNR, holes; block 4; worst of the
 views). The tiles are stored in raster order (99.5 % of neighbours in row-then-column order).
 
 ### Measurements: bits per splat (Kawazu factor-10 archive, z17, 6,172,195 splats)
@@ -1100,29 +1100,29 @@ views). The tiles are stored in raster order (99.5 % of neighbours in row-then-c
 | height (16) | 16 | delta to previous 7.9 |
 | scales (24) | 24 | x 5.3, y - x 5.8, z - x 6.1 |
 | rotation (24) | 24 | 0.0 + 6.3 + 6.1 + 6.0 |
-| colour (24) | 24 | r 6.8, g - r 4.8, b - r 5.8 |
+| color (24) | 24 | r 6.8, g - r 4.8, b - r 5.8 |
 | alpha (8) | 8 | 0 (always 242) |
 | total | 128 (101.4 as stored bytes) | **82.3** |
 
 gzip: 10.95 bytes per splat as stored (31 % less than 16), 10.50 rearranged (34 % less); brotli quality 9: 11.4 and 10.9.
 
-Precision reductions (mesh 08OF4060, z17, 702,139 splats; colour error in 0-255, worst of three views):
-| change | bits saved | colour error | PSNR dB |
+Precision reductions (mesh 08OF4060, z17, 702,139 splats; color error in 0-255, worst of three views):
+| change | bits saved | color error | PSNR dB |
 | --- | ---: | ---: | ---: |
 | position x, y 12 bits (from 16) | 8 | 1.0 | 41.4 |
 | position 11 / 10 bits | 10 / 12 | 1.6 / 2.6 | 38.7 / 35.4 |
 | height step 2 / 5 / 10 cm (from 4 mm) | 2.3 / 3.6 / 4.6 | 0.4 / 0.8 / 1.3 | 46.8 / 42.8 / 39.9 |
 | scale 6 / 4 / 3 steps per octave (from 10) | 2.2 / 4.0 / 5.2 | 0.7 / 1.0 / 1.3 | 43.7 / 41.7 / 40.2 |
 | rotation 5 / 4 / 3 bits per component (from 7) | 6 / 9 / 12 | 0.8 / 1.4 / 2.3 | 43.4 / 40.0 / 36.3 |
-| colour 6 / 5 / 4 bits per channel (from 8) | 6 / 9 / 12 | 0.6 / 1.3 / 2.6 | 49.1 / 44.0 / 38.0 |
+| color 6 / 5 / 4 bits per channel (from 8) | 6 / 9 / 12 | 0.6 / 1.3 / 2.6 | 49.1 / 44.0 / 38.0 |
 No change produced more than 0.23 % holes.
 
 ### Observations
-- The data is mostly forest: scale, rotation and colour carry 5.3 to 6.3 bits each per field and are close to noise, so
+- The data is mostly forest: scale, rotation and color carry 5.3 to 6.3 bits each per field and are close to noise, so
   lossless modelling gains little (101 -> 82 bits at best, and gzip gets about the same).
 - Raster order makes the cell gap small: the stored row and column cost 7.7 bits after deltas, and a single gap in raster
   order (not measured) should cost about 2.
-- Together, position 12 bits (-8), height 2 cm (-2.3), scale 6 steps (-2.2), rotation 5 bits (-6), colour 6 bits (-6) save about
+- Together, position 12 bits (-8), height 2 cm (-2.3), scale 6 steps (-2.2), rotation 5 bits (-6), color 6 bits (-6) save about
   24 bits (a 96-bit, 12-byte record), if the errors add up like the worst single ones (not measured together).
 - gzip is the only general compressor the browser decodes natively (DecompressionStream), and stars' Martin cannot read gzip
   MLT tiles (kawazu-demo.md), so the 31 to 34 % of gzip is not available yet.
@@ -1179,13 +1179,13 @@ make the vegetation share cheap to compute (E017 method), and what to try differ
 ### E016 result: version 6 (12-byte records), 2026-11-16
 
 Combined reductions (software renderer, block 4, worst of three views; mesh 08OF4060, z17): position 13 bits
-(from 16), height 2 cm, scale 6 steps per octave, rotation 5 bits per component, colour 6 bits per channel: colour error
+(from 16), height 2 cm, scale 6 steps per octave, rotation 5 bits per component, color 6 bits per channel: color error
 1.59 of 255, PSNR 40.0 dB, 0.07 % holes (position 12 bits instead of 13: 1.76, 39.1 dB). The scales of a z17 tile span
 11 to 11.6 octaves (smallest 2^-10 m, the builder's floor), so a 7-bit code at 6 steps per octave (21 octaves) from the
 block's smallest scale covers them.
 
 Version 6 (documents/surfel-block-format.md): 96-bit records, x 13, y 13, z 14, three scales 7 bits each, rotation 17,
-colour 6 bits per channel; alpha moves to the header (one opacity per block); header 40 bytes. Opt-in
+color 6 bits per channel; alpha moves to the header (one opacity per block); header 40 bytes. Opt-in
 (`{ version: 6 }`, `DORAYAKI_BLOCK_VERSION=6`); reads 4, 5 and 6. The vertex shader decodes the record as uploaded
 (a `uvec3` per instance), so the GPU holds 12 bytes per splat (it held 16, and 56 before E013).
 
@@ -1245,7 +1245,7 @@ unchanged (one opaque pass).
   The same camera that showed the dots (zoom 17.67, bearing -30, pitch 60, lower-left ground below the bridge) shows none; a
   close forest view (zoom 19.4) and a mountain-side view (zoom 18.3) show none either. Not checked: hfu's exact view of the
   fields and houses (its coordinates were not given, and a search for it in the nine meshes did not find it).
-- `?shade=<0..1>` scales the fixed Lambert shading (uniform `u_shade`, in all three vertex shaders): at 0 the colours are drawn as
+- `?shade=<0..1>` scales the fixed Lambert shading (uniform `u_shade`, in all three vertex shaders): at 0 the colors are drawn as
   stored, lighter and closer to a photograph (the forest greener), as 3D Gaussian splatting does (it has no shading).
 - Cost not measured (two draw calls per tile instead of one).
 - Not done: a sorted, depth-correct blend (true splat compositing), which would need sorting per frame.
@@ -1284,7 +1284,7 @@ hfu asked for a button that removes vegetation, to see what the ground looks lik
 - A ground-only archive of the whole 1.08 km2 would be about 7 to 10 MB (the mesh is 0.8 MB), small enough to host beside the
   full one. Not built.
 - A real button needs the class in the tiles (a class code per splat: the alpha byte of version 5 is free for it; version 6
-  has one opacity per block and no spare bits). It would serve the vivid-colour and the false-colour ideas as well (colour by
+  has one opacity per block and no spare bits). It would serve the vivid-color and the false-color ideas as well (color by
   class). Not done.
 
 ### Decision
@@ -1293,8 +1293,8 @@ Open. The checkbox and the guess stay in the branch as an experiment; the next s
 ## E020: what would a class per splat cost in the tiles? (analysis)
 
 ### Question
-A class for every splat (ground, vegetation, ...) would give a real "hide vegetation" button (E019), vivid colours by class and
-false-colour classification. How much of the size work (E016) would it cost?
+A class for every splat (ground, vegetation, ...) would give a real "hide vegetation" button (E019), vivid colors by class and
+false-color classification. How much of the size work (E016) would it cost?
 
 ### Method
 No format change. The class goes through the existing pipeline in the opacity byte of version 5 (analysis only, behind
@@ -1336,13 +1336,13 @@ Cost for the nine-mesh archive (6,935,498 splats; 83,230,962 bytes as version 6)
 | 3 groups, 2-bit plane, gzip per tile | 0.61 MB | +0.74 % |
 | ground or not, 1-bit plane, gzip per tile | 0.34 MB | +0.41 % |
 | 3 groups, ideal with context | 0.53 MB | +0.64 % |
-| class bits inside the 96-bit record (no extra bytes) | 0 | 0; colour error 1.59 -> 1.76 for 2 bits (position 12 bits), 1.82 for 3 bits (position 12 bits and height 4 cm), 1.93 (rotation 4 bits), 2.03 (colour 5 bits); PSNR 40.0 -> 38.3 to 39.1 dB; holes 0.07 -> 0.07 to 0.10 % |
+| class bits inside the 96-bit record (no extra bytes) | 0 | 0; color error 1.59 -> 1.76 for 2 bits (position 12 bits), 1.82 for 3 bits (position 12 bits and height 4 cm), 1.93 (rotation 4 bits), 2.03 (color 5 bits); PSNR 40.0 -> 38.3 to 39.1 dB; holes 0.07 -> 0.07 to 0.10 % |
 
 ### Observations
 - A class plane compresses very well because classes come in runs along the raster order (the previous splat's class cuts the
   entropy by about 30 %): about 0.4 to 1.0 bit per splat, 0.4 to 1.0 % of the archive. The expensive ways are the uncompressed
   ones (2 % for two bits, 8 % for a byte).
-- Inside the record the class is free in bytes but costs picture quality: two bits cost 0.17 of 255 (11 % more colour error),
+- Inside the record the class is free in bytes but costs picture quality: two bits cost 0.17 of 255 (11 % more color error),
   three bits 0.23 to 0.44, and the record is then fixed to 3 or 4 classes.
 - The class plane has to be a separate unit to be cheap: the browser decodes gzip natively (`DecompressionStream`), so a gzip-ed plane
   inside the tile (a second MLT frame) is possible even though stars' Martin cannot read gzip tiles. A separate sidecar archive
@@ -1362,13 +1362,13 @@ second frame in the tile, or a sidecar archive) and what classes the build can r
 
 ### Question
 E020 found that a class per splat is cheap if it is a compressed plane beside the records. Where does the plane live, what is in it, and
-does it make a real "hide vegetation" button and a false-colour view possible?
+does it make a real "hide vegetation" button and a false-color view possible?
 
 ### Decisions (documents/class-plane.md)
 - **A second frame in the same tile** (experimental tag 0xD1), not a sidecar archive: one request, the plane cannot get out of step with
   the block, nothing more to host (hfu wants few Kawazu archives on stars), and a reader that does not know it skips it. The cost
   is that every client downloads it (about 1 % of the archive).
-- **Class codes are the ASPRS LAS codes** (the palette hfu named: "the standard colours of LAS point classes"), plus codes from 64 up
+- **Class codes are the ASPRS LAS codes** (the palette hfu named: "the standard colors of LAS point classes"), plus codes from 64 up
   for a build's own rules: 64 = vegetation inferred from several returns (the airborne files have no vegetation class).
 - **One byte per splat, gzip-ed** (E020: 0.99 bit per splat at z17 against 0.71 for a 2-bit plane): simpler, any of 128 codes (codes 128 to 255 are reserved after the review), 0.25 %
   of the archive more than the tightest form. Purity is not stored.
@@ -1378,8 +1378,8 @@ does it make a real "hide vegetation" button and a false-colour view possible?
 ### Built
 `src/class-plane.ts` (encode, header validation, decode with an injected inflate), `extractClassPlanes` / `wrapClassPlane` in
 `src/mlt-frame.ts`, 18 class slots in the voxel accumulator, `DORAYAKI_CLASS_PLANE=1` in `build:tileset`, planes joined in
-`merge:tilesets`, and in the demo: a "hide vegetation" checkbox and `?hide=` codes, a "colour: by class" select with a legend, a
-vivid palette (`demo/src/class-palette.ts`); the GPU skips hidden classes with a 128-bit mask and colours from a 32-slot palette.
+`merge:tilesets`, and in the demo: a "hide vegetation" checkbox and `?hide=` codes, a "color: by class" select with a legend, a
+vivid palette (`demo/src/class-palette.ts`); the GPU skips hidden classes with a 128-bit mask and colors from a 32-slot palette.
 Tests (`test/class-plane.test.ts`): round trip with and without gzip, zero and one splat, short header, bad magic, version,
 compression, length mismatches (both ways, and a gzip plane whose inflated size is not the count), the plane found in either order beside
 an unknown frame, a tile without a plane, a truncated frame.
@@ -1389,11 +1389,11 @@ an unknown frame, a tile without a plane, a truncated frame.
   bytes, +1.19 %** (1.16 bits per splat; E020 had predicted 0.4 to 1 % from the airborne-heavy 3-mesh mix, and this mesh has the finer MMS
   vegetation classes).
 - At zoom 17.67 in the browser (four z17 tiles, 682,792 splats): the legend of the classes in view (shares of splats): canopy 62.9 %, high
-  vegetation 14.5 %, medium 8.6 %, ground 7.9 %, unclassified 4.9 %, low 1.2 %. With "colour by class" (zoom 15.96, one z15 tile): high
+  vegetation 14.5 %, medium 8.6 %, ground 7.9 %, unclassified 4.9 %, low 1.2 %. With "color by class" (zoom 15.96, one z15 tile): high
   vegetation 35.4 %, canopy 32.0 %, medium 15.7 %, ground 11.2 %, low 3.6 %, unclassified 2.2 %.
 
 ### Observations
-- Colour by class works as a false-colour view: ground orange, canopy teal, greens for the vegetation classes; the road shows as a
+- Color by class works as a false-color view: ground orange, canopy teal, greens for the vegetation classes; the road shows as a
   lime ribbon (class 3) and the loop bridge area stands out from the forest.
 - Hiding vegetation by the real class removes the forest and the **loop bridge with its road**: the bridge is classed as vegetation
   (MMS classes 3 to 5 on the road's surroundings, and the airborne several-returns rule on the structure's edges), and the road's white
@@ -1403,7 +1403,7 @@ an unknown frame, a tile without a plane, a truncated frame.
 
 ### Decision
 Keep as a first slice behind the flags and the controls. Open: how to get a better class for the airborne data (E020), whether the
-plane is built for the whole area and hosted, and the vivid-colour idea (correcting colours by class).
+plane is built for the whole area and hosted, and the vivid-color idea (correcting colors by class).
 
 ### E021 follow-up: the whole area with class planes (2026-11-17)
 

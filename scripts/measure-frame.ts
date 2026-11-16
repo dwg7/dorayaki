@@ -26,7 +26,7 @@ const a = centre(fileA), b = centre(fileB);
 const P = { E: (a.e0 + b.e0) / 2, N: (a.n0 + b.n0) / 2 };
 const world = (o: { e0: number; n0: number }) => {
   const origin = jprcsToLatLng(zone, o.n0, o.e0);
-  const at = (position: [number, number, number]): Gaussian => ({ position, scales: [1, 1, 1], rotation: [1, 0, 0, 0], colour: [0.5, 0.5, 0.5], opacity: 0.95 });
+  const at = (position: [number, number, number]): Gaussian => ({ position, scales: [1, 1, 1], rotation: [1, 0, 0, 0], color: [0.5, 0.5, 0.5], opacity: 0.95 });
   const { block, splats } = placeGaussians([at([P.E - o.e0, P.N - o.n0, 200]), at([10, 10, 200])], origin, 17);
   // Tile units (not metres: a metre factor times a tile index of 29 million would amplify the width's last digits).
   return { u: block.origin.x + splats[0]!.x, v: block.origin.y + splats[0]!.y, w: tileWidthMetres({ z: 17, x: block.origin.x, y: block.origin.y }) };

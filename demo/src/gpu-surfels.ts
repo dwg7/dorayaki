@@ -23,11 +23,11 @@ uniform float u_extent;     // factor on every semi-axis (1 = the 2-sigma ellips
 uniform vec3 u_light;       // local metric frame, normalized
 uniform vec3 u_right;       // camera right in the local metric frame, normalized
 uniform vec3 u_up;
-uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colours as stored (no shading)
+uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colors as stored (no shading)
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
-uniform float u_class_colour; // 1: colour by class instead of the stored colour
-uniform vec3 u_palette[128]; // colour of class code c (class-palette.ts)
+uniform float u_class_color; // 1: color by class instead of the stored color
+uniform vec3 u_palette[128]; // color of class code c (class-palette.ts)
 bool hidden(float cls) {
   uint code = uint(cls + 0.5);
   return u_has_class > 0.5 && code < 128u && ((u_hide_mask[code >> 5u] >> (code & 31u)) & 1u) == 1u;
@@ -63,7 +63,7 @@ void main() {
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
-  vec3 base = (u_class_colour > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : a_color.rgb;
+  vec3 base = (u_class_color > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : a_color.rgb;
   v_color = base * shade;
 }`;
 
@@ -139,11 +139,11 @@ uniform float u_extent;
 uniform vec3 u_light;
 uniform vec3 u_right;
 uniform vec3 u_up;
-uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colours as stored (no shading)
+uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colors as stored (no shading)
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
-uniform float u_class_colour; // 1: colour by class instead of the stored colour
-uniform vec3 u_palette[128]; // colour of class code c (class-palette.ts)
+uniform float u_class_color; // 1: color by class instead of the stored color
+uniform vec3 u_palette[128]; // color of class code c (class-palette.ts)
 bool hidden(float cls) {
   uint code = uint(cls + 0.5);
   return u_has_class > 0.5 && code < 128u && ((u_hide_mask[code >> 5u] >> (code & 31u)) & 1u) == 1u;
@@ -212,7 +212,7 @@ ${decode}
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
-  vec3 base = (u_class_colour > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : rgb;
+  vec3 base = (u_class_color > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : rgb;
   v_color = base * shade;
 }`;
 }
@@ -242,7 +242,7 @@ export interface SurfelProgram {
   uShade: WebGLUniformLocation;
   uHideMask: WebGLUniformLocation;
   uHasClass: WebGLUniformLocation;
-  uClassColour: WebGLUniformLocation;
+  uClassColor: WebGLUniformLocation;
   uPalette: WebGLUniformLocation;
   uFalloff: WebGLUniformLocation;
   /** Only in the program that decodes packed records. */
@@ -333,7 +333,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
     uShade: uniform("u_shade"),
     uHideMask: uniform("u_hide_mask"),
     uHasClass: uniform("u_has_class"),
-    uClassColour: uniform("u_class_colour"),
+    uClassColor: uniform("u_class_color"),
     uPalette: uniform("u_palette"),
     uFalloff: uniform("u_falloff"),
     ...(packed ? { uZOrigin: uniform("u_z_origin"), uZStep: uniform("u_z_step") } : {}),
@@ -400,7 +400,7 @@ export function uploadInstances(gl: WebGL2RenderingContext, inst: SplatInstances
   attrib(LOC.axisV, inst.axisV, 3, gl.FLOAT, false, 1);
   attrib(LOC.normal, inst.normal, 3, gl.FLOAT, false, 1);
   attrib(LOC.round, inst.round, 1, gl.FLOAT, false, 1);
-  attrib(LOC.color, inst.colour, 4, gl.UNSIGNED_BYTE, true, 1);
+  attrib(LOC.color, inst.color, 4, gl.UNSIGNED_BYTE, true, 1);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
   return { vao, buffers, count: inst.count };
@@ -426,9 +426,9 @@ export interface DrawOptions {
   pass?: "flat" | "core" | "soft";
   /** Bit c of the 128 bits: skip the splats of class code c (hideMaskOf; needs the tile's class codes, E021). */
   hideMask?: Uint32Array;
-  /** Colour by class (palette in class-palette.ts) instead of the stored colour, for tiles that have class codes. */
-  classColour?: boolean;
-  /** Strength of the shading, 0..1 (default 1: the fixed Lambert light; 0: colours as stored). */
+  /** Color by class (palette in class-palette.ts) instead of the stored color, for tiles that have class codes. */
+  classColor?: boolean;
+  /** Strength of the shading, 0..1 (default 1: the fixed Lambert light; 0: colors as stored). */
   shade?: number;
   /** Exponent of the Gaussian falloff over the quad in the soft pass (default 3.5 here; the layer uses 6.5, a Gaussian over 3.6 sigma across). */
   falloff?: number;
@@ -456,7 +456,7 @@ export function drawSurfels(
   gl.uniform1f(p.uShade, opts.shade ?? 1);
   gl.uniform4uiv(p.uHideMask, opts.hideMask ?? NO_HIDDEN_CLASSES);
   gl.uniform1f(p.uHasClass, b.hasClasses ? 1 : 0);
-  gl.uniform1f(p.uClassColour, opts.classColour ? 1 : 0);
+  gl.uniform1f(p.uClassColor, opts.classColor ? 1 : 0);
   gl.uniform3fv(p.uPalette, PALETTE);
   gl.uniform1f(p.uFalloff, opts.falloff ?? 3.5);
   if (opts.depthTest) {

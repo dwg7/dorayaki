@@ -36,7 +36,7 @@ environment variables (see [adaptive-merging.md](adaptive-merging.md)).
 | piece | file | role |
 | --- | --- | --- |
 | LAS header and chunked records | `src/pointcloud/las.ts` | `parseLasHeader`, `forEachLasRecord`: formats 0-3, no LAZ |
-| per-voxel moments | `src/pointcloud/voxel-accumulator.ts` | hash table of count, mean offsets, second moments, colour; chunked storage so growth never copies records |
+| per-voxel moments | `src/pointcloud/voxel-accumulator.ts` | hash table of count, mean offsets, second moments, color; chunked storage so growth never copies records |
 | Gaussian from moments | `src/pointcloud/voxel-gaussians.ts` | `gaussianFromMoments`, shared with the in-memory fit |
 | pyramid from a callback | `src/pointcloud/pyramid.ts` | `buildPyramidFrom(fit, origin, config)`; `buildPyramid` calls it with the in-memory fit |
 | the script | `scripts/build-tileset.ts` | reads files in 64 MB chunks into one accumulator per voxel size, builds the pyramid, writes tiles and PMTiles |
@@ -45,7 +45,7 @@ One pass over the file feeds every voxel size at once (each aggregated zoom
 and the maxzoom have their own grid, because tile widths at different zooms
 are not exact powers of two). The in-memory and streaming fits agree: the
 voxel counts and positions on Numazu are identical, and about 6 to 12 % of
-records differ in the last quantization step of z, a colour level or the
+records differ in the last quantization step of z, a color level or the
 rotation code (a different summation order).
 
 ### Measured on the Kawazu MMS mesh

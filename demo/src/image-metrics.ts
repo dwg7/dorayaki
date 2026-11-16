@@ -5,7 +5,7 @@
  *
  * `holes`: share of the reference's covered pixels that the candidate leaves
  * empty. `extra`: candidate-covered pixels where the reference is empty,
- * relative to the reference's covered pixels. `mae`, `psnr`: colour error over
+ * relative to the reference's covered pixels. `mae`, `psnr`: color error over
  * pixels both cover. `depthMedian`, `depthP95`: absolute difference of the
  * depths of those pixels, in metres. With `block` > 1 both images are first
  * reduced by averaging block x block pixels (a block counts as covered when at

@@ -126,8 +126,8 @@ const statusEl = document.getElementById("status") as HTMLElement;
 const depthEl = document.getElementById("depth") as HTMLInputElement;
 const hideVegEl = document.getElementById("hideveg") as HTMLInputElement;
 hideVegEl.checked = new URLSearchParams(location.search).get("hideveg") === "1";
-const colourEl = document.getElementById("colourmode") as HTMLSelectElement;
-colourEl.value = new URLSearchParams(location.search).get("colour") === "class" ? "class" : "stored";
+const colorEl = document.getElementById("colormode") as HTMLSelectElement;
+colorEl.value = new URLSearchParams(location.search).get("color") === "class" ? "class" : "stored";
 const legendEl = document.getElementById("legend") as HTMLDivElement;
 const setStatus = (text: string): void => {
   statusEl.textContent = text;
@@ -194,8 +194,8 @@ const deliveries: Array<{ ms: number; zoom: number; tiles: number; bytes: number
 /** Class codes to hide: vegetation when the checkbox is on, plus `?hide=3,4,...` (codes 0 to 127). */
 const extraHide = (flag("hide", tileset) ?? "").split(",").filter((c) => c.trim() !== "").map(Number).filter((c) => Number.isInteger(c) && c >= 0 && c < 128);
 const hideCodes = (): number[] => [...(hideVegEl.checked ? VEGETATION_CLASSES : []), ...extraHide];
-/** Whether a class feature (hide, colour by class) is on. */
-const classesNeeded = (): boolean => hideCodes().length > 0 || colourEl.value === "class";
+/** Whether a class feature (hide, color by class) is on. */
+const classesNeeded = (): boolean => hideCodes().length > 0 || colorEl.value === "class";
 /** The vegetation guess (vegetation.ts): `?vegh=` metres above the local ground, `?vegcell=` cell metres, `?vegshape=0` ignores the shape. */
 const vegNumber = (name: string, fallback: number): number => { const v = Number(flag(name, tileset)); return v > 0 ? v : fallback; };
 const vegOptions = { minHeight: vegNumber("vegh", 2), cellMetres: vegNumber("vegcell", 4), roundOnly: flag("vegshape", tileset) !== "0" };
@@ -286,7 +286,7 @@ map.on("load", () => {
     l.setZOffset(dz + zoomLift());
     l.setDepthTest(depthEl.checked);
     l.setHideClasses(hideCodes());
-    l.classColour = colourEl.value === "class";
+    l.classColor = colorEl.value === "class";
     map.addLayer(l, "tile-outline"); // keep the 2D tile outlines visible on top
     return l;
   };
@@ -295,11 +295,11 @@ map.on("load", () => {
   // A class feature was switched: tiles loaded without classes (no plane, and the guess not made because no feature was on) are loaded again.
   const onClassFeature = (): void => {
     layer.setHideClasses(hideCodes());
-    layer.setClassColour(colourEl.value === "class");
+    layer.setClassColor(colorEl.value === "class");
     if (classesNeeded() && loaded.some((t) => !t.classPlane && !t.guessed && t.count > 0)) { streamer.reset(); refresh(); } else void ensureClasses();
   };
   hideVegEl.addEventListener("change", onClassFeature);
-  colourEl.addEventListener("change", onClassFeature);
+  colorEl.addEventListener("change", onClassFeature);
 
   // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
   // as a whole when it is complete (documents/demo-and-site.md).
@@ -310,7 +310,7 @@ map.on("load", () => {
     return { lng: c.lng, lat: c.lat, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), width: canvas.clientWidth, height: canvas.clientHeight, centreZ: map.queryTerrainElevation(c) ?? 0 };
   };
   let loaded: LoadedTile[] = [];
-  // Class codes: the hide checkbox hides vegetation (plus `?hide=3,4,...` codes), the select colours by class. The class planes of the
+  // Class codes: the hide checkbox hides vegetation (plus `?hide=3,4,...` codes), the select colors by class. The class planes of the
   // tiles are inflated only when one of them is used (a tile without a plane has the guess of vegetation.ts instead).
   // Inflate a gzip payload but never produce more than `max` bytes (the plane's count): a hostile payload cannot expand without bound.
   const gunzip = async (bytes: Uint8Array, max: number): Promise<Uint8Array> => {
@@ -327,7 +327,7 @@ map.on("load", () => {
     return out.subarray(0, n);
   };
   const updateLegend = (): void => {
-    if (colourEl.value !== "class" && !hideVegEl.checked) { legendEl.textContent = ""; return; }
+    if (colorEl.value !== "class" && !hideVegEl.checked) { legendEl.textContent = ""; return; }
     const counts = new Map<number, number>();
     let total = 0;
     for (const t of loaded) for (const c of t.classCodes ?? []) { counts.set(c, (counts.get(c) ?? 0) + 1); total++; }

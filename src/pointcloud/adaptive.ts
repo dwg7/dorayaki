@@ -4,8 +4,8 @@
  * Starts from the occupied voxels of a VoxelAccumulator and merges, level by
  * level, the occupied children of each parent cell (cells double: size · 2^k)
  * into one Gaussian when the merged points still form a thin patch or line
- * and their colour is nearly uniform. A flat road then costs one splat per
- * large cell instead of one per voxel; edges, vegetation and colour changes
+ * and their color is nearly uniform. A flat road then costs one splat per
+ * large cell instead of one per voxel; edges, vegetation and color changes
  * keep their small cells.
  *
  * Merging is exact in the moments (parallel-axis combination), so a merged
@@ -23,14 +23,14 @@ export interface AdaptiveOptions {
   maxLevel: number;
   /** A merge needs the smallest standard deviation of the merged points to be at most this (metres). */
   thickness: number;
-  /** ...and each child's mean colour within this of the merged mean, per channel (0..1). */
-  colourTolerance: number;
+  /** ...and each child's mean color within this of the merged mean, per channel (0..1). */
+  colorTolerance: number;
   /**
    * Sparse rule (E008): also merge when every child has fewer than this many
    * points (0 = off). Voxels supported by a handful of points carry little
    * more than the points; merging them upward makes fewer, better supported
    * Gaussians, at the cost of detail that was never well sampled. Applies
-   * whatever the thickness and colour.
+   * whatever the thickness and color.
    */
   sparseSupport?: number;
   minScale?: number;
@@ -95,7 +95,7 @@ function acceptable(kids: readonly Node[], m: Node, o: AdaptiveOptions): boolean
   if (Math.sqrt(Math.max(0, values[2])) > o.thickness) return false;
   for (const k of kids) {
     for (let c = 0; c < 3; c++) {
-      if (Math.abs(k.rgb[c]! / k.n - m.rgb[c]! / m.n) > o.colourTolerance) return false;
+      if (Math.abs(k.rgb[c]! / k.n - m.rgb[c]! / m.n) > o.colorTolerance) return false;
     }
   }
   return true;
@@ -116,11 +116,11 @@ export function adaptiveGaussians(acc: VoxelAccumulator, options: AdaptiveOption
   };
 
   let current = new Map<number, Node>();
-  acc.forEachVoxel((ix, iy, iz, n, mean, cov, colour, classes) => {
+  acc.forEachVoxel((ix, iy, iz, n, mean, cov, color, classes) => {
     current.set(key(ix, iy, iz), {
       ix, iy, iz, marker: false, n, mean,
       m2: cov.map((v) => v * n) as Node["m2"],
-      rgb: [colour[0] * n, colour[1] * n, colour[2] * n],
+      rgb: [color[0] * n, color[1] * n, color[2] * n],
       cls: classes,
       cell: acc.size,
     });

@@ -17,7 +17,7 @@
  * when DORAYAKI_ADAPTIVE_LEVELS is set: that many merge levels (cells double);
  * DORAYAKI_ADAPTIVE_REFINE (default 0) starts from cells 2^refine times finer
  * than the maxzoom's; DORAYAKI_ADAPTIVE_THICKNESS (metres, default 0.05) and
- * DORAYAKI_ADAPTIVE_COLOUR (default 0.1) are the merge limits;
+ * DORAYAKI_ADAPTIVE_COLOR (default 0.1) are the merge limits;
  * DORAYAKI_ADAPTIVE_SPARSE (default 0 = off) also merges children that all have
  * fewer points than that (E008); DORAYAKI_ADAPTIVE_SPARSE_SCALE (default 1) multiplies that
  * threshold for each zoom below the maxzoom (E009).
@@ -115,10 +115,14 @@ const opacityOf = (counts: readonly number[]): number => {
 const sizes = pyramidVoxelSizes(origin, config);
 const accs = new Map(sizes.map((s) => [s, new VoxelAccumulator(s, 16, classAlpha ? CLASS_SLOTS : 0)]));
 const finestSize = sizes[sizes.length - 1]!;
+if (process.env.DORAYAKI_ADAPTIVE_COLOUR !== undefined) {
+  // Renamed with the spelling of colour to color (2026-11-17); the old name would be ignored and the default limit used without a sign.
+  throw new Error("DORAYAKI_ADAPTIVE_COLOUR is now DORAYAKI_ADAPTIVE_COLOR");
+}
 const adaptive = process.env.DORAYAKI_ADAPTIVE_LEVELS === undefined ? undefined : {
   maxLevel: Number(process.env.DORAYAKI_ADAPTIVE_LEVELS),
   thickness: Number(process.env.DORAYAKI_ADAPTIVE_THICKNESS ?? 0.05),
-  colourTolerance: Number(process.env.DORAYAKI_ADAPTIVE_COLOUR ?? 0.1),
+  colorTolerance: Number(process.env.DORAYAKI_ADAPTIVE_COLOR ?? 0.1),
   sparseSupport: Number(process.env.DORAYAKI_ADAPTIVE_SPARSE ?? 0),
   ...(classAlpha ? { opacityOf } : {}),
 };

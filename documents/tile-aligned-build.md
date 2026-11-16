@@ -92,7 +92,7 @@ neighbours, a per-mesh frame with its convergence error, and a serial merge. The
 
 1. A `TileFrame` module (`src/geodesy/tile-frame.ts`): the fitted frame with the step-and-clamp rule, tested against the exact conversion.
 2. The tile-local build as a function (`points of one tile -> z17, z16, z15 pieces`), run on the prototype's densest tile and compared with the
-   present build of the same area after undoing the rotation: same splat counts within the seam strip, same colours.
+   present build of the same area after undoing the rotation: same splat counts within the seam strip, same colors.
 3. Scatter to shard files and a tile job runner (processes, a manifest), on the nine Kawazu meshes: compare the archive with the present one
    (size, seam jogs gone) and the time with 1, 4 and 8 workers.
 4. The gather step and a streaming PMTiles writer; then the same for a larger area.

@@ -1,6 +1,6 @@
 /**
  * E016: which precision reductions are visually free. Decodes the tiles of one zoom, requantizes one field at a time
- * (position, height step, scale steps per octave, rotation bits, colour bits), renders the original and the
+ * (position, height step, scale steps per octave, rotation bits, color bits), renders the original and the
  * requantized splats from fixed cameras (demo/src/cpu-render.ts) and compares them (demo/src/image-metrics.ts).
  *
  *   npm run measure:precision -- <tileset dir> <zoom> [--views lng,lat,zoom,bearing,pitch;...]
@@ -41,7 +41,7 @@ function quantQuat(s: Splat, bits: number): Splat {
   return { ...s, qw: out[0]!, qx: out[1]!, qy: out[2]!, qz: out[3]! };
 }
 const quantScale = (v: number, perOctave: number) => 2 ** (Math.round(Math.log2(v) * perOctave) / perOctave);
-const quantColour = (v: number, bits: number) => Math.round((Math.round((v / 255) * (2 ** bits - 1)) / (2 ** bits - 1)) * 255);
+const quantColor = (v: number, bits: number) => Math.round((Math.round((v / 255) * (2 ** bits - 1)) / (2 ** bits - 1)) * 255);
 
 interface Variant { name: string; bitsSaved: string; apply: (s: Splat, zMin: number) => Splat }
 const variants: Variant[] = [
@@ -50,26 +50,26 @@ const variants: Variant[] = [
   ...[0.02, 0.05, 0.1].map((m): Variant => ({ name: `height step ${m * 100} cm`, bitsSaved: `${Math.log2(m / 0.004).toFixed(1)}`, apply: (s, zMin) => ({ ...s, z: zMin + Math.round((s.z - zMin) / m) * m }) })),
   ...[6, 4, 3].map((k): Variant => ({ name: `scale ${k} steps/octave`, bitsSaved: `${(3 * Math.log2(10 / k)).toFixed(1)}`, apply: (s) => ({ ...s, sx: quantScale(s.sx, k), sy: quantScale(s.sy, k), sz: quantScale(s.sz, k) }) })),
   ...[5, 4, 3].map((b): Variant => ({ name: `rotation ${b} bits/component`, bitsSaved: `${3 * (7 - b)}`, apply: (s) => quantQuat(s, b) })),
-  ...[6, 5, 4].map((b): Variant => ({ name: `colour ${b} bits/channel`, bitsSaved: `${3 * (8 - b)}`, apply: (s) => ({ ...s, r: quantColour(s.r, b), g: quantColour(s.g, b), b: quantColour(s.b, b) }) })),
+  ...[6, 5, 4].map((b): Variant => ({ name: `color ${b} bits/channel`, bitsSaved: `${3 * (8 - b)}`, apply: (s) => ({ ...s, r: quantColor(s.r, b), g: quantColor(s.g, b), b: quantColor(s.b, b) }) })),
   // The reductions together (the 96-bit record of E016): the biggest single errors were position and rotation.
   ...[12, 13].map((b): Variant => ({
-    name: `combined: position ${b} bits, height 2 cm, scale 6/octave, rotation 5 bits, colour 6 bits`, bitsSaved: `${2 * (16 - b) + 2.3 + 2.2 + 6 + 6}`,
+    name: `combined: position ${b} bits, height 2 cm, scale 6/octave, rotation 5 bits, color 6 bits`, bitsSaved: `${2 * (16 - b) + 2.3 + 2.2 + 6 + 6}`,
     apply: (s, zMin) => {
       const q = quantQuat(s, 5);
       const pos = (v: number) => Math.min((2 ** b - 1) / 2 ** b, Math.round(v * 2 ** b) / 2 ** b);
       return { ...q, x: pos(s.x), y: pos(s.y), z: zMin + Math.round((s.z - zMin) / 0.02) * 0.02,
         sx: quantScale(s.sx, 6), sy: quantScale(s.sy, 6), sz: quantScale(s.sz, 6),
-        r: quantColour(s.r, 6), g: quantColour(s.g, 6), b: quantColour(s.b, 6) };
+        r: quantColor(s.r, 6), g: quantColor(s.g, 6), b: quantColor(s.b, 6) };
     },
   })),
   // Making room for a class in the 96-bit record (E020): the combined variant above (position 13 bits) is the base; each of
   // these frees 2 or 3 bits from one field of it.
   ...[
-    { name: "base for class bits: position 13, height 2 cm, scale 6/octave, rotation 5, colour 6", pos: 13, zStep: 0.02, quat: 5, colour: 6, freed: 0 },
-    { name: "frees 2 bits: position 12 bits", pos: 12, zStep: 0.02, quat: 5, colour: 6, freed: 2 },
-    { name: "frees 3 bits: colour 5 bits per channel", pos: 13, zStep: 0.02, quat: 5, colour: 5, freed: 3 },
-    { name: "frees 3 bits: rotation 4 bits per component", pos: 13, zStep: 0.02, quat: 4, colour: 6, freed: 3 },
-    { name: "frees 3 bits: position 12 bits, height 4 cm", pos: 12, zStep: 0.04, quat: 5, colour: 6, freed: 3 },
+    { name: "base for class bits: position 13, height 2 cm, scale 6/octave, rotation 5, color 6", pos: 13, zStep: 0.02, quat: 5, color: 6, freed: 0 },
+    { name: "frees 2 bits: position 12 bits", pos: 12, zStep: 0.02, quat: 5, color: 6, freed: 2 },
+    { name: "frees 3 bits: color 5 bits per channel", pos: 13, zStep: 0.02, quat: 5, color: 5, freed: 3 },
+    { name: "frees 3 bits: rotation 4 bits per component", pos: 13, zStep: 0.02, quat: 4, color: 6, freed: 3 },
+    { name: "frees 3 bits: position 12 bits, height 4 cm", pos: 12, zStep: 0.04, quat: 5, color: 6, freed: 3 },
   ].map((v): Variant => ({
     name: `class room: ${v.name}`, bitsSaved: `${v.freed}`,
     apply: (s, zMin) => {
@@ -77,7 +77,7 @@ const variants: Variant[] = [
       const pos = (x: number) => Math.min((2 ** v.pos - 1) / 2 ** v.pos, Math.round(x * 2 ** v.pos) / 2 ** v.pos);
       return { ...q, x: pos(s.x), y: pos(s.y), z: zMin + Math.round((s.z - zMin) / v.zStep) * v.zStep,
         sx: quantScale(s.sx, 6), sy: quantScale(s.sy, 6), sz: quantScale(s.sz, 6),
-        r: quantColour(s.r, v.colour), g: quantColour(s.g, v.colour), b: quantColour(s.b, v.colour) };
+        r: quantColor(s.r, v.color), g: quantColor(s.g, v.color), b: quantColor(s.b, v.color) };
     },
   })),
 ];

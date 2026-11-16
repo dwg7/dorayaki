@@ -220,9 +220,9 @@ npm run measure:encoding -- <tileset dir> <zoom>   # E016: entropy per field, gz
 npm run measure:precision -- <tileset dir> <zoom>  # E016: which precision reductions are visually free (software renderer)
 DORAYAKI_CLASS_PLANE=1 npm run build:tileset -- ...   # also write a class plane (E021); merge:tilesets joins the planes
 DORAYAKI_BLOCK_VERSION=6 npm run build:tileset -- ...   # write version 6 blocks (12-byte records); default is version 5
-npm run measure:quality -- <tileset dir> <ref zoom> <cand zoom|mixed> [<cand dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]  # E012: software-render both from fixed cameras, print holes/colour/depth differences, optional PNGs
+npm run measure:quality -- <tileset dir> <ref zoom> <cand zoom|mixed> [<cand dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]  # E012: software-render both from fixed cameras, print holes/color/depth differences, optional PNGs
 npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
-npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOUR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=gzip gzips PMTiles tiles (default raw; Martin 1.14 cannot read gzip MLT tiles)
+npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=gzip gzips PMTiles tiles (default raw; Martin 1.14 cannot read gzip MLT tiles)
 npm run merge:tilesets -- <name> <dir name> [<dir name> ...]  # merge tilesets of demo/tiles/<dir>/ (tiles with one address are concatenated)
 npm run measure:adaptive -- <file.las> <zone> <base cell metres> <levels>  # E005: splat counts for a grid of merge limits
 DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  # list Numazu on the site (DORAYAKI_KAWAZU_TILEJSON likewise for Kawazu)
@@ -250,7 +250,7 @@ src/gaussian/to-surfels.ts   3DGS Gaussian -> splat mapping and tile placement
 src/pointcloud/las.ts        minimal LAS reader (formats 0-3, no LAZ)
 src/pointcloud/voxel-gaussians.ts  one Gaussian per voxel from a point cloud (in memory)
 src/pointcloud/voxel-accumulator.ts  the same fit, streaming: memory grows with voxels, not points
-src/pointcloud/adaptive.ts   E005: merge coplanar, same-colour voxel Gaussians into larger splats
+src/pointcloud/adaptive.ts   E005: merge coplanar, same-color voxel Gaussians into larger splats
 src/pointcloud/pyramid.ts    tile pyramid from a point cloud: aggregated zooms + maxzoom levels
 src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
 scripts/build-numazu-demo.ts builds the numazu tileset from data/ (not committed)
@@ -276,8 +276,8 @@ scripts/measure-codec.ts     codec timing in Node
 scripts/measure-coarse.ts    E003 coarse Gaussian measurements
 scripts/measure-stream.ts    streaming voxelisation of a LAS file (chunked read)
 scripts/build-tileset.ts     streaming tileset builder for a LAS file of any size (one level per tile)
-demo/src/cpu-render.ts       software renderer (Node) for measurement: same camera model as MapLibre, flat colour
-demo/src/image-metrics.ts    compare two renderings: holes, extra, colour error, depth difference
+demo/src/cpu-render.ts       software renderer (Node) for measurement: same camera model as MapLibre, flat color
+demo/src/image-metrics.ts    compare two renderings: holes, extra, color error, depth difference
 scripts/measure-frame.ts     E022 jog between neighbouring meshes
 scripts/prototype-tile-scatter.ts  E022 prototype of a tile-aligned build's first stages (documents/tile-aligned-build.md)
 scripts/measure-quality.ts   E012/E015 quality comparison between tile zooms, tilesets, or the mixed-zoom choice
@@ -345,3 +345,5 @@ Do not add generated dependency directories such as node_modules.
 Do not add large binaries unless they are necessary to reproduce a specific experiment.
 
 Use a permissive open-source license unless the repository owner directs otherwise.
+
+Spelling: American English (`color`, not `colour`) in code, flags, environment variables and documents (unified 2026-11-17).

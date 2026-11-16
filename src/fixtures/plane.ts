@@ -16,7 +16,7 @@ export interface PlaneOptions {
  * neighbouring discs overlap and cover the tile. Because radius is metric,
  * the fixture depends on the width of the tile that carries it.
  *
- * Colour is a gradient: r follows x, g follows y, b = 128, a = 255.
+ * Color is a gradient: r follows x, g follows y, b = 128, a = 255.
  * No randomness is used. Every float is float32-exact, so the fixture
  * survives an encode/decode round trip with strict equality.
  */

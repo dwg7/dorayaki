@@ -86,7 +86,7 @@ test("voxel Gaussians: flat patches face up, filled voxels are isotropic", () =>
   const cube = discs[16]!;
   close(cube.flatness, 1, 1e-6);
   close(cube.position[0], 2.125, 1e-9);
-  assert.deepEqual(gs[16]!.colour.map((c) => Math.round(c * 10) / 10), [0.2, 0.6, 0.2]);
+  assert.deepEqual(gs[16]!.color.map((c) => Math.round(c * 10) / 10), [0.2, 0.6, 0.2]);
 });
 
 test("voxel Gaussians round-trip through a reference-3DGS PLY", () => {
@@ -127,7 +127,7 @@ test("streaming voxel accumulator gives the same Gaussians as the in-memory fit"
     for (let k = 0; k < 3; k++) {
       close(g.position[k]!, w.position[k]!, 1e-9);
       close(g.scales[k]! / w.scales[k]!, 1, 1e-6);
-      close(g.colour[k]!, w.colour[k]!, 1e-6);
+      close(g.color[k]!, w.color[k]!, 1e-6);
     }
     assert.equal(g.support, w.support);
   });

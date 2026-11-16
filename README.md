@@ -26,7 +26,7 @@ may share the same horizontal position at different heights and
 orientations.
 
 A splat is the primitive of 3D Gaussian Splatting: a position, three
-scales, a rotation and a colour. Here it is quantized into **16 bytes**.
+scales, a rotation and a color. Here it is quantized into **16 bytes**.
 
 ## What has been demonstrated
 
@@ -46,7 +46,7 @@ scales, a rotation and a colour. Here it is quantized into **16 bytes**.
   million points (mobile mapping and airborne laser, 1.08 km2, nine survey
   meshes) become an 83 MB PMTiles archive of 6.94 million splats (about 77 bytes
   per square metre), served from stars. The demo loads only the tiles in view.
-  Vegetation is kept as coarse blobs; flat, evenly coloured ground as large
+  Vegetation is kept as coarse blobs; flat, evenly colored ground as large
   splats. See [documents/kawazu-demo.md](documents/kawazu-demo.md),
   [documents/large-point-clouds.md](documents/large-point-clouds.md) and
   [documents/size-and-scale.md](documents/size-and-scale.md).

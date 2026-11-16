@@ -218,9 +218,9 @@ describe("encoder rejects invalid splats", () => {
     ["negative scale", { sx: -1 }],
     ["infinite scale", { sz: Number.POSITIVE_INFINITY }],
     ["zero quaternion", { qw: 0, qx: 0, qy: 0, qz: 0 }],
-    ["colour above 255", { r: 256 }],
-    ["fractional colour", { g: 1.5 }],
-    ["negative colour", { a: -1 }],
+    ["color above 255", { r: 256 }],
+    ["fractional color", { g: 1.5 }],
+    ["negative color", { a: -1 }],
   ];
   for (const [name, patch] of cases) {
     test(name, () => assertEncodeRejects([{ ...ONE, ...patch }], "INVALID_VALUE"));
