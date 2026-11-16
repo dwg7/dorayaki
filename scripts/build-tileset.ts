@@ -82,21 +82,35 @@ const e0 = (minE + maxE) / 2;
 const n0 = (minN + maxN) / 2;
 const origin = jprcsToLatLng(Number(zoneArg), n0, e0);
 
+/**
+ * DORAYAKI_CLASS_ALPHA=1 (E020, analysis only): count the points of every voxel by class and store the dominant class and its
+ * purity in the splat's opacity byte: class slot * 32 + round(share * 31). Slots: LAS class 0..5; 6 = class 1 on a pulse with
+ * several returns (airborne canopy); 7 = any other class.
+ */
+const classAlpha = process.env.DORAYAKI_CLASS_ALPHA === "1";
+const CLASS_SLOTS = 8;
+const classSlot = (cls: number, returns: number): number => (cls === 1 && ((returns >> 3) & 7) > 1 ? 6 : cls <= 5 ? cls : 7);
+const opacityOf = (counts: readonly number[]): number => {
+  let total = 0, best = 0;
+  counts.forEach((c, i) => { total += c; if (c > counts[best]!) best = i; });
+  return (best * 32 + Math.round((counts[best]! / total) * 31)) / 255;
+};
 const sizes = pyramidVoxelSizes(origin, config);
-const accs = new Map(sizes.map((s) => [s, new VoxelAccumulator(s)]));
+const accs = new Map(sizes.map((s) => [s, new VoxelAccumulator(s, 16, classAlpha ? CLASS_SLOTS : 0)]));
 const finestSize = sizes[sizes.length - 1]!;
 const adaptive = process.env.DORAYAKI_ADAPTIVE_LEVELS === undefined ? undefined : {
   maxLevel: Number(process.env.DORAYAKI_ADAPTIVE_LEVELS),
   thickness: Number(process.env.DORAYAKI_ADAPTIVE_THICKNESS ?? 0.05),
   colourTolerance: Number(process.env.DORAYAKI_ADAPTIVE_COLOUR ?? 0.1),
   sparseSupport: Number(process.env.DORAYAKI_ADAPTIVE_SPARSE ?? 0),
+  ...(classAlpha ? { opacityOf } : {}),
 };
 // The sparse threshold is multiplied by this for each zoom below the maxzoom (cells there are 4 times
 // the area, so they hold about 4 times the points); 1 keeps one threshold for every zoom (E009).
 const sparseScale = Number(process.env.DORAYAKI_ADAPTIVE_SPARSE_SCALE ?? 1);
 const zoomOfSize = new Map(sizes.map((v, i) => [v, i < config.aggregatedZooms.length ? config.aggregatedZooms[i]! : config.maxzoom]));
 const baseSize = finestSize / 2 ** Number(process.env.DORAYAKI_ADAPTIVE_REFINE ?? 0);
-const baseAcc = adaptive ? (accs.get(baseSize) ?? new VoxelAccumulator(baseSize)) : undefined;
+const baseAcc = adaptive ? (accs.get(baseSize) ?? new VoxelAccumulator(baseSize, 16, classAlpha ? CLASS_SLOTS : 0)) : undefined;
 if (baseAcc) accs.set(baseSize, baseAcc);
 let adaptiveLevels: number[] | undefined;
 const list = [...accs.values()];
@@ -123,7 +137,8 @@ for (const [fi, f] of files.entries()) {
       if (!keep(c, returns)) return;
       const lx = x - e0, ly = y - n0;
       const cr = (r >> 8) / 255, cg = (g >> 8) / 255, cb = (b >> 8) / 255;
-      for (const a of list) a.add(lx, ly, z, cr, cg, cb);
+      const slot = classAlpha ? classSlot(c, returns) : -1;
+      for (const a of list) a.add(lx, ly, z, cr, cg, cb, slot);
     });
     fileDone += n;
   }

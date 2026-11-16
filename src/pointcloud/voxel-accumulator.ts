@@ -18,8 +18,8 @@ import { gaussianFromMoments } from "./voxel-gaussians.js";
 const CHUNK_BITS = 16;
 const CHUNK = 1 << CHUNK_BITS;
 const CHUNK_MASK = CHUNK - 1;
-/** Doubles per voxel: n, Σd (3), Σddᵀ (6), Σrgb (3). */
-const STRIDE = 13;
+/** Doubles per voxel without class slots: n, Σd (3), Σddᵀ (6), Σrgb (3). With class slots, one more double per slot. */
+const BASE_STRIDE = 13;
 
 export interface AccumulatorFit {
   /** Voxels with fewer points are dropped (default 1). */
@@ -31,6 +31,9 @@ export interface AccumulatorFit {
 
 export class VoxelAccumulator {
   readonly size: number;
+  /** Class slots per voxel (point counts by class, E020); 0 when the points carry no class. */
+  readonly classSlots: number;
+  private readonly STRIDE: number;
   /** Number of occupied voxels. */
   voxels = 0;
   /** Number of points added. */
@@ -42,20 +45,22 @@ export class VoxelAccumulator {
   private readonly keys: Int32Array[] = [];
   private readonly sums: Float64Array[] = [];
 
-  constructor(size: number, initialCapacityLog2 = 16) {
+  constructor(size: number, initialCapacityLog2 = 16, classSlots = 0) {
     if (!(size > 0) || !Number.isFinite(size)) throw new RangeError("voxel size must be positive and finite");
     this.size = size;
+    this.classSlots = classSlots;
+    this.STRIDE = BASE_STRIDE + classSlots;
     this.table = new Int32Array(1 << initialCapacityLog2);
     this.mask = this.table.length - 1;
   }
 
   /** Bytes held by the table and the per-voxel chunks (typed arrays only). */
   get byteLength(): number {
-    return this.table.byteLength + this.keys.length * CHUNK * (3 * 4 + STRIDE * 8);
+    return this.table.byteLength + this.keys.length * CHUNK * (3 * 4 + this.STRIDE * 8);
   }
 
   /** Add one point (local metres; colour channels in 0..1). */
-  add(x: number, y: number, z: number, r: number, g: number, b: number): void {
+  add(x: number, y: number, z: number, r: number, g: number, b: number, classSlot = -1): void {
     const size = this.size;
     const ix = Math.floor(x / size), iy = Math.floor(y / size), iz = Math.floor(z / size);
     if (!(Math.abs(ix) < 2 ** 31 && Math.abs(iy) < 2 ** 31 && Math.abs(iz) < 2 ** 31)) {
@@ -63,13 +68,14 @@ export class VoxelAccumulator {
     }
     const id = this.find(ix | 0, iy | 0, iz | 0);
     const chunk = this.sums[id >> CHUNK_BITS]!;
-    const o = (id & CHUNK_MASK) * STRIDE;
+    const o = (id & CHUNK_MASK) * this.STRIDE;
     const dx = x - ix * size, dy = y - iy * size, dz = z - iz * size;
     chunk[o]! += 1;
     chunk[o + 1]! += dx; chunk[o + 2]! += dy; chunk[o + 3]! += dz;
     chunk[o + 4]! += dx * dx; chunk[o + 5]! += dx * dy; chunk[o + 6]! += dx * dz;
     chunk[o + 7]! += dy * dy; chunk[o + 8]! += dy * dz; chunk[o + 9]! += dz * dz;
     chunk[o + 10]! += r; chunk[o + 11]! += g; chunk[o + 12]! += b;
+    if (classSlot >= 0 && classSlot < this.classSlots) chunk[o + BASE_STRIDE + classSlot]! += 1;
     this.points++;
   }
 
@@ -93,7 +99,7 @@ export class VoxelAccumulator {
     const id = this.voxels;
     if ((id & CHUNK_MASK) === 0) {
       this.keys.push(new Int32Array(CHUNK * 3));
-      this.sums.push(new Float64Array(CHUNK * STRIDE));
+      this.sums.push(new Float64Array(CHUNK * this.STRIDE));
     }
     const k = this.keys[id >> CHUNK_BITS]!;
     const o = (id & CHUNK_MASK) * 3;
@@ -142,11 +148,13 @@ export class VoxelAccumulator {
       mean: [number, number, number],
       cov: [number, number, number, number, number, number],
       colour: [number, number, number],
+      /** Point counts by class slot (empty without class slots). */
+      classes: number[],
     ) => void,
   ): void {
     for (const id of this.sortedIds()) {
       const s = this.sums[id >> CHUNK_BITS]!;
-      const o = (id & CHUNK_MASK) * STRIDE;
+      const o = (id & CHUNK_MASK) * this.STRIDE;
       const n = s[o]!;
       const k = this.keys[id >> CHUNK_BITS]!;
       const ko = (id & CHUNK_MASK) * 3;
@@ -157,6 +165,7 @@ export class VoxelAccumulator {
         [s[o + 4]! / n - mdx * mdx, s[o + 5]! / n - mdx * mdy, s[o + 6]! / n - mdx * mdz,
           s[o + 7]! / n - mdy * mdy, s[o + 8]! / n - mdy * mdz, s[o + 9]! / n - mdz * mdz],
         [s[o + 10]! / n, s[o + 11]! / n, s[o + 12]! / n],
+        this.classSlots > 0 ? Array.from(s.subarray(o + BASE_STRIDE, o + BASE_STRIDE + this.classSlots)) : [],
       );
     }
   }
@@ -172,7 +181,7 @@ export class VoxelAccumulator {
     const out: Gaussian[] = [];
     for (const id of this.sortedIds()) {
       const s = this.sums[id >> CHUNK_BITS]!;
-      const o = (id & CHUNK_MASK) * STRIDE;
+      const o = (id & CHUNK_MASK) * this.STRIDE;
       const n = s[o]!;
       if (n < minPoints) continue;
       const k = this.keys[id >> CHUNK_BITS]!;
