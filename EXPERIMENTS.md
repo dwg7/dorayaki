@@ -1233,16 +1233,22 @@ the cores, no depth write. Splats overlap their neighbours with soft edges, and 
 confined to the feathered rims. `?softcore=`, `?softscale=`, `?softfalloff=` change the three numbers. The default look is
 unchanged (one opaque pass).
 
-### Observations (looked at, one browser, Kawazu archive, zoom 18.5, bearing -30, pitch 60)
-- Defaults (0.8, 1.4, 3.5): edges between splats melt into each other; the picture is slightly softer than the flat one and
-  otherwise the same. The difference is small.
-- 0.5, 2, 7: foliage becomes a soft, painterly texture while the bridge and the road stay legible: much closer to the look of
-  Gaussian splat demos. But where ground splats are sparse, the shrunken cores leave gaps and the feathered splats over the
-  basemap show as a regular pattern of grey dots (lower left of the picture).
-- Cost not measured (two draw calls per tile instead of one; at 1.6 million splats the render time reading was 0).
-- Shading is still the fixed two-sided Lambert of the flat look; 3D Gaussian splatting has none (colours are baked), so a
-  flatter, unshaded variant is a next knob. Not tried.
+### Observations (looked at, one browser, Kawazu archive)
+- First defaults (core 0.8, feathered 1.4, falloff 3.5): edges between splats melt into each other; the picture is slightly
+  softer than the flat one and otherwise the same.
+- A stronger setting (core 0.5, feathered 2, falloff 7) gave a soft, painterly foliage while the bridge and the road stayed
+  legible, **but hfu saw a regular pattern of dark circles on flat ground** (a screenshot of fields and houses): the shrunken
+  opaque cores left gaps between them, so only the semi-transparent feathered splats covered the gaps (the basemap shows
+  through as a pale haze) and each core showed as a dot. Flat ground is where splats sit on a grid.
+- Fix: the cores always cover the surface. The core is now the full extent (`coreScale` 1, as the flat look draws it, with the
+  `?extent=` that covers gaps), and only the feathered splat is larger (1.8, falloff 6.5, a Gaussian over 3.6 sigma across).
+  The same camera that showed the dots (zoom 17.67, bearing -30, pitch 60, lower-left ground below the bridge) shows none; a
+  close forest view (zoom 19.4) and a mountain-side view (zoom 18.3) show none either. Not checked: hfu's exact view of the
+  fields and houses (its coordinates were not given, and a search for it in the nine meshes did not find it).
+- `?shade=<0..1>` scales the fixed Lambert shading (uniform `u_shade`, in all three vertex shaders): at 0 the colours are drawn as
+  stored, lighter and closer to a photograph (the forest greener), as 3D Gaussian splatting does (it has no shading).
+- Cost not measured (two draw calls per tile instead of one).
 - Not done: a sorted, depth-correct blend (true splat compositing), which would need sorting per frame.
 
 ### Decision
-Open: hfu to judge by eye (`?fixture=kawazu-stars&look=soft` locally, and with the three tuning flags).
+Open: hfu to judge by eye (`?fixture=kawazu-stars&look=soft`, with `&shade=0`).

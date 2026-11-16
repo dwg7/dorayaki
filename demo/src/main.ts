@@ -238,6 +238,8 @@ map.on("load", () => {
       l.softScale = num("softscale", l.softScale);
       l.softFalloff = num("softfalloff", l.softFalloff);
     }
+    const shade = flag("shade", tileset);
+    if (shade !== undefined && shade !== null && shade !== "" && Number.isFinite(Number(shade))) l.shade = Math.min(1, Math.max(0, Number(shade))); // 0: no shading
     if (mixed) l.drawAllTiles = true; // the streamer chose tiles of several zooms by distance
     if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
     l.setZOffset(dz + zoomLift());

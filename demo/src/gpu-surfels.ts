@@ -21,7 +21,8 @@ uniform float u_min_radius; // metres; semi-axis floor when drawing a progressiv
 uniform float u_extent;     // factor on every semi-axis (1 = the 2-sigma ellipse); covers gaps between neighbours
 uniform vec3 u_light;       // local metric frame, normalized
 uniform vec3 u_right;       // camera right in the local metric frame, normalized
-uniform vec3 u_up;          // camera up in the local metric frame, normalized
+uniform vec3 u_up;
+uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colours as stored (no shading)          // camera up in the local metric frame, normalized
 in vec2 a_corner;           // quad corner in [-1, 1]^2
 in vec3 a_position;         // x, y tile-local; z metres
 in vec3 a_axis_u;           // semi-axis vector along the major axis, metres
@@ -40,13 +41,13 @@ void main() {
     float r = max(length(a_axis_u) * u_extent, u_min_radius);
     u = u_right * r;
     v = u_up * r;
-    shade = 0.8;
+    shade = mix(1.0, 0.8, u_shade);
   } else {
     float lu = max(length(u), 1e-9);
     float lv = max(length(v), 1e-9);
     u *= u_extent * max(1.0, u_min_radius / (lu * u_extent));
     v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
-    shade = 0.35 + 0.65 * abs(dot(normalize(a_normal), u_light));
+    shade = mix(1.0, 0.35 + 0.65 * abs(dot(normalize(a_normal), u_light)), u_shade);
   }
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
@@ -126,6 +127,7 @@ uniform float u_extent;
 uniform vec3 u_light;
 uniform vec3 u_right;
 uniform vec3 u_up;
+uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colours as stored (no shading)
 uniform float u_z_origin;   // metres, of the tile's block
 uniform float u_z_step;     // metres per z code
 in vec2 a_corner;
@@ -175,7 +177,7 @@ ${decode}
     float r = max(2.0 * sqrt(sa * sb) * u_extent, u_min_radius);
     u = u_right * r;
     v = u_up * r;
-    shade = 0.8;
+    shade = mix(1.0, 0.8, u_shade);
   } else {
     u = aa * 2.0 * sa;
     v = ab * 2.0 * sb;
@@ -183,7 +185,7 @@ ${decode}
     float lv = max(length(v), 1e-9);
     u *= u_extent * max(1.0, u_min_radius / (lu * u_extent));
     v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
-    shade = 0.35 + 0.65 * abs(dot(normalize(an), u_light));
+    shade = mix(1.0, 0.35 + 0.65 * abs(dot(normalize(an), u_light)), u_shade);
   }
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
@@ -205,6 +207,7 @@ export interface SurfelProgram {
   uRight: WebGLUniformLocation;
   uUp: WebGLUniformLocation;
   uSoft: WebGLUniformLocation;
+  uShade: WebGLUniformLocation;
   uFalloff: WebGLUniformLocation;
   /** Only in the program that decodes packed records. */
   uZOrigin?: WebGLUniformLocation;
@@ -286,6 +289,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
     uRight: uniform("u_right"),
     uUp: uniform("u_up"),
     uSoft: uniform("u_soft"),
+    uShade: uniform("u_shade"),
     uFalloff: uniform("u_falloff"),
     ...(packed ? { uZOrigin: uniform("u_z_origin"), uZStep: uniform("u_z_step") } : {}),
     ...(kind === 12 ? { uScaleBase: uniform("u_scale_base") } : {}),
@@ -373,7 +377,9 @@ export interface DrawOptions {
    * `"flat"`: opaque splats of the full extent.
    */
   pass?: "flat" | "core" | "soft";
-  /** Exponent of the Gaussian falloff over the quad in the soft pass (default 3.5: 2.7 sigma at the quad's edge). */
+  /** Strength of the shading, 0..1 (default 1: the fixed Lambert light; 0: colours as stored). */
+  shade?: number;
+  /** Exponent of the Gaussian falloff over the quad in the soft pass (default 3.5 here; the layer uses 6.5, a Gaussian over 3.6 sigma across). */
   falloff?: number;
 }
 
@@ -396,6 +402,7 @@ export function drawSurfels(
   if (p.uScaleBase) gl.uniform1f(p.uScaleBase, b.z?.scaleBase ?? 0);
   const soft = opts.pass === "soft";
   gl.uniform1f(p.uSoft, soft ? 1 : 0);
+  gl.uniform1f(p.uShade, opts.shade ?? 1);
   gl.uniform1f(p.uFalloff, opts.falloff ?? 3.5);
   if (opts.depthTest) {
     gl.enable(gl.DEPTH_TEST);

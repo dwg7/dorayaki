@@ -82,10 +82,12 @@ export class SurfelLayer implements CustomLayerInterface {
    */
   look: "flat" | "soft" = "flat";
   /** Soft look: the core's scale and the feathered splat's scale, as factors on the semi-axes. */
-  coreScale = 0.8;
-  softScale = 1.4;
-  /** Soft look: exponent of the Gaussian falloff over the feathered quad (3.5 = Gaussian at 2.7 sigma across). */
-  softFalloff = 3.5;
+  coreScale = 1;
+  softScale = 1.8;
+  /** Soft look: exponent of the Gaussian falloff over the feathered quad (6.5 = a Gaussian over 3.6 sigma across). */
+  softFalloff = 6.5;
+  /** Strength of the shading, 0..1 (`?shade=`; 0 draws the colours as stored, like a 3D Gaussian splat). */
+  shade = 1;
   /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
   extent = 1;
 
@@ -187,6 +189,7 @@ export class SurfelLayer implements CustomLayerInterface {
           depthTest: this.depthTest,
           pass,
           falloff: this.softFalloff,
+          shade: this.shade,
         });
         if (pi === 0) { drawn++; count += plan.count; }
       }
