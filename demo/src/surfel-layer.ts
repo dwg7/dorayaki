@@ -71,6 +71,11 @@ export class SurfelLayer implements CustomLayerInterface {
    * does not follow the camera's distance to the data (NOTES.md).
    */
   zoomOverride: number | undefined;
+  /**
+   * Draw every tile handed over, whatever its zoom (`?mixed=1`: the streamer already chose the tiles by distance,
+   * mixed-selection.ts). Off: draw the tiles of the one zoom picked from the map zoom.
+   */
+  drawAllTiles = false;
   /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
   extent = 1;
 
@@ -152,7 +157,7 @@ export class SurfelLayer implements CustomLayerInterface {
     let drawn = 0, count = 0;
     let plan: TileDraw = { count: 0, levelsDrawn: 1, minRadius: 0 };
     for (const t of this.tiles) {
-      if (!t.buffers || t.tile.z !== zoom) continue;
+      if (!t.buffers || (!this.drawAllTiles && t.tile.z !== zoom)) continue;
       plan = drawPlan(t, displayZoom);
       const matrix = Float32Array.from(multiplyMat4(options.defaultProjectionData.mainMatrix, t.model));
       const program = t.packed ? this.packedProgram : this.program;

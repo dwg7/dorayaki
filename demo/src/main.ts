@@ -13,6 +13,9 @@ import { SurfelLayer } from "./surfel-layer.js";
 import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
 import { terrainLift } from "./terrain-lift.js";
+import { selectMixedTiles } from "./mixed-selection.js";
+import type { View } from "./camera.js";
+import type { LngLatBoundsArray } from "./tile-view.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
   return [tileLongitude(t, x), tileLatitude(t, y)];
@@ -218,12 +221,15 @@ map.on("load", () => {
   const lod = Number(flag("lod", tileset));
   const extent = Number(flag("extent", tileset));
   const dz = Number(flag("dz", tileset));
+  // `?mixed=1`: tiles of several zooms at once, by distance from the camera (documents/demo-and-site.md, E015).
+  const mixed = flag("mixed", tileset) === "1";
   // With terrain on, MapLibre's terrain at low zoom is coarser than the ground and lies above it in places, covering
   // the splats; raise them by a zoom-dependent amount (terrain-lift.ts). `?dz=` raises everything by dz metres (debug).
   const zoomLift = (): number => (terrain > 0 ? terrainLift(map.getZoom()) : 0);
   const makeLayer = (): SurfelLayer => {
     const l = new SurfelLayer("surfels");
     if (lod > 0) l.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
+    if (mixed) l.drawAllTiles = true; // the streamer chose tiles of several zooms by distance
     if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
     l.setZOffset(dz + zoomLift());
     l.setDepthTest(depthEl.checked);
@@ -235,10 +241,17 @@ map.on("load", () => {
 
   // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
   // as a whole when it is complete (documents/demo-and-site.md).
+  // The view as the camera model of camera.ts takes it (for `?mixed=1`); the ground height under the view centre comes from the terrain.
+  const currentView = (): View => {
+    const c = map.getCenter();
+    const canvas = map.getCanvas();
+    return { lng: c.lng, lat: c.lat, zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch(), width: canvas.clientWidth, height: canvas.clientHeight, centreZ: map.queryTerrainElevation(c) ?? 0 };
+  };
   let loaded: LoadedTile[] = [];
   let summary = "loading…";
   const streamer = new TileStreamer<LoadedTile>({
     candidates: tiles,
+    ...(mixed ? { select: (_z: number, b: LngLatBoundsArray, maxZoom?: number) => selectMixedTiles(tiles, b, currentView(), { limit: 24, ...(maxZoom !== undefined ? { maxZoom } : {}) }) } : {}),
     staged: flag("staged", tileset) !== "0", // show the next coarser zoom while the first set loads (`?staged=0` switches it off)
     load: loadTile,
     onProgress: ({ zoom, wanted, done }) => {

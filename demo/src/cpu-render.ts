@@ -11,23 +11,11 @@
  * view's latitude. A splat's tile-local x, y are fractions of the tile; its
  * axes are in metres (see splat-instances.ts).
  */
-import { EARTH_CIRCUMFERENCE_METRES, type TileAddress } from "../../src/tile-geometry.js";
-import type { SplatInstances } from "./splat-instances.js";
+import type { TileAddress } from "../../src/tile-geometry.js";
+import { cameraModel, dot, type V3, type View } from "./camera.js";
 
-export interface View {
-  lng: number;
-  lat: number;
-  /** MapLibre zoom (512-pixel tiles). */
-  zoom: number;
-  /** Degrees clockwise from north. */
-  bearing: number;
-  /** Degrees from straight down. */
-  pitch: number;
-  width: number;
-  height: number;
-  /** Height in metres of the point the camera looks at. */
-  centreZ: number;
-}
+export type { View } from "./camera.js";
+import type { SplatInstances } from "./splat-instances.js";
 
 export interface TileInstances {
   tile: TileAddress;
@@ -43,36 +31,11 @@ export interface Image {
   depth: Float32Array;
 }
 
-/** MapLibre's vertical field of view, radians. */
-export const FOV = 0.6435011087932844;
-
-const mercator = (lng: number, lat: number): [number, number] => {
-  const x = (lng + 180) / 360;
-  const s = Math.sin((lat * Math.PI) / 180);
-  const y = 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
-  return [x, y];
-};
-
-type V3 = [number, number, number];
-const dot = (a: V3, b: V3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-
 export function renderTiles(tiles: readonly TileInstances[], view: View): Image {
   const { width: W, height: H } = view;
   const image: Image = { width: W, height: H, rgb: new Uint8Array(W * H * 3), depth: new Float32Array(W * H).fill(Infinity) };
 
-  const K = EARTH_CIRCUMFERENCE_METRES * Math.cos((view.lat * Math.PI) / 180); // metres per Mercator unit
-  const [mx, my] = mercator(view.lng, view.lat);
-  const th = (view.bearing * Math.PI) / 180;
-  const ph = (view.pitch * Math.PI) / 180;
-  const f: V3 = [Math.sin(th) * Math.sin(ph), Math.cos(th) * Math.sin(ph), -Math.cos(ph)];
-  const right: V3 = [Math.cos(th), -Math.sin(th), 0];
-  const up: V3 = [right[1] * f[2] - right[2] * f[1], right[2] * f[0] - right[0] * f[2], right[0] * f[1] - right[1] * f[0]];
-  const tanHalf = Math.tan(FOV / 2);
-  const ppm = (512 * 2 ** view.zoom) / K; // pixels per metre at the view centre
-  const distance = H / 2 / tanHalf / ppm;
-  // The view centre is (0, 0, centreZ); the camera sits `distance` behind it.
-  const camAbs: V3 = [-f[0] * distance, -f[1] * distance, view.centreZ - f[2] * distance];
-  const pxPerUnit = H / 2 / tanHalf; // pixels at depth 1
+  const { K, mx, my, f, right, up, position: camAbs, pxPerUnit } = cameraModel(view);
 
   for (const { tile, instances: s } of tiles) {
     const n = 2 ** tile.z;

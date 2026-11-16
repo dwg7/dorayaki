@@ -5,6 +5,12 @@
  * (demo/src/image-metrics.ts).
  *
  *   npm run measure:quality -- <tileset dir> <reference zoom> <candidate zoom> [<candidate dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]
+ *   npm run measure:quality -- <tileset dir> <reference zoom> mixed [--views ...] [--out dir]
+ *
+ * With `mixed` as the candidate zoom (E015) the candidate is what the demo's `?mixed=1` would draw from the
+ * same tileset in each view (tiles of several zooms chosen by distance, demo/src/mixed-selection.ts), and a
+ * second candidate row per view is the single-zoom choice (the tiles of floor(view zoom)). Tile bytes are
+ * the files' sizes.
  *
  * The reference zoom is read from the first directory, the candidate zoom from
  * the candidate directory (default: the same one). With --out, writes PNGs of
@@ -15,6 +21,9 @@ import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 
 import { renderTiles, type Image, type TileInstances, type View } from "../demo/src/cpu-render.js";
+import { visibleBounds } from "../demo/src/camera.js";
+import { selectMixedTiles } from "../demo/src/mixed-selection.js";
+import { viewTiles } from "../demo/src/tile-view.js";
 import { decodeSurfelTileWithLevels } from "../demo/src/decode-tile.js";
 import { compareImages } from "../demo/src/image-metrics.js";
 import { splatInstances } from "../demo/src/splat-instances.js";
@@ -35,20 +44,23 @@ if (!refDir || !refZoomArg || !candZoomArg) {
 }
 const candDir = candDirArg ?? refDir;
 
-function loadZoom(dir: string, z: number): { tiles: TileInstances[]; heights: Array<[number, number, number]> } {
+/** Splat instances of every tile of one zoom; `bytes` is the tile files' size. */
+function loadZoom(dir: string, z: number): { tiles: TileInstances[]; bytes: Map<string, number> } {
   const tiles: TileInstances[] = [];
-  const heights: Array<[number, number, number]> = []; // tile x, y fractions are not needed; keep world-ish samples
+  const bytes = new Map<string, number>();
   const zdir = join(dir, String(z));
   if (!existsSync(zdir)) throw new Error(`${zdir} does not exist`);
   for (const xs of readdirSync(zdir)) {
     for (const f of readdirSync(join(zdir, xs))) {
       if (!f.endsWith(".mlt")) continue;
       const x = Number(xs), y = Number(f.slice(0, -4));
-      const decoded = decodeSurfelTileWithLevels(new Uint8Array(readFileSync(join(zdir, xs, f))));
+      const file = new Uint8Array(readFileSync(join(zdir, xs, f)));
+      const decoded = decodeSurfelTileWithLevels(file);
       tiles.push({ tile: { z, x, y }, instances: splatInstances(decoded.splats) });
+      bytes.set(`${z}/${x}/${y}`, file.byteLength);
     }
   }
-  return { tiles, heights };
+  return { tiles, bytes };
 }
 
 /** Median height of the splats within `radius` metres of a point, to aim the camera at the ground. */
@@ -97,11 +109,47 @@ function png(image: Image): Uint8Array {
 const defaultViews = "138.939214,34.790766,16.63,128.7,67;138.9392956,34.7917627,18.5,-30,60;138.9392956,34.7917627,17.5,0,0";
 const viewSpecs = (viewsArg ?? defaultViews).split(";").map((v) => v.split(",").map(Number) as [number, number, number, number, number]);
 
+const mixedMode = candZoomArg === "mixed";
 const t0 = performance.now();
 const ref = loadZoom(refDir, Number(refZoomArg));
-const cand = loadZoom(candDir, Number(candZoomArg));
 const count = (t: TileInstances[]) => t.reduce((n, x) => n + x.instances.count, 0);
-console.log(`reference ${refDir} z${refZoomArg}: ${ref.tiles.length} tiles, ${count(ref.tiles)} splats; candidate ${candDir} z${candZoomArg}: ${cand.tiles.length} tiles, ${count(cand.tiles)} splats (loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s)`);
+const sum = (tiles: TileInstances[], bytes: Map<string, number>) => tiles.reduce((n, t) => n + (bytes.get(`${t.tile.z}/${t.tile.x}/${t.tile.y}`) ?? 0), 0);
+const zoomsIn = (dir: string): number[] => readdirSync(dir).filter((d) => /^\d+$/.test(d)).map(Number).sort((a, b) => a - b);
+
+interface Candidate { name: string; tiles: (view: View) => TileInstances[] }
+const candidates: Candidate[] = [];
+let candBytes = new Map<string, number>();
+if (mixedMode) {
+  const byKey = new Map<string, TileInstances>();
+  for (const z of zoomsIn(candDir)) {
+    const l = loadZoom(candDir, z);
+    for (const t of l.tiles) byKey.set(`${t.tile.z}/${t.tile.x}/${t.tile.y}`, t);
+    for (const [k, b] of l.bytes) candBytes.set(k, b);
+  }
+  const all = [...byKey.values()];
+  const addresses = all.map((t) => t.tile);
+  candidates.push({
+    name: "mixed",
+    tiles: (view) => selectMixedTiles(addresses, visibleBounds(view), view, { limit: 24 }).map((a) => byKey.get(`${a.z}/${a.x}/${a.y}`)!),
+  });
+  const zs = zoomsIn(candDir);
+  const zoomFor = (view: View): number => zs.filter((x) => x <= Math.floor(view.zoom)).pop() ?? zs[0]!;
+  // What the demo draws without `?mixed=1`: the nearest nine tiles of the zoom picked from the map zoom, among
+  // those the camera can see (visibleBounds stands in for the map's bounds).
+  candidates.push({
+    name: "single, nearest 9",
+    tiles: (view) => {
+      const near = new Set(viewTiles(addresses, zoomFor(view), visibleBounds(view), 9).map((a) => `${a.z}/${a.x}/${a.y}`));
+      return all.filter((t) => near.has(`${t.tile.z}/${t.tile.x}/${t.tile.y}`));
+    },
+  });
+  candidates.push({ name: "single, all tiles", tiles: (view) => all.filter((t) => t.tile.z === zoomFor(view)) });
+} else {
+  const cand = loadZoom(candDir, Number(candZoomArg));
+  candBytes = cand.bytes;
+  candidates.push({ name: `z${candZoomArg}`, tiles: () => cand.tiles });
+}
+console.log(`reference ${refDir} z${refZoomArg}: ${ref.tiles.length} tiles, ${count(ref.tiles)} splats; candidate ${candDir} ${mixedMode ? "mixed/single" : "z" + candZoomArg} (loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s)`);
 if (outDir) mkdirSync(outDir, { recursive: true });
 
 const rows: Array<Record<string, number | string>> = [];
@@ -109,18 +157,20 @@ viewSpecs.forEach(([lng, lat, zoom, bearing, pitch], vi) => {
   const centreZ = groundHeight(ref.tiles, lng, lat);
   const view: View = { lng, lat, zoom, bearing, pitch, width: 800, height: 600, centreZ };
   const a = renderTiles(ref.tiles, view);
-  const b = renderTiles(cand.tiles, view);
-  for (const block of [1, 4]) {
-    const c = compareImages(a, b, block);
-    rows.push({
-      view: `${vi + 1}: z${zoom} b${bearing} p${pitch}`, block, covered: c.referencePixels,
-      holes: +c.holes.toFixed(4), extra: +c.extra.toFixed(4), mae: +c.mae.toFixed(2), psnr: +c.psnr.toFixed(2),
-      depthMedian: +c.depthMedian.toFixed(3), depthP95: +c.depthP95.toFixed(3),
-    });
+  for (const cand of candidates) {
+    const tiles = cand.tiles(view);
+    const b = renderTiles(tiles, view);
+    const byZoom = [...new Set(tiles.map((t) => t.tile.z))].sort().map((z) => `z${z}:${tiles.filter((t) => t.tile.z === z).length}`).join(" ");
+    for (const block of [1, 4]) {
+      const c = compareImages(a, b, block);
+      rows.push({
+        view: `${vi + 1}: z${zoom} b${bearing} p${pitch}`, candidate: cand.name, tiles: byZoom, splats: count(tiles), MB: +(sum(tiles, candBytes) / 1e6).toFixed(1), block,
+        holes: +c.holes.toFixed(4), extra: +c.extra.toFixed(4), mae: +c.mae.toFixed(2), psnr: +c.psnr.toFixed(2),
+        depthMedian: +c.depthMedian.toFixed(3),
+      });
+    }
+    if (outDir) writeFileSync(join(outDir, `view${vi + 1}-${cand.name.replace(/ /g, "-")}.png`), png(b));
   }
-  if (outDir) {
-    writeFileSync(join(outDir, `view${vi + 1}-reference.png`), png(a));
-    writeFileSync(join(outDir, `view${vi + 1}-candidate.png`), png(b));
-  }
+  if (outDir) writeFileSync(join(outDir, `view${vi + 1}-reference.png`), png(a));
 });
 console.table(rows);

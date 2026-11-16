@@ -134,3 +134,37 @@ test("staged: reset makes the next update stage again", async () => {
   await tick();
   assert.deepEqual(ready.slice(1), [16, 17], "after reset the coarse set is delivered first, then the target");
 });
+
+test("select: the streamer holds the tiles the selector returns, of mixed zooms, and reports the finest zoom", async () => {
+  const L = manualLoader();
+  const ready: Array<[number, string[]]> = [];
+  const s = new TileStreamer<string>({
+    candidates: [A, B, C], load: L.load,
+    select: () => [A, C],
+    onReady: (set, z) => ready.push([z, set.map((x) => x.data)]),
+  });
+  s.update(17.2, bothOf(A, B));
+  assert.deepEqual([...L.calls].sort(), [key(A), key(C)].sort());
+  L.finish(A); L.finish(C);
+  await tick();
+  assert.deepEqual(ready, [[17, [key(A), key(C)]]]);
+});
+
+test("select with staged: the first delivery comes from the selector capped one zoom lower", async () => {
+  const L = manualLoader();
+  const ready: Array<[number, string[]]> = [];
+  const caps: Array<number | undefined> = [];
+  const s = new TileStreamer<string>({
+    candidates: [A, B, C], load: L.load, staged: true,
+    select: (_z, _b, maxZoom) => { caps.push(maxZoom); return maxZoom === undefined ? [A, B] : [C]; },
+    onReady: (set, z) => ready.push([z, set.map((x) => x.data)]),
+  });
+  s.update(17.2, bothOf(A, B));
+  assert.deepEqual(caps, [undefined, 16]);
+  L.finish(C);
+  await tick();
+  assert.deepEqual(ready, [[16, [key(C)]]]);
+  L.finish(A); L.finish(B);
+  await tick();
+  assert.deepEqual(ready[1], [17, [key(A), key(B)]]);
+});
