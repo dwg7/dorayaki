@@ -1,7 +1,7 @@
 /**
- * Surfel Block codec (experimental, version 4).
+ * Surfel Block codec (experimental; writes version 5 or 6, reads 4, 5 and 6).
  *
- * Each record is a quantized anisotropic Gaussian splat (16 bytes), the
+ * Each record is a quantized anisotropic Gaussian splat (16 bytes in versions 4 and 5, 12 in version 6), the
  * kind of primitive 3D Gaussian Splatting uses, instead of the circular
  * disc of versions 1-3. See documents/surfel-block-format.md for the byte
  * layout. All multi-byte values are little-endian. This module has no

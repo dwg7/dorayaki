@@ -65,14 +65,48 @@ void main() {
 }`;
 
 /**
- * The same drawing from the wire record: one 16-byte record per splat is uploaded as it is (four uints per instance)
- * and decoded here, which is 3.5 times less GPU memory than the float attributes above. The decoding mirrors
- * splat-instances.ts (the reference for tests): position (x, y as u16 / 65536, z from a per-tile origin and step),
- * scales 2^(code / 10 - 16), rotation from 24 bits (smallest three: bits 0-1 index of the largest component, then
- * the three others at 7 bits, 63 = 0, scaled by 1 / sqrt 2), colour. Axes are ordered by scale code (ties by index);
- * a splat is round when its largest and smallest codes differ by 5 or less (a ratio below 1.5).
+ * Vertex shader that decodes packed records. `bytes` 16: the record of versions 4 and 5; 12: the bit-packed record of
+ * version 6 (V6_FIELDS in src/surfel-block.ts, `u_scale_base` the block's scaleLog2Min). The decoding mirrors
+ * splat-instances.ts for the drawing and the codec for the fields.
  */
-const PACKED_VERTEX_SHADER = `#version 300 es
+function packedVertexShader(bytes: 16 | 12): string {
+  const v6 = bytes === 12;
+  const record = v6
+    ? `in uvec3 a_rec;             // the 12-byte record as three little-endian words
+uniform float u_scale_base; // log2 of the metres of scale code 0
+// \`len\` bits (at most 25) at bit \`off\` of the 96-bit record.
+uint bits(uint off, uint len) {
+  uint w = off >> 5u;
+  uint o = off & 31u;
+  uint lo = a_rec[w] >> o;
+  uint hi = (o + len > 32u) ? (a_rec[w + 1u] << (32u - o)) : 0u;
+  return (lo | hi) & ((1u << len) - 1u);
+}`
+    : "in uvec4 a_rec;             // the 16-byte record as four little-endian words";
+  const decode = v6
+    ? `  vec3 pos = vec3(float(bits(0u, 13u)) / 8192.0, float(bits(13u, 13u)) / 8192.0, u_z_origin + float(bits(26u, 14u)) * u_z_step);
+  uint codes[3] = uint[3](bits(40u, 7u), bits(47u, 7u), bits(54u, 7u));
+  float sc[3];
+  for (int i = 0; i < 3; i++) sc[i] = exp2(u_scale_base + float(codes[i]) / 6.0);
+  uint qb = bits(61u, 17u);
+  const uint QBITS = 5u;
+  const uint QMASK = 31u;
+  const float QHALF = 15.0;
+  vec3 rgb = vec3(float(bits(78u, 6u)), float(bits(84u, 6u)), float(bits(90u, 6u))) / 63.0;`
+    : `  uint w0 = a_rec.x, w1 = a_rec.y, w2 = a_rec.z, w3 = a_rec.w;
+  vec3 pos = vec3(float(w0 & 0xFFFFu) / 65536.0, float(w0 >> 16) / 65536.0, u_z_origin + float(w1 & 0xFFFFu) * u_z_step);
+  uint codes[3] = uint[3](w1 >> 16 & 255u, w1 >> 24, w2 & 255u);
+  float sc[3];
+  for (int i = 0; i < 3; i++) sc[i] = exp2(float(codes[i]) / 10.0 - 16.0);
+  uint qb = (w2 >> 8) & 0xFFFFFFu;
+  const uint QBITS = 7u;
+  const uint QMASK = 127u;
+  const float QHALF = 63.0;
+  vec3 rgb = vec3(float(w3 & 255u), float((w3 >> 8) & 255u), float((w3 >> 16) & 255u)) / 255.0;`;
+  // A splat is round when its largest and smallest scale codes differ by less than a ratio of 1.5:
+  // 10 steps per octave (versions 4, 5): at most 5 codes; 6 steps per octave (version 6): at most 3.
+  const roundDiff = v6 ? "3u" : "5u";
+  return `#version 300 es
 precision highp float;
 precision highp int;
 uniform mat4 u_matrix;
@@ -85,28 +119,23 @@ uniform vec3 u_up;
 uniform float u_z_origin;   // metres, of the tile's block
 uniform float u_z_step;     // metres per z code
 in vec2 a_corner;
-in uvec4 a_rec;             // the 16-byte record as four little-endian words
+${record}
 out vec2 v_corner;
 out vec3 v_color;
 const float QUAT_RANGE = 0.70710678118654752;
 void main() {
-  uint w0 = a_rec.x, w1 = a_rec.y, w2 = a_rec.z, w3 = a_rec.w;
-  vec3 pos = vec3(float(w0 & 0xFFFFu) / 65536.0, float(w0 >> 16) / 65536.0, u_z_origin + float(w1 & 0xFFFFu) * u_z_step);
-  uint codes[3] = uint[3](w1 >> 16 & 255u, w1 >> 24, w2 & 255u);
-  float sc[3];
-  for (int i = 0; i < 3; i++) sc[i] = exp2(float(codes[i]) / 10.0 - 16.0);
+${decode}
   // Rotation: columns of the matrix of the unit quaternion (w, x, y, z).
-  uint qb = (w2 >> 8) & 0xFFFFFFu;
   int largest = int(qb & 3u);
   float q[4];
   float sumSq = 0.0;
   uint shift = 2u;
   for (int i = 0; i < 4; i++) {
     if (i == largest) { q[i] = 0.0; continue; }
-    float v = (float((qb >> shift) & 127u) - 63.0) / 63.0 * QUAT_RANGE;
+    float v = (float((qb >> shift) & QMASK) - QHALF) / QHALF * QUAT_RANGE;
     q[i] = v;
     sumSq += v * v;
-    shift += 7u;
+    shift += QBITS;
   }
   q[largest] = sqrt(max(0.0, 1.0 - sumSq));
   float inv = 1.0 / length(vec4(q[0], q[1], q[2], q[3]));
@@ -132,7 +161,7 @@ void main() {
   vec3 centre = vec3(pos.xy * u_tile_width, pos.z);
   vec3 u, v;
   float shade;
-  if (cmax - cmin <= 5u) {
+  if (cmax - cmin <= ${roundDiff}) {
     float r = max(2.0 * sqrt(sa * sb) * u_extent, u_min_radius);
     u = u_right * r;
     v = u_up * r;
@@ -149,8 +178,9 @@ void main() {
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
-  v_color = vec3(float(w3 & 255u), float((w3 >> 8) & 255u), float((w3 >> 16) & 255u)) / 255.0 * shade;
+  v_color = rgb * shade;
 }`;
+}
 
 /** Light direction in the local metric frame (east, south, up): from the north-west, above. */
 const LIGHT = normalize3(-0.4, -0.5, 0.75);
@@ -167,6 +197,8 @@ export interface SurfelProgram {
   /** Only in the program that decodes packed records. */
   uZOrigin?: WebGLUniformLocation;
   uZStep?: WebGLUniformLocation;
+  /** Only in the program for 12-byte records. */
+  uScaleBase?: WebGLUniformLocation;
 }
 
 export interface SurfelBuffers {
@@ -174,7 +206,7 @@ export interface SurfelBuffers {
   buffers: WebGLBuffer[];
   count: number;
   /** Set for packed records: the block's z origin and step, metres. */
-  z?: { origin: number; step: number };
+  z?: { origin: number; step: number; scaleBase: number };
 }
 
 function normalize3(x: number, y: number, z: number): [number, number, number] {
@@ -198,9 +230,13 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
 // Fixed attribute locations so the VAO does not depend on the program.
 const LOC = { corner: 0, position: 1, axisU: 2, axisV: 3, normal: 4, round: 5, color: 6, record: 1 } as const;
 
-/** `packed`: the program that decodes 16-byte records (see PACKED_VERTEX_SHADER); default: float attributes. */
-export function createSurfelProgram(gl: WebGL2RenderingContext, packed = false): SurfelProgram {
-  const vs = compile(gl, gl.VERTEX_SHADER, packed ? PACKED_VERTEX_SHADER : VERTEX_SHADER);
+/**
+ * The drawing program: `"instances"` (float attributes, default), or `16` / `12` for the program that decodes records of
+ * that many bytes (packedVertexShader).
+ */
+export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances" | 16 | 12 = "instances"): SurfelProgram {
+  const packed = kind !== "instances";
+  const vs = compile(gl, gl.VERTEX_SHADER, packed ? packedVertexShader(kind) : VERTEX_SHADER);
   const fs = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
   const program = gl.createProgram();
   if (!program) throw new Error("createProgram failed");
@@ -238,12 +274,14 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, packed = false):
     uRight: uniform("u_right"),
     uUp: uniform("u_up"),
     ...(packed ? { uZOrigin: uniform("u_z_origin"), uZStep: uniform("u_z_step") } : {}),
+    ...(kind === 12 ? { uScaleBase: uniform("u_scale_base") } : {}),
   };
 }
 
 /** Upload a block's 16-byte records as they are (PackedBlock in src/surfel-block.ts); draw them with a packed program. */
 export function uploadPacked(
   gl: WebGL2RenderingContext, records: Uint8Array, count: number, zOrigin: number, zStep: number,
+  recordBytes: 16 | 12 = 16, scaleBase = 0,
 ): SurfelBuffers {
   const vao = gl.createVertexArray();
   if (!vao) throw new Error("createVertexArray failed");
@@ -261,11 +299,11 @@ export function uploadPacked(
   gl.bindBuffer(gl.ARRAY_BUFFER, rec);
   gl.bufferData(gl.ARRAY_BUFFER, records, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(LOC.record);
-  gl.vertexAttribIPointer(LOC.record, 4, gl.UNSIGNED_INT, 16, 0);
+  gl.vertexAttribIPointer(LOC.record, recordBytes / 4, gl.UNSIGNED_INT, recordBytes, 0);
   gl.vertexAttribDivisor(LOC.record, 1);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return { vao, buffers, count, z: { origin: zOrigin, step: zStep } };
+  return { vao, buffers, count, z: { origin: zOrigin, step: zStep, scaleBase } };
 }
 
 export function uploadSplats(gl: WebGL2RenderingContext, splats: readonly Splat[]): SurfelBuffers {
@@ -333,6 +371,7 @@ export function drawSurfels(
     gl.uniform1f(p.uZOrigin, b.z?.origin ?? 0);
     gl.uniform1f(p.uZStep, b.z?.step ?? 1);
   }
+  if (p.uScaleBase) gl.uniform1f(p.uScaleBase, b.z?.scaleBase ?? 0);
   if (opts.depthTest) {
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LEQUAL);

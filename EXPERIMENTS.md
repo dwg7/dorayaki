@@ -1175,3 +1175,46 @@ histograms above stay. The local build `demo/tiles/kawazu-veg` was deleted. If t
 make the vegetation share cheap to compute (E017 method), and what to try differently is the way transparency is drawn
 (sorted blending instead of screen-door noise) and the opacity, neither of which was explored.
 - The alpha byte stays unused and constant, so the note in E016 about dropping it applies again.
+
+### E016 result: version 6 (12-byte records), 2026-11-16
+
+Combined reductions (software renderer, block 4, worst of three views; mesh 08OF4060, z17): position 13 bits
+(from 16), height 2 cm, scale 6 steps per octave, rotation 5 bits per component, colour 6 bits per channel: colour error
+1.59 of 255, PSNR 40.0 dB, 0.07 % holes (position 12 bits instead of 13: 1.76, 39.1 dB). The scales of a z17 tile span
+11 to 11.6 octaves (smallest 2^-10 m, the builder's floor), so a 7-bit code at 6 steps per octave (21 octaves) from the
+block's smallest scale covers them.
+
+Version 6 (documents/surfel-block-format.md): 96-bit records, x 13, y 13, z 14, three scales 7 bits each, rotation 17,
+colour 6 bits per channel; alpha moves to the header (one opacity per block); header 40 bytes. Opt-in
+(`{ version: 6 }`, `DORAYAKI_BLOCK_VERSION=6`); reads 4, 5 and 6. The vertex shader decodes the record as uploaded
+(a `uvec3` per instance), so the GPU holds 12 bytes per splat (it held 16, and 56 before E013).
+
+| | version 5 | version 6 | ratio |
+| --- | ---: | ---: | ---: |
+| mesh 08OF4060 (11 tiles) | 13,127,262 B | 9,846,006 B | 0.750 |
+| nine meshes (46 tiles, 6,935,498 splats): z15 | 1,351,910 | 1,014,034 | 0.750 |
+| z16 | 10,862,055 | 8,146,845 | 0.750 |
+| z17 | 98,757,239 | 74,068,696 | 0.750 |
+| archive | 110,972,600 | 83,230,961 | 0.750 |
+| per square metre (1.08 km2) | 103 B | 77 B | |
+| largest tile | 7.17 MB | 5.38 MB | |
+
+In the browser (Apple M1; mesh 08OF4060, zoom 18.5, bearing -30, pitch 60, 682,792 splats, same camera in both): the
+25 x 25 block means of version 6 and version 5 differ by 0.63 of 255 on average (largest block 6.3; 81 of 1,875 blocks
+by more than 2, scattered, with no brightness bias: -0.05), so the shader decoding agrees with the codec to within
+the quantization.
+
+### Observations
+- Exactly 0.750: the record is 12/16 bytes and the header and level table are negligible; the saving does not depend
+  on the data.
+- Whole 12-byte records are less compressible than the version 5 planes: the 31 to 34 % of gzip measured above is
+  not expected on top of this (not measured on version 6).
+- Per-block `alpha` closes the door on per-splat opacity in this layout (E017 was abandoned, so nothing uses it).
+- The entropy-coding route (about 82 bits at best, E016 table) was not taken: it needs a decoder with state per field and
+  would not be uploaded to the GPU as it is.
+- The nine-mesh build was run through `merge:tilesets`, which decodes and re-encodes the tiles it merges (the
+  pyramid keeps one tile per address except at mesh seams), so tiles at seams were quantized twice.
+
+### Decision
+Version 6 is kept opt-in. The hosted Kawazu archive stays version 5 until hfu decides to replace it (a build
+and upload as before; the TileJSON version parameter must change).

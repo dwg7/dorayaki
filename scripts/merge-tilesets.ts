@@ -48,7 +48,7 @@ for (const e of [...byAddress.values()].sort((a, b) => a.z - b.z || a.x - b.x ||
   const splats: Splat[] = [];
   // A loop, not push(...array): spreading hundreds of thousands of arguments overflows the stack.
   for (const d of e.from) for (const s of decodeSurfelTileWithLevels(new Uint8Array(readFileSync(`${ROOT}/${d}/${e.z}/${e.x}/${e.y}.mlt`))).splats) splats.push(s);
-  const data = encodeDemoTile(splats, [splats.length]);
+  const data = encodeDemoTile(splats, [splats.length], process.env.DORAYAKI_BLOCK_VERSION === "6" ? 6 : undefined);
   const path = `${OUT}/${e.z}/${e.x}/${e.y}.mlt`;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, data);
