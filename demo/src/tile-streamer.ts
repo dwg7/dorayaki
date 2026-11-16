@@ -24,6 +24,11 @@ export interface TileStreamerOptions<T> {
   onReady: (tiles: Array<StreamedTile<T>>, zoom: number) => void;
   /** Called when a request starts and whenever one of its tiles arrives. */
   onProgress?: (info: { zoom: number; wanted: number; done: number }) => void;
+  /**
+   * Choose the tiles to hold for a view instead of the tiles of one zoom: `maxZoom`, when given, asks for a set that
+   * goes no finer than that (used for the staged first delivery). The zoom reported with a set is its finest tile's.
+   */
+  select?: (displayZoom: number, bounds: LngLatBoundsArray, maxZoom?: number) => TileAddress[];
   /** Show the next coarser zoom first when nothing has been delivered yet (default false). */
   staged?: boolean;
   /** Most tiles held at once, the nearest to the view's centre (default 9: a 3 x 3 block). */
@@ -70,8 +75,10 @@ export class TileStreamer<T> {
 
   /** Ask for the tiles of the zoom selected for `displayZoom` that intersect `bounds`. */
   update(displayZoom: number, bounds: LngLatBoundsArray): void {
-    const zoom = selectZoom(this.zooms, displayZoom);
-    const wanted = viewTiles(this.opts.candidates, zoom, bounds, this.limit);
+    const wanted = this.opts.select
+      ? this.opts.select(displayZoom, bounds)
+      : viewTiles(this.opts.candidates, selectZoom(this.zooms, displayZoom), bounds, this.limit);
+    const zoom = this.opts.select ? Math.max(-Infinity, ...wanted.map((t) => t.z)) : selectZoom(this.zooms, displayZoom);
     const signature = wanted.map(key).join(",");
     if (signature === this.lastSignature) return;
     this.lastSignature = signature;
@@ -82,7 +89,7 @@ export class TileStreamer<T> {
     // First delivery: the next coarser zoom of this view, if the target is still loading when it arrives.
     const stageZoom = this.opts.staged && !this.delivered ? Math.max(-Infinity, ...this.zooms.filter((z) => z < zoom)) : -Infinity;
     if (Number.isFinite(stageZoom)) {
-      const stage = viewTiles(this.opts.candidates, stageZoom, bounds, this.limit);
+      const stage = this.opts.select ? this.opts.select(displayZoom, bounds, stageZoom) : viewTiles(this.opts.candidates, stageZoom, bounds, this.limit);
       void this.fetchSet(stage).then((results) => {
         for (const [i, t] of stage.entries()) { this.inflight.delete(key(t)); this.held.set(key(t), results[i] ?? null); }
         if (generation !== this.generation || this.delivered) return; // superseded, or the target set got there first

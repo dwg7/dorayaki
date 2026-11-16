@@ -1018,3 +1018,64 @@ the page's own timing does not show the gain; the two fetch times above do.
 
 ### Decision
 Keep, on by default.
+
+## E015: tiles of several zooms by distance (`?mixed=1`)
+
+### Question
+The demo draws the tiles of one zoom, the nearest nine in view. In a tilted view the far ground is
+then empty (nine tiles do not reach it), and the one zoom is a compromise between near and far.
+Can tiles of several zooms be drawn at once, each where the camera is close enough to deserve it,
+within a bounded number of tiles?
+
+### Method
+`demo/src/mixed-selection.ts`: walk the tile pyramid from the coarsest zoom; keep a tile when the
+part of it nearest to the camera would be drawn at a map zoom below the next zoom (the existing
+floor rule, per tile instead of per map; `effectiveZoom` in `demo/src/camera.ts` is the zoom at
+which a point is seen), when no finer zoom exists, or when any of the finer tiles replacing it is
+missing; otherwise replace it by the finer tiles. The result is a partition (no tile covers another),
+cut to the 24 tiles nearest the view centre. `TileStreamer` takes a `select` function for it (the
+staged first delivery calls it with a coarser cap), the layer draws every tile it is given
+(`drawAllTiles`), and the demo wires it to `?mixed=1`. The camera model of the software renderer was
+moved to `camera.ts` and shared, with `visibleBounds(view)` (the ground the camera sees, cut at
+20 km), so that `npm run measure:quality -- <dir> 17 mixed` can compare, from fixed cameras and
+against the z17 tiles everywhere, what the demo draws now (the nearest nine tiles of the zoom picked
+from the map zoom, among those in view), the same with all tiles of that zoom, and the mixed set.
+Tileset: the nine-mesh Kawazu archive (factor 10; z15, z16 and z17), 800 x 600 renderings, block 4.
+
+### Measurements (block 4; MB are the tile files' sizes)
+| view | candidate | tiles | MB | holes | colour error (0-255) |
+| --- | --- | --- | ---: | ---: | ---: |
+| zoom 16.63, pitch 67 (showcase) | mixed | z16:7 z17:2 | 20.3 | 0.4 % | 2.8 |
+| | now (nearest 9) | z16:8 | 10.8 | 0.4 % | 3.7 |
+| zoom 17.2, pitch 75 | mixed | z16:6 z17:8 | 44.3 | 0.3 % | 3.0 |
+| | now (nearest 9) | z17:9 | 32.1 | **87 %** | 17.8 |
+| zoom 16.2, pitch 80 | mixed | z15:1 z16:3 z17:4 | 18.8 | 0.07 % | 1.6 |
+| | now (nearest 9) | z16:6 | 6.1 | 0.3 % | 4.0 |
+| zoom 18.5, pitch 60 | mixed | z16:2 z17:3 | 17.8 | 0.06 % | 0.9 |
+| | now (nearest 9) | z17:6 | 25.5 | 0 % | 0 |
+| zoom 17.5, top-down | mixed | z16:2 z17:2 | 12.2 | 0.09 % | 1.2 |
+| | now (nearest 9) | z17:4 | 16.2 | 0 % | 0 |
+
+In the browser (`?fixture=kawazu-stars&mixed=1` at zoom 17.2, pitch 75, bearing 128.7): staged
+delivery z16 8 tiles (10.8 MB), then 17 tiles (z17 12, z16 5; 65.7 MB, 4,103,361 splats, 66 MB
+of GPU buffers at 16 bytes each); the far ridge and the loop bridge both drawn.
+
+### Observations
+- In a steeply tilted view at zoom 17.2 the nearest nine z17 tiles leave 87 % of the reference's
+  pixels empty; the mixed set leaves 0.3 %, for 12 MB more. This is the case that motivated it.
+- Near views (zoom 18.5, top-down) draw fewer bytes than now (17.8 vs 25.5 MB) because tiles at the
+  edge of the view are taken from a coarser zoom, at 0.9 to 1.2 grey levels of colour error.
+- Views at zoom 16 to 16.6 cost 2 to 3 times the bytes of the single zoom, for a colour error
+  that is 25 to 60 % lower: the quality is bought with bytes.
+- The simulated view 2 chose 14 tiles (44.3 MB); the browser chose 17 (65.7 MB): the real map's
+  bounds are wider than `visibleBounds`, and the canvas is larger. The cost of a view depends on
+  the screen; the cap is a tile count (24), not bytes, so the worst case is 24 z17 tiles, about
+  85 MB on this archive.
+- Not seen: seams between tiles of different zooms (no cracks noticed in one screenshot; not
+  looked for), frame time with 4 million splats.
+
+### Decision
+Kept behind `?mixed=1`, not the default: the byte cost at ordinary views is higher than now, and
+a byte budget (the selector knows tile counts, not sizes) is not designed. Next questions:
+a byte-aware cap, and per-area maximum zoom (B-1), which this selector already handles
+(a finer tile is used only where it exists).
