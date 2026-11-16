@@ -62,6 +62,24 @@ const variants: Variant[] = [
         r: quantColour(s.r, 6), g: quantColour(s.g, 6), b: quantColour(s.b, 6) };
     },
   })),
+  // Making room for a class in the 96-bit record (E020): the combined variant above (position 13 bits) is the base; each of
+  // these frees 2 or 3 bits from one field of it.
+  ...[
+    { name: "base for class bits: position 13, height 2 cm, scale 6/octave, rotation 5, colour 6", pos: 13, zStep: 0.02, quat: 5, colour: 6, freed: 0 },
+    { name: "frees 2 bits: position 12 bits", pos: 12, zStep: 0.02, quat: 5, colour: 6, freed: 2 },
+    { name: "frees 3 bits: colour 5 bits per channel", pos: 13, zStep: 0.02, quat: 5, colour: 5, freed: 3 },
+    { name: "frees 3 bits: rotation 4 bits per component", pos: 13, zStep: 0.02, quat: 4, colour: 6, freed: 3 },
+    { name: "frees 3 bits: position 12 bits, height 4 cm", pos: 12, zStep: 0.04, quat: 5, colour: 6, freed: 3 },
+  ].map((v): Variant => ({
+    name: `class room: ${v.name}`, bitsSaved: `${v.freed}`,
+    apply: (s, zMin) => {
+      const q = quantQuat(s, v.quat);
+      const pos = (x: number) => Math.min((2 ** v.pos - 1) / 2 ** v.pos, Math.round(x * 2 ** v.pos) / 2 ** v.pos);
+      return { ...q, x: pos(s.x), y: pos(s.y), z: zMin + Math.round((s.z - zMin) / v.zStep) * v.zStep,
+        sx: quantScale(s.sx, 6), sy: quantScale(s.sy, 6), sz: quantScale(s.sz, 6),
+        r: quantColour(s.r, v.colour), g: quantColour(s.g, v.colour), b: quantColour(s.b, v.colour) };
+    },
+  })),
 ];
 
 // Range of the scale codes (10 steps per octave) per tile: how many octaves a block's three scales span.

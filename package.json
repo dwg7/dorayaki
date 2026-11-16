@@ -27,7 +27,8 @@
     "measure:coarse": "esbuild scripts/measure-coarse.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-coarse.mjs --log-level=warning && node demo/build/measure-coarse.mjs",
     "measure:quality": "esbuild scripts/measure-quality.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-quality.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-quality.mjs",
     "measure:encoding": "esbuild scripts/measure-encoding.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-encoding.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-encoding.mjs",
-    "measure:precision": "esbuild scripts/measure-precision.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-precision.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-precision.mjs"
+    "measure:precision": "esbuild scripts/measure-precision.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-precision.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-precision.mjs",
+    "measure:class": "esbuild scripts/measure-class.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-class.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-class.mjs"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
