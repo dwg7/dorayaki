@@ -34,7 +34,7 @@ export interface SplatInstances {
   /** 0 or 1. */
   round: Float32Array;
   /** r, g, b, a; 4 per splat. */
-  colour: Uint8Array;
+  color: Uint8Array;
 }
 
 export function splatInstances(splats: readonly Splat[]): SplatInstances {
@@ -46,7 +46,7 @@ export function splatInstances(splats: readonly Splat[]): SplatInstances {
     axisV: new Float32Array(n * 3),
     normal: new Float32Array(n * 3),
     round: new Float32Array(n),
-    colour: new Uint8Array(n * 4),
+    color: new Uint8Array(n * 4),
   };
   splats.forEach((s, i) => {
     const axes = splatAxes(s);
@@ -68,7 +68,7 @@ export function splatInstances(splats: readonly Splat[]): SplatInstances {
       out.axisU.set([a[0] * 2 * sa, a[1] * 2 * sa, a[2] * 2 * sa], i * 3);
       out.axisV.set([b[0] * 2 * sb, b[1] * 2 * sb, b[2] * 2 * sb], i * 3);
     }
-    out.colour.set([s.r, s.g, s.b, s.a], i * 4);
+    out.color.set([s.r, s.g, s.b, s.a], i * 4);
   });
   return out;
 }

@@ -19,7 +19,7 @@ test("a flat disc keeps its radius and normal: semi-axes are perpendicular and r
   close(len(inst.axisV, 0), 4);
   close(dot(inst.axisU, inst.axisV, 0), 0);
   assert.deepEqual([...inst.normal.subarray(0, 3)].map((v) => Math.round(v) + 0), [0, 0, -1]); // sign kept
-  assert.deepEqual([...inst.colour.subarray(0, 4)], [9, 8, 7, 255]);
+  assert.deepEqual([...inst.color.subarray(0, 4)], [9, 8, 7, 255]);
   assert.deepEqual([...inst.position.subarray(0, 3)], [0.5, 0.5, 3]);
 });
 

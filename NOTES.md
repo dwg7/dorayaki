@@ -17,7 +17,7 @@ that have actually been observed are recorded here.
   level. The codec does not need a frame; geographic rendering does.
 - Also observed: a decoded block has no part identity. The tests can tell
   ground, deck, underside and supports apart only by array order, normal,
-  and colour. Nothing so far needs it.
+  and color. Nothing so far needs it.
 
 ## 2026-11-12 — experimental MLT frame
 
@@ -160,7 +160,7 @@ Observed in Chromium (Claude desktop browser pane) with
 - Added a minimal 3DGS PLY reader (binary little-endian, scalar vertex
   properties, reference 3DGS conventions) and a deliberately lossy mapping
   to v2 surfels. The normal is the shortest axis, the radius is
-  2·√(product of the other two scales), the colour is the SH DC term, and
+  2·√(product of the other two scales), the color is the SH DC term, and
   alpha is sigmoid(opacity). Tested on a deterministic toy PLY (flat
   ground, a wall rotated 30°, an isotropic "tree" blob) placed at Sapporo
   Station. No format change.
@@ -184,7 +184,7 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
 `data/`.
 
 - Pipeline: LAS → one Gaussian per 0.25 m voxel (mean, covariance, mean
-  colour) → reference-3DGS PLY → existing PLY → surfel mapping → z18 tile
+  color) → reference-3DGS PLY → existing PLY → surfel mapping → z18 tile
   by centre ownership. 6,365 Gaussians in one tile (z18/232154/103715),
   203,726 bytes. The run took 0.17 s.
 - Placement: Gauss–Krüger inverse checked against GSI xy2bl to 1e-8°
@@ -200,7 +200,7 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
 - Coverage: disc radius (2σ) has median 0.13 m against the 0.25 m voxel
   spacing, so surfaces show the voxel lattice as dotted grids with gaps.
   This comes from the toy fitting and RADIUS_SIGMAS, not from the format.
-- Colours are dark in the source itself (mean RGB about 41–55 / 255;
+- Colors are dark in the source itself (mean RGB about 41–55 / 255;
   medium vegetation about 20), so the render is dark. Not adjusted.
 - Vertical datum: the LAS heights are absolute (lowest ground point
   7.526 m). The demo sets z = 0 at that point to sit on the flat
@@ -381,7 +381,7 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
 - Shading is now two-sided (`abs(dot(normal, light))`), because an axis's
   sign carries no meaning in v4. The synthetic fixtures' down-facing
   surfaces (bridge underside, overhang underside) are therefore lit like
-  up-facing ones and are told apart by their colour, no longer by being dark.
+  up-facing ones and are told apart by their color, no longer by being dark.
   Round splats use a constant shade.
 - Observed: in `toy-gs` the isotropic blob, which v3 drew as three thin
   vertical slabs, now reads as a rounded cluster. In the Numazu tiles the
@@ -521,9 +521,9 @@ with MapLibre GL JS 6.16.0, local Numazu tileset, mostly zoom 18–21:
   terrain at the data was 22.8 m, the splats stayed at 7.5 m, and they were
   hidden inside the terrain.
 - That burying is a depth test against the terrain mesh, not the
-  background colour: making the basemap's `background` colour transparent
+  background color: making the basemap's `background` color transparent
   (`rgba(0,0,0,0)`) left the splats hidden, and switching the layer's depth
-  test off made them visible. (Only the `background` layer's colour was
+  test off made them visible. (Only the `background` layer's color was
   tried, not other fills.)
 - Unexplained: with terrain on there were rows of blue-tinted dots near the
   building (top of the view at zoom 21, pitch 70), also with depth test off.
@@ -546,7 +546,7 @@ zip size). Scale 1 mm. Plane rectangular zone VIII bounds: easting
 the mesh is nearly full and the loop bridge, X = −133,954 / Y = 40,173, is
 inside), height 177.1–245.2 m (68 m of relief). Mean density about 1,700
 points per m², one fifth of Numazu's 8,700 per m² but 200 times the points.
-Not yet read: colour content, classification, the actual distribution of
+Not yet read: color content, classification, the actual distribution of
 points over the loop bridge.
 
 ## 2026-11-15 — streaming voxelisation of the Kawazu mesh (196.6 million points)
@@ -558,7 +558,7 @@ file in 64 MB chunks. Checks and measurements (Apple M1, Node 22):
 - On Numazu (`08NE2701`) it reproduces the in-memory counts exactly:
   29,989 voxels at z19 (12.2 cm) and 7,639 at z18, the same as the demo
   draws. A unit test compares it with `fitVoxelGaussians` on synthetic points
-  (positions to 1e-9, scales and colours to 1e-6, same supports).
+  (positions to 1e-9, scales and colors to 1e-6, same supports).
 - On `08OF4060` (196,608,664 points, 6.68 GB LAS) one pass with both grids
   took 22.2 s (8.8 million points per second), peak RSS 0.81 GB.
   Occupied voxels: 1,232,293 at z18 (24.5 cm, 160 points per voxel) and
@@ -590,7 +590,7 @@ Run on the 196.6 M-point Kawazu MMS mesh (zone 8), built and viewed with
   (the COPC size is itself an extrapolation, not measured).
 - On Numazu the streaming builder gives the same splat count per tile and the
   same x, y. About 6 % (z18) to 12 % (z19) of the records differ in the
-  last bit of z (1 mm), a colour level or the rotation code, from a different
+  last bit of z (1 mm), a color level or the rotation code, from a different
   summation order. It is not byte-identical.
 - Looked at at zoom 17.3 and 18.6, pitch 45–55: both show the loop, the
   pillars and the trees. 50 cm is visibly coarser: lane markings and the
@@ -738,3 +738,10 @@ splats was not measured; it was about 0.39 s). Details and the table of findings
 byte-identical to the local files; TileJSON `?v=20261117c`; centre the loop bridge. The earlier file (83,230,962 B, SHA `9f416dcb...`) is kept locally as
 `demo/tiles/dorayaki-kawazu-v6b.pmtiles`. Until the site that points at `?v=20261117c` is merged, the live site (still on `?v=20261117v6b`) gets cached plane-less
 tiles for up to four hours and, for tiles not in the edge cache, tiles with planes: both decode.
+
+## 2026-11-17: colour is now color (a breaking change)
+
+The spelling was unified to American English everywhere: identifiers and API fields (`Gaussian.color`, `colorTolerance`, `classColor`, `u_class_color`, ...), the
+demo's URL flag (`?color=class`, was `?colour=class`), its element ids, the environment variable `DORAYAKI_ADAPTIVE_COLOR` (was `DORAYAKI_ADAPTIVE_COLOUR`; the
+builder stops with an error if the old one is set, so it cannot be ignored silently), and all documents and comments. Old links with `?colour=class` show the
+stored colors. The data is unchanged: no tile, block or archive format changed; manifests written before keep the key `colourTolerance` in their stats and nothing reads it.

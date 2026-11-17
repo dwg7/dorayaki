@@ -111,9 +111,9 @@ test("through the adaptive merge the dominant class of all the points of a splat
   // Two neighbouring voxels, one with 5 ground points (slot 2) and one with 3 high-vegetation points (slot 5): merged, ground wins.
   for (let i = 0; i < 5; i++) acc.add(0.1 + i * 0.1, 0.5, 0.5, 0.4, 0.4, 0.4, 2);
   for (let i = 0; i < 3; i++) acc.add(1.1 + i * 0.1, 0.5, 0.5, 0.4, 0.4, 0.4, 5);
-  const merged = adaptiveGaussians(acc, { maxLevel: 1, thickness: 5, colourTolerance: 1, opacityOf: planeOpacityOf }).gaussians;
+  const merged = adaptiveGaussians(acc, { maxLevel: 1, thickness: 5, colorTolerance: 1, opacityOf: planeOpacityOf }).gaussians;
   assert.equal(merged.length, 1);
   assert.equal(Math.round(merged[0]!.opacity * 255), 2);
-  const alone = adaptiveGaussians(acc, { maxLevel: 0, thickness: 5, colourTolerance: 1, opacityOf: planeOpacityOf }).gaussians.map((g) => Math.round(g.opacity * 255)).sort();
+  const alone = adaptiveGaussians(acc, { maxLevel: 0, thickness: 5, colorTolerance: 1, opacityOf: planeOpacityOf }).gaussians.map((g) => Math.round(g.opacity * 255)).sort();
   assert.deepEqual(alone, [2, 5]);
 });

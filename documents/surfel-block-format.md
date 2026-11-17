@@ -17,7 +17,7 @@ instead of whole records (see "Splat records"). A reader still accepts version 4
 Version 4 changes what a record holds. Versions 1–3 stored a circular disc
 (position, normal, radius) in 32 bytes. Version 4 stores an anisotropic
 Gaussian splat, as 3D Gaussian Splatting does: position, three scales, a
-rotation and a colour, quantized into 16 bytes.
+rotation and a color, quantized into 16 bytes.
 
 ## Byte order
 
@@ -102,7 +102,7 @@ Offsets below are relative to the start of a record, that is, the plane index.
 |      7 |    1 | uint8     | sy       | scale code of local axis 1                               |
 |      8 |    1 | uint8     | sz       | scale code of local axis 2                               |
 |      9 |    3 | uint24 LE | rotation | packed unit quaternion                                   |
-|     12 |    1 | uint8     | r        | colour                                                   |
+|     12 |    1 | uint8     | r        | color                                                   |
 |     13 |    1 | uint8     | g        |                                                          |
 |     14 |    1 | uint8     | b        |                                                          |
 |     15 |    1 | uint8     | a        | opacity                                                  |
@@ -132,7 +132,7 @@ Offsets below are relative to the start of a record, that is, the plane index.
   whose rebuilt quaternion is closest, because the rebuilt component's
   error can be several times the others'. Measured error (random
   rotations): mean 0.7°, worst 1.2°.
-- **Colour** is RGB plus opacity, 8 bits each.
+- **Color** is RGB plus opacity, 8 bits each.
 
 Decoding therefore returns values within these tolerances, not the exact
 input.
@@ -158,7 +158,7 @@ separately. This is an open point, not a decision.
 
 Encoder: every coordinate, scale and quaternion component is finite;
 x and y are in `[0, 1)`; scales are `> 0`; the quaternion is non-zero;
-colour channels are integers in `0..255`; the level table has 1 to 64
+color channels are integers in `0..255`; the level table has 1 to 64
 entries summing to `count`.
 
 Decoder: version 4 or 5, `record_bytes` 16, `level_count` in `1..64`, finite
@@ -246,7 +246,7 @@ undefined and no published data relied on another datum.
 - Spare bits carrying rendering intent, as in the `gint` project
   (github.com/kenjiyoshidahome2026-bit/gint). That would interact with the
   rule against a second mandatory LOD mechanism in AGENTS.md.
-- Spherical harmonics beyond the degree-0 colour, source-point storage and
+- Spherical harmonics beyond the degree-0 color, source-point storage and
   per-splat covariance beyond scales and a rotation.
 
 ## Version 6
@@ -284,7 +284,7 @@ and `scale_log2_min` as the base-2 logarithm of the smallest scale of the block 
 octaves above it clamp. Splats of one block must share one opacity (the encoder rejects anything else).
 
 Tolerances: position 1/16384 of the tile, height half a step, scale a factor 2^(1/12) (6 %), rotation a few
-degrees, colour about 2 of 255. Measured on Kawazu (E016): about 1.6 of 255 mean colour error against version 5
+degrees, color about 2 of 255. Measured on Kawazu (E016): about 1.6 of 255 mean color error against version 5
 in the software renderer, 0.63 in a browser comparison with 25 x 25 block means.
 
 A reader that draws splats decodes the fields as above; `demo/src/gpu-surfels.ts` (`packedVertexShader(12)`) does it

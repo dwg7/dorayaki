@@ -51,14 +51,14 @@ test("PLY reader rejects unsupported or malformed input", () => {
   assert.throws(() => readPly(full.subarray(0, full.byteLength - 1)), PlyError);
 });
 
-test("3DGS conventions: log scale, logit opacity, SH DC colour, normalised quaternion", () => {
+test("3DGS conventions: log scale, logit opacity, SH DC color, normalised quaternion", () => {
   const row = [1, 2, 3, 0, 0, 0, 0, 0, 0, 0, Math.log(2), Math.log(0.5), Math.log(0.1), 2, 0, 0, 0];
   const [g] = gaussiansFromPly(readPly(writePlyFloat32(TOY_GS_PROPERTIES, [row])));
   close(g!.scales[0], 2);
   close(g!.scales[1], 0.5);
   close(g!.scales[2], 0.1);
   close(g!.opacity, 0.5);
-  assert.deepEqual(g!.colour, [0.5, 0.5, 0.5]);
+  assert.deepEqual(g!.color, [0.5, 0.5, 0.5]);
   assert.deepEqual(g!.rotation, [1, 0, 0, 0]);
   assert.throws(() => gaussiansFromPly(readPly(writePlyFloat32(["x"], [[0]]))), /missing property/);
 });
@@ -72,7 +72,7 @@ test("rotation axes are orthonormal and follow the quaternion", () => {
 });
 
 const gaussian = (scales: [number, number, number], rotation: [number, number, number, number] = [1, 0, 0, 0]): Gaussian => ({
-  position: [0, 0, 0], scales, rotation, colour: [1, 0, 0], opacity: 0.8,
+  position: [0, 0, 0], scales, rotation, color: [1, 0, 0], opacity: 0.8,
 });
 
 test("a Gaussian becomes a disc: shortest axis is the normal, radius from the other two", () => {

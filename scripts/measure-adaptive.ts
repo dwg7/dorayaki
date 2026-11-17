@@ -1,10 +1,10 @@
 /**
  * E005: how many splats adaptive merging leaves, for a grid of limits.
- * One streaming pass accumulates the base grid; then each (thickness, colour)
+ * One streaming pass accumulates the base grid; then each (thickness, color)
  * pair is merged and counted. Counts only; no tiles are written.
  *
  * Usage: node measure-adaptive.mjs <file.las> <zone> <base cell metres> <levels>
- * Merge limits tried: thickness 0.03 0.05 0.1 0.2 m, colour 0.1 0.2 0.3 1 (1 = off).
+ * Merge limits tried: thickness 0.03 0.05 0.1 0.2 m, color 0.1 0.2 0.3 1 (1 = off).
  */
 import { closeSync, openSync, readSync } from "node:fs";
 
@@ -39,10 +39,10 @@ while (done < header.count) {
 }
 closeSync(fd);
 console.log(`base ${size} m: ${acc.voxels} voxels, levels ${levels}`);
-console.log("thickness colour -> splats (share of base), per-level counts, MB at 16 B");
+console.log("thickness color -> splats (share of base), per-level counts, MB at 16 B");
 for (const thickness of [0.03, 0.05, 0.1, 0.2]) {
-  for (const colourTolerance of [0.1, 0.2, 0.3, 1]) {
-    const { gaussians, perLevel } = adaptiveGaussians(acc, { maxLevel: levels, thickness, colourTolerance });
-    console.log(`${thickness} ${colourTolerance} -> ${gaussians.length} (${(gaussians.length / acc.voxels * 100).toFixed(0)}%) [${perLevel.join(",")}] ${(gaussians.length * 16 / 1e6).toFixed(2)} MB`);
+  for (const colorTolerance of [0.1, 0.2, 0.3, 1]) {
+    const { gaussians, perLevel } = adaptiveGaussians(acc, { maxLevel: levels, thickness, colorTolerance });
+    console.log(`${thickness} ${colorTolerance} -> ${gaussians.length} (${(gaussians.length / acc.voxels * 100).toFixed(0)}%) [${perLevel.join(",")}] ${(gaussians.length * 16 / 1e6).toFixed(2)} MB`);
   }
 }

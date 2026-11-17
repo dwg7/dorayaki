@@ -6,7 +6,7 @@
  * splat (only the frame changes: east-north-up to east-south-up, and
  * quantization). What is still dropped:
  *
- * - colour = the SH degree-0 (DC) term only; higher SH terms are dropped;
+ * - color = the SH degree-0 (DC) term only; higher SH terms are dropped;
  * - alpha = sigmoid(opacity), stored; the renderer may or may not use it.
  *
  * `gaussianToDisc` is a statistics helper: the circular reduction the
@@ -40,7 +40,7 @@ export interface Gaussian {
   /** Unit quaternion (w, x, y, z). */
   rotation: [number, number, number, number];
   /** Linear RGB in [0, 1] from the SH DC term (clamped). */
-  colour: [number, number, number];
+  color: [number, number, number];
   /** [0, 1]. */
   opacity: number;
   /** Number of source points behind this Gaussian, when known (point-cloud fits). */
@@ -68,7 +68,7 @@ export function gaussiansFromPly(ply: PlyVertices): Gaussian[] {
       position: [c("x", i), c("y", i), c("z", i)],
       scales: [Math.exp(c("scale_0", i)), Math.exp(c("scale_1", i)), Math.exp(c("scale_2", i))],
       rotation: q.map((v) => v / qn) as [number, number, number, number],
-      colour: [0, 1, 2].map((k) => clamp01(0.5 + SH_C0 * c(`f_dc_${k}` as "f_dc_0", i))) as [number, number, number],
+      color: [0, 1, 2].map((k) => clamp01(0.5 + SH_C0 * c(`f_dc_${k}` as "f_dc_0", i))) as [number, number, number],
       opacity: sigmoid(c("opacity", i)),
     });
   }
@@ -83,7 +83,7 @@ export interface Disc {
   /** Unit normal, east-north-up. */
   normal: [number, number, number];
   radius: number;
-  colour: [number, number, number];
+  color: [number, number, number];
   opacity: number;
   /** Ratio of the two in-plane scales (>= 1); 1 means the ellipse was a circle. */
   anisotropy: number;
@@ -104,7 +104,7 @@ export function gaussianToDisc(g: Gaussian): Disc {
     position: g.position,
     normal: axes[n] as [number, number, number],
     radius: RADIUS_SIGMAS * inPlane,
-    colour: g.colour,
+    color: g.color,
     opacity: g.opacity,
     anisotropy: sb / sa,
     flatness: g.scales[n]! / inPlane,
@@ -163,7 +163,7 @@ export function placeGaussians(gaussians: readonly Gaussian[], origin: GeoOrigin
       z: g.position[2],
       sx: g.scales[0], sy: g.scales[1], sz: g.scales[2],
       qw, qx, qy, qz,
-      r: byte(g.colour[0]), g: byte(g.colour[1]), b: byte(g.colour[2]),
+      r: byte(g.color[0]), g: byte(g.color[1]), b: byte(g.color[2]),
       a: byte(g.opacity),
       ...(g.support !== undefined ? { support: g.support } : {}),
     };

@@ -1,6 +1,6 @@
 /**
  * Deterministic toy 3DGS PLY, written in the reference 3DGS conventions
- * (log scales, logit opacity, quaternion w x y z, SH DC colour) with
+ * (log scales, logit opacity, quaternion w x y z, SH DC color) with
  * axes east, north, up in metres around an origin. It stands in for
  * Gaussians fitted to a point cloud until real data is chosen.
  *

@@ -1,7 +1,7 @@
 /**
- * Colours and names of the class codes (src/class-plane.ts) for the "colour by class" view (E021): vivid, close to the usual LAS
+ * Colors and names of the class codes (src/class-plane.ts) for the "color by class" view (E021): vivid, close to the usual LAS
  * point class palettes (ground brown to orange, vegetation greens, buildings red, water blue, ...), made saturated so that the
- * classes are told apart at a glance, like a false-colour satellite image. No DOM or WebGL here.
+ * classes are told apart at a glance, like a false-color satellite image. No DOM or WebGL here.
  */
 export interface ClassStyle { name: string; rgb: [number, number, number] }
 

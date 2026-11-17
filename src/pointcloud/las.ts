@@ -19,7 +19,7 @@ export interface LasPoints {
   y: Float64Array;
   z: Float64Array;
   classification: Uint8Array;
-  /** 16-bit RGB triples, or null for formats without colour. */
+  /** 16-bit RGB triples, or null for formats without color. */
   rgb: Uint16Array | null;
   min: [number, number, number];
   max: [number, number, number];
@@ -40,7 +40,7 @@ export interface LasHeader {
   offset: [number, number, number];
   min: [number, number, number];
   max: [number, number, number];
-  /** Byte offset of RGB within a record, or null for formats without colour. */
+  /** Byte offset of RGB within a record, or null for formats without color. */
   rgbOffset: number | null;
 }
 
@@ -93,7 +93,7 @@ export function parseLasHeader(bytes: Uint8Array): LasHeader {
  */
 /**
  * Call `fn` for `n` records starting at the start of `bytes` (formats 0-3):
- * scaled x, y, z, classification, the 16-bit r, g, b (0 without colour) and
+ * scaled x, y, z, classification, the 16-bit r, g, b (0 without color) and
  * the raw return byte (bits 0-2 return number, bits 3-5 number of returns).
  */
 export function forEachLasRecord(

@@ -8,7 +8,7 @@
  * Per voxel it keeps the moments that make a Gaussian: the count, the sums of
  * the offset from the voxel's minimum corner (not the absolute coordinate, so
  * the sums stay small and precise), of its pairwise products, and of the
- * colour. Voxels live in an open-addressing hash table of typed arrays; the
+ * color. Voxels live in an open-addressing hash table of typed arrays; the
  * per-voxel records are stored in fixed-size chunks so growing never copies
  * them. No file or DOM access; the caller feeds the points.
  */
@@ -59,7 +59,7 @@ export class VoxelAccumulator {
     return this.table.byteLength + this.keys.length * CHUNK * (3 * 4 + this.STRIDE * 8);
   }
 
-  /** Add one point (local metres; colour channels in 0..1). */
+  /** Add one point (local metres; color channels in 0..1). */
   add(x: number, y: number, z: number, r: number, g: number, b: number, classSlot = -1): void {
     const size = this.size;
     const ix = Math.floor(x / size), iy = Math.floor(y / size), iz = Math.floor(z / size);
@@ -140,14 +140,14 @@ export class VoxelAccumulator {
   /**
    * Call `fn` for every occupied voxel, in the deterministic order (z, y, x
    * of the cell index), with its cell index, point count, mean position, point
-   * covariance (xx, xy, xz, yy, yz, zz) and mean colour.
+   * covariance (xx, xy, xz, yy, yz, zz) and mean color.
    */
   forEachVoxel(
     fn: (
       ix: number, iy: number, iz: number, n: number,
       mean: [number, number, number],
       cov: [number, number, number, number, number, number],
-      colour: [number, number, number],
+      color: [number, number, number],
       /** Point counts by class slot (empty without class slots). */
       classes: number[],
     ) => void,

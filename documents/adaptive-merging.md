@@ -21,7 +21,7 @@ all its points) and replaced by one Gaussian when
 
 1. the smallest standard deviation of the merged points is at most
    `thickness` (the patch is still flat, or a line), and
-2. every child's mean colour is within `colour` of the merged mean, per channel.
+2. every child's mean color is within `color` of the merged mean, per channel.
 
 A parent that fails keeps its children and blocks every larger ancestor, so
 splats of different sizes never overlap. A parent with one child passes
@@ -29,7 +29,7 @@ upwards unchanged so that it can still merge with neighbours later.
 
 A third rule, the **sparse rule** (E008): a parent is also merged when every
 child is supported by fewer than `sparseSupport` points, whatever the
-thickness and colour. A voxel supported by a handful of points carries little
+thickness and color. A voxel supported by a handful of points carries little
 more than the points; this is how vegetation volume is kept small (at 24
 points, MMS + all airborne returns of Kawazu fall from 73.4 MB uniform to
 20.0 MB). Merging applies to every zoom of the pyramid. A coarser zoom has cells of 4 times
@@ -41,7 +41,7 @@ with it, the whole pyramid is 0.34 times the z17 size instead of 1.2 times.
 Environment variables of `npm run build:tileset`: `DORAYAKI_ADAPTIVE_LEVELS`
 (merge levels; enables the feature), `DORAYAKI_ADAPTIVE_REFINE` (start from
 cells 2^refine times finer than the maxzoom's), `DORAYAKI_ADAPTIVE_THICKNESS`
-(metres, default 0.05), `DORAYAKI_ADAPTIVE_COLOUR` (default 0.1), `DORAYAKI_ADAPTIVE_SPARSE` (default 0 = off).
+(metres, default 0.05), `DORAYAKI_ADAPTIVE_COLOR` (default 0.1), `DORAYAKI_ADAPTIVE_SPARSE` (default 0 = off).
 `npm run measure:adaptive -- <file.las> <zone> <base cell metres> <levels>`
 prints splat counts for a grid of limits without writing tiles.
 
@@ -52,7 +52,7 @@ prints splat counts for a grid of limits without writing tiles.
   scanner noise) are not flat to 5 cm.
 - A uniform 49 cm cell is itself up to 14 cm thick (cell / sqrt(12)), so a
   20 cm limit is not looser than the uniform grid. Starting from 24.5 cm cells
-  with thickness 20 cm and colour 0.2 gives 311,871 splats (6.22 MB), the same
+  with thickness 20 cm and color 0.2 gives 311,871 splats (6.22 MB), the same
   as the uniform 49 cm set (318,817; 6.33 MB), with the lane markings of the
   loop road visible in the adaptive one and blurred in the uniform one.
 - In four oblique views no failure that the uniform 49 cm set does not already

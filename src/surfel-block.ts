@@ -27,7 +27,7 @@ export interface Surfel {
   nz: number;
   /** Metres. */
   radius: number;
-  /** Colour channels, each an integer in 0..255. */
+  /** Color channels, each an integer in 0..255. */
   r: number;
   g: number;
   b: number;
@@ -61,7 +61,7 @@ export interface Splat {
   qx: number;
   qy: number;
   qz: number;
-  /** Colour channels, each an integer in 0..255. a is opacity. */
+  /** Color channels, each an integer in 0..255. a is opacity. */
   r: number;
   g: number;
   b: number;
@@ -513,7 +513,7 @@ export function readBits(buf: Uint8Array, base: number, off: number, len: number
 /**
  * Encode splats as a version 6 block: 12-byte records, positions to 1/8192 of the tile, heights to a per-block step
  * (at least 1 mm, wide enough for 14 bits), scales to 6 steps per octave from the block's smallest scale (7 bits;
- * larger scales clamp at 21 octaves above it), rotation to 17 bits, colour to 6 bits per channel, one opacity for the
+ * larger scales clamp at 21 octaves above it), rotation to 17 bits, color to 6 bits per channel, one opacity for the
  * whole block (splats with different opacities are rejected). Lossier than version 5 (E016); a deliberate break.
  */
 function encodeSurfelBlockV6(splats: readonly Splat[], levels: readonly number[]): Uint8Array {
@@ -551,9 +551,9 @@ function encodeSurfelBlockV6(splats: readonly Splat[], levels: readonly number[]
   const F = V6_FIELDS;
   const xyMax = 2 ** F.x.len - 1;
   const scaleMax = 2 ** F.sx.len - 1;
-  const colourMax = 2 ** F.r.len - 1;
+  const colorMax = 2 ** F.r.len - 1;
   const code = (metres: number) => Math.min(scaleMax, Math.max(0, Math.round((Math.log2(metres) - scaleBase) * V6_SCALE_STEPS_PER_OCTAVE)));
-  const colour = (c: number) => Math.round((c * colourMax) / 255);
+  const color = (c: number) => Math.round((c * colorMax) / 255);
   const base = SURFEL_BLOCK_HEADER_BYTES_V6 + 4 * levels.length;
   splats.forEach((s, i) => {
     const o = base + i * SURFEL_RECORD_BYTES_V6;
@@ -564,9 +564,9 @@ function encodeSurfelBlockV6(splats: readonly Splat[], levels: readonly number[]
     putBits(bytes, o, F.sy.off, F.sy.len, code(s.sy));
     putBits(bytes, o, F.sz.off, F.sz.len, code(s.sz));
     putBits(bytes, o, F.quat.off, F.quat.len, packQuaternionBits(s.qw, s.qx, s.qy, s.qz, V6_QUAT_COMPONENT_BITS));
-    putBits(bytes, o, F.r.off, F.r.len, colour(s.r));
-    putBits(bytes, o, F.g.off, F.g.len, colour(s.g));
-    putBits(bytes, o, F.b.off, F.b.len, colour(s.b));
+    putBits(bytes, o, F.r.off, F.r.len, color(s.r));
+    putBits(bytes, o, F.g.off, F.g.len, color(s.g));
+    putBits(bytes, o, F.b.off, F.b.len, color(s.b));
   });
   return bytes;
 }
@@ -575,20 +575,20 @@ function decodeSurfelBlockV6(bytes: Uint8Array, layout: SurfelBlockLayout): Surf
   const { count, levels, zOrigin, zStep, tableEnd, scaleLog2Min, alpha } = layout;
   const F = V6_FIELDS;
   const xyScale = 2 ** F.x.len;
-  const colourMax = 2 ** F.r.len - 1;
+  const colorMax = 2 ** F.r.len - 1;
   const splats: Splat[] = new Array(count);
   for (let i = 0; i < count; i++) {
     const o = tableEnd + i * SURFEL_RECORD_BYTES_V6;
     const [qw, qx, qy, qz] = unpackQuaternionBits(readBits(bytes, o, F.quat.off, F.quat.len), V6_QUAT_COMPONENT_BITS);
     const scale = (f: { off: number; len: number }) => 2 ** (scaleLog2Min + readBits(bytes, o, f.off, f.len) / V6_SCALE_STEPS_PER_OCTAVE);
-    const colour = (f: { off: number; len: number }) => Math.round((readBits(bytes, o, f.off, f.len) * 255) / colourMax);
+    const color = (f: { off: number; len: number }) => Math.round((readBits(bytes, o, f.off, f.len) * 255) / colorMax);
     splats[i] = {
       x: readBits(bytes, o, F.x.off, F.x.len) / xyScale,
       y: readBits(bytes, o, F.y.off, F.y.len) / xyScale,
       z: Math.fround(zOrigin + readBits(bytes, o, F.z.off, F.z.len) * zStep),
       sx: scale(F.sx), sy: scale(F.sy), sz: scale(F.sz),
       qw, qx, qy, qz,
-      r: colour(F.r), g: colour(F.g), b: colour(F.b), a: alpha,
+      r: color(F.r), g: color(F.g), b: color(F.b), a: alpha,
     };
   }
   return { splats, levels };

@@ -45,8 +45,8 @@ All optional; the camera is in the fragment, the rest in the query.
 | `?terrain=<exaggeration>` | add MapLibre terrain from stars' `mapterhorn-japan-bridge` Terrarium DEM. Needed for data far above sea level: without terrain the camera is relative to 0 m and high data vanishes or is magnified (NOTES.md) |
 | `?look=soft` | the soft look (E018): every splat is drawn twice, an opaque core of the full extent that carries the depth, then a larger Gaussian-feathered, alpha-blended splat on top; `?softcore=` (default 1; below about 0.75 the cores leave gaps and the feathered splats show as a pattern of dots), `?softscale=` (1.8) and `?softfalloff=` (6.5) tune it |
 | `?hideveg=1`, the "hide vegetation" checkbox; `?hide=3,4,...` | hide the splats of the vegetation classes (3, 4, 5 and 64) or of the listed class codes, from the tile's class plane ([class-plane.md](class-plane.md), E021). A tile without a plane gets a weak guess from the splats alone (E019: well above the local ground and round, about 11 % of the Kawazu splats; `?vegh=`, `?vegcell=`, `?vegshape=0` tune it) |
-| `?colour=class`, the "colour" select | draw by class in a vivid palette, with a legend (E021); needs a class plane to be meaningful |
-| `?shade=<0..1>` | strength of the shading: 1 (default) is the fixed two-sided Lambert light, 0 draws the colours as stored (no shading, as 3D Gaussian splats do) |
+| `?color=class`, the "color" select | draw by class in a vivid palette, with a legend (E021); needs a class plane to be meaningful |
+| `?shade=<0..1>` | strength of the shading: 1 (default) is the fixed two-sided Lambert light, 0 draws the colors as stored (no shading, as 3D Gaussian splats do) |
 | `?mixed=1` | draw tiles of several zooms at once, chosen by distance from the camera (`mixed-selection.ts`, at most 24 tiles; E015), instead of the nearest nine tiles of one zoom |
 | `?staged=0` | switch off the staged first display: the next coarser zoom is shown while the first set of tiles loads (E014) |
 | `?gpu=legacy` | draw from float instance data (56 bytes per splat) instead of the packed 16-byte records, to compare the two (E013) |
