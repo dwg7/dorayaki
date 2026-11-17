@@ -745,3 +745,24 @@ The spelling was unified to American English everywhere: identifiers and API fie
 demo's URL flag (`?color=class`, was `?colour=class`), its element ids, the environment variable `DORAYAKI_ADAPTIVE_COLOR` (was `DORAYAKI_ADAPTIVE_COLOUR`; the
 builder stops with an error if the old one is set, so it cannot be ignored silently), and all documents and comments. Old links with `?colour=class` show the
 stored colors. The data is unchanged: no tile, block or archive format changed; manifests written before keep the key `colourTolerance` in their stats and nothing reads it.
+
+## 2026-11-17: panning toward higher ground brought the camera onto the slope; the demo now keeps the zoom
+
+Observed on the site (MapLibre GL JS 6.16.0, Kawazu, terrain on, window 1288 x 1063) from
+`#map=17.72/34.792253/138.939012/97.9/59`, with pan drags that move the center west, up the valley side (400 px each):
+
+- The camera stays at 454 m above sea level for seven drags while the ground under it rises from 166 m to 422 m; the
+  eighth drag ends with the camera 1.6 m above the ground. The zoom after each drag: 17.37, 18.05, 18.09, 18.37, 18.45,
+  18.30, 19.07, 18.83. Continued by hand, it ended at zoom 22 (the maximum), 24 m from the center and 18 m above the
+  ground, on a slope with no point cloud: a white page.
+- The zoom changes between `dragend` and `moveend`, with no `zoomstart` or `zoomend`. MapLibre holds the center's
+  elevation during the drag and, at its end, puts the center on the terrain with the camera left where it is.
+- With the zoom put back at `moveend` (`demo/src/pan-zoom-keeper.ts`), twelve of the same drags (2.7 km) keep zoom
+  17.72; the camera rises with the ground (388 m to 784 m) and rests 82 to 307 m above it. The lowest during a drag
+  was 24 m. The camera moves in one step when the drag ends, by as much as the ground under the center changed
+  (about 200 m at the largest).
+
+Not addressed: a right-drag that raises the pitch past about 78 degrees at zoom 18.6 over the loop bridge brings the
+camera to the slope behind it. MapLibre keeps it on the terrain with no clearance, which is inside the point cloud
+(trees and the bridge stand above the DEM), and the drag's end moved the center about 600 m and the zoom from 18.61
+to 16.87.

@@ -51,6 +51,7 @@ All optional; the camera is in the fragment, the rest in the query.
 | `?staged=0` | switch off the staged first display: the next coarser zoom is shown while the first set of tiles loads (E014) |
 | `?gpu=legacy` | draw from float instance data (56 bytes per splat) instead of the packed 16-byte records, to compare the two (E013) |
 | `?dz=<metres>` | raise every tile, to test high-elevation behaviour |
+| `?keepzoom=0` | with terrain on, leave the zoom as MapLibre sets it when a pan drag ends. By default the demo puts the zoom back to what it was when the drag started (`pan-zoom-keeper.ts`): MapLibre GL JS 6.16.0 keeps the camera's height above sea level across a pan drag, so panning toward higher ground brought the camera down onto the slope and the zoom up to 22 (NOTES.md, 2026-11-17) |
 | `?fade=0` | keep the basemap at full opacity. By default its layers fade from zoom 15.5 to 20 % at zoom 19, so the splats stand out. Only layers whose opacity is a plain number are changed (92 of 135 opacity properties of the bvmap-starlight style, including 59 of 99 line properties); layers with their own zoom expressions are not |
 | `?extent=<factor>` | scale every splat's semi-axes (default 1); about 1.3 closes the gaps between neighbours ([adaptive-merging.md](adaptive-merging.md)) |
 
@@ -76,6 +77,7 @@ Kept separate as AGENTS.md requires.
 | `tile-selection.ts` | choose zoom and level prefix |
 | `tile-matrix.ts` | tile-local to Web Mercator placement (float64) |
 | `camera.ts` | the map view's camera (as MapLibre's), effective zoom of a point, visible ground |
+| `pan-zoom-keeper.ts` | keep the zoom across a pan drag over terrain (workaround; `?keepzoom=0` switches it off) |
 | `mixed-selection.ts` | tiles of several zooms by distance (`?mixed=1`) |
 | `splat-instances.ts` | per-splat instance data (float attributes; `?gpu=legacy`, and the reference for the packed shader) |
 | `gpu-surfels.ts` | shaders (float attributes and packed 16-byte records), buffer upload, instanced draw |
