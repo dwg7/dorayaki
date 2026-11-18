@@ -283,6 +283,7 @@ scripts/measure-frame.ts     E022 jog between neighbouring meshes
 scripts/prototype-tile-scatter.ts  E022 prototype of a tile-aligned build's first stages (documents/tile-aligned-build.md)
 scripts/measure-quality.ts   E012/E015 quality comparison between tile zooms, tilesets, or the mixed-zoom choice
 demo/src/camera.ts           map view camera model, effective zoom, visible ground bounds
+demo/src/pan-zoom-keeper.ts  keep the zoom across a pan drag over terrain (workaround for the camera sinking onto slopes)
 demo/src/mixed-selection.ts  tiles of several zooms by distance from the camera (?mixed=1)
 scripts/measure-adaptive.ts  E005 splat counts for a grid of merge limits
 scripts/merge-tilesets.ts    merge tilesets built apart (one per mesh) into one

@@ -12,6 +12,7 @@ import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
 import { SurfelLayer } from "./surfel-layer.js";
 import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
+import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
 import { vegetationFlags } from "./vegetation.js";
 import { classStyle } from "./class-palette.js";
@@ -249,6 +250,9 @@ map.on("load", () => {
       encoding: "custom", redFactor: 256, greenFactor: 1, blueFactor: 1 / 256, baseShift: 32768 + shift,
     });
     map.setTerrain({ source: "dem", exaggeration: terrain });
+    // A pan drag over terrain ends at another zoom, and panning toward higher ground brings the camera down onto the
+    // slope (pan-zoom-keeper.ts); keep the zoom instead. `?keepzoom=0` leaves the map as MapLibre moves it.
+    if (flag("keepzoom", tileset) !== "0") keepZoomAcrossPans(map);
   }
   // Debug overlay on top of the basemap: the demo tile's boundary.
   map.addSource("tile-outline", {
