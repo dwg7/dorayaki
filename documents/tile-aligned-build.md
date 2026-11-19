@@ -136,7 +136,7 @@ conversion fits are not stated). What they change in this plan:
 ## Proposed next steps (each small enough for one change)
 
 1. **Done**: `TileFramer` (`src/geodesy/tile-frame.ts`, `test/tile-frame.test.ts`): the fitted frame per tile, anchored deterministically at the tile's centre, the step-and-clamp rule, tested against the exact conversion. See "TileFramer" below.
-2. The tile-local build as a function (`points of one tile -> z17, z16, z15 pieces`), run on the prototype's densest tile and compared with the
+2. **Done** (`src/pointcloud/tile-build.ts`, E022 step 2; counts within 0.3 % at z17/z16, 3.4 % at z15 on the densest tile of 08OF4062; seams and on-screen look not yet compared): the tile-local build as a function (`points of one tile -> z17, z16, z15 pieces`), run on the prototype's densest tile and compared with the
    present build of the same area after undoing the rotation: same splat counts within the seam strip, same colors.
 3. Scatter to shard files and a tile job runner (processes, a manifest), on the nine Kawazu meshes: compare the archive with the present one
    (size, seam jogs gone) and the time with 1, 4 and 8 workers.

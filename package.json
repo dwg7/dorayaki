@@ -30,6 +30,7 @@
     "measure:precision": "esbuild scripts/measure-precision.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-precision.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-precision.mjs",
     "measure:class": "esbuild scripts/measure-class.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-class.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-class.mjs",
     "prototype:tile-scatter": "esbuild scripts/prototype-tile-scatter.ts --bundle --platform=node --format=esm --outfile=demo/build/prototype-tile-scatter.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/prototype-tile-scatter.mjs",
+    "compare:tile-build": "esbuild scripts/compare-tile-build.ts --bundle --platform=node --format=esm --outfile=demo/build/compare-tile-build.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/compare-tile-build.mjs",
     "measure:frame": "esbuild scripts/measure-frame.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-frame.mjs --log-level=warning && node demo/build/measure-frame.mjs"
   },
   "devDependencies": {

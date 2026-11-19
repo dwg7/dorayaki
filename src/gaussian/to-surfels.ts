@@ -121,6 +121,25 @@ export interface GeoOrigin {
 export type PlacedSplat = Splat & { support?: number };
 
 /**
+ * One east-north-up Gaussian as a splat at block-local (x, y) tile units. East-north-up -> east-south-up flips y; flipping one local axis as
+ * well keeps the matrix a proper rotation (axes are unsigned lines).
+ */
+export function splatOfGaussian(g: Gaussian, x: number, y: number): PlacedSplat {
+  const byte = (v: number): number => Math.round(clamp01(v) * 255);
+  const [a0, a1, a2] = rotationAxes(g.rotation);
+  const [qw, qx, qy, qz] = quaternionFromAxes([-a0[0], a0[1], -a0[2]], [a1[0], -a1[1], a1[2]], [a2[0], -a2[1], a2[2]]);
+  return {
+    x, y,
+    z: g.position[2],
+    sx: g.scales[0], sy: g.scales[1], sz: g.scales[2],
+    qw, qx, qy, qz,
+    r: byte(g.color[0]), g: byte(g.color[1]), b: byte(g.color[2]),
+    a: byte(g.opacity),
+    ...(g.support !== undefined ? { support: g.support } : {}),
+  };
+}
+
+/**
  * Place east-north-up Gaussians around a geographic origin on zoom-level
  * tiles. Returns the smallest tile block containing every centre, and the
  * splats in that block's block-local coordinates (see src/tiling.ts;
@@ -151,22 +170,6 @@ export function placeGaussians(gaussians: readonly Gaussian[], origin: GeoOrigin
     cols: Math.floor(maxX) - x0 + 1,
     rows: Math.floor(maxY) - y0 + 1,
   };
-  const byte = (v: number): number => Math.round(clamp01(v) * 255);
-  const splats = gaussians.map((g, i): PlacedSplat => {
-    // East-north-up -> east-south-up flips y; flipping one local axis as
-    // well keeps the matrix a proper rotation (axes are unsigned lines).
-    const [a0, a1, a2] = rotationAxes(g.rotation);
-    const [qw, qx, qy, qz] = quaternionFromAxes([-a0[0], a0[1], -a0[2]], [a1[0], -a1[1], a1[2]], [a2[0], -a2[1], a2[2]]);
-    return {
-      x: tx[i]! - x0,
-      y: ty[i]! - y0,
-      z: g.position[2],
-      sx: g.scales[0], sy: g.scales[1], sz: g.scales[2],
-      qw, qx, qy, qz,
-      r: byte(g.color[0]), g: byte(g.color[1]), b: byte(g.color[2]),
-      a: byte(g.opacity),
-      ...(g.support !== undefined ? { support: g.support } : {}),
-    };
-  });
+  const splats = gaussians.map((g, i): PlacedSplat => splatOfGaussian(g, tx[i]! - x0, ty[i]! - y0));
   return { block, splats };
 }
