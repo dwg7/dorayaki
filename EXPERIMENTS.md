@@ -1526,3 +1526,9 @@ points at the edge, and an affected tile would have failed to encode).
 Seams: six cameras (four on mesh boundaries) compared by `measure:quality` between the present archive and the tiled one at z17: holes and extra 0.05 to 2.8 % of the pixels at full resolution, 0 to 0.7 % at 4 x 4 blocks;
 mean absolute difference 3 to 10 of 255. The images look alike; a jog at a mesh boundary is not visible in forest, so this does **not yet show that the seam jogs are gone**; a view across a building or road on a boundary is the
 test still to be made. Also not done: a run on an idle machine with enough memory, the streaming archive writer (step 4), re-measuring the DEM shift and the terrain lift on the new archive.
+
+Seam measurement (2026-11-21; `npm run measure:seam -- <tileset dir>...`, `scripts/measure-seam.ts`): the z17 splats within 14 m of the four interior mesh edges of the 3 x 3 grid (E 40,400 and 40,800; N -133,800 and -134,100),
+counted by distance from the edge (1 m bins) relative to the level 8 to 14 m away, and an overlap index (other splats within 0.25 m). Present archive (cls6): the two bins next to the edge hold 0.871 and
+0.876 of the far density (the other bins within 0.94 to 1.02: a dip of about 12 % exactly at the seam, where a mesh-cut voxel is fitted from the points of one side only); the overlap index is 0.109 in the strip against 0.095 far.
+Tiled archive: 0.990 and 0.983 in those bins (all bins 0.96 to 1.03), overlap 0.103 against 0.096. The seam that the mesh-by-mesh build leaves in the splat density is gone in the tiled build.
+What this does not measure: the lateral jog itself (up to 1.8 m between neighbouring meshes, E022), only its signature in the density; a feature crossing a boundary (a building edge) compared directly is still not done.

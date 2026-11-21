@@ -218,6 +218,7 @@ npm run measure:frame -- <zone> <meshA.las> <meshB.las>   # E022: how far apart 
 npm run prototype:tile-scatter -- <file.las> <zone> [maxpoints]   # E022: scatter one LAS file into z17 tile frames, accuracy, one tile accumulated and merged
 npm run compare:tile-build -- <file.las> <zone> [x y]   # E022 step 2: tile-local build (buildTilePieces) against the present build on one z17 tile
 npm run build:tiled -- <name> <zone> <file.las[@filters][,file2.las ...]> [--workers N] [--centre lng,lat] [--keep]   # E022 step 3: tile-aligned build (scatter to shards, one job per z17 tile, gather, PMTiles); same DORAYAKI_* recipe variables as build:tileset, DORAYAKI_ADAPTIVE_LEVELS required; work in data/tiled-work/<name>
+npm run measure:seam -- <tileset dir> [...]   # E022 step 3: splat density and overlap along the interior mesh edges of the Kawazu grid (does a mesh seam show)
 npm run measure:encoding -- <tileset dir> <zoom>   # E016: entropy per field, gzip/brotli of the block as stored and rearranged
 npm run measure:precision -- <tileset dir> <zoom>  # E016: which precision reductions are visually free (software renderer)
 DORAYAKI_CLASS_PLANE=1 npm run build:tileset -- ...   # also write a class plane (E021); merge:tilesets joins the planes
@@ -286,6 +287,7 @@ scripts/measure-frame.ts     E022 jog between neighbouring meshes
 scripts/prototype-tile-scatter.ts  E022 prototype of a tile-aligned build's first stages (documents/tile-aligned-build.md)
 scripts/compare-tile-build.ts  E022 step 2: the tile-local build against the present one on the same points
 scripts/build-tiled.ts       E022 step 3: tile-aligned parallel build (scatter, tile jobs, gather, archive)
+scripts/measure-seam.ts       E022 step 3: mesh-seam signature in the splat density (Kawazu grid)
 src/pointcloud/tile-shard.ts shard records (16 bytes) of the tiled build; src/pointcloud/las-spec.ts: `file.las@c2@first` input specs
 scripts/measure-quality.ts   E012/E015 quality comparison between tile zooms, tilesets, or the mixed-zoom choice
 demo/src/camera.ts           map view camera model, effective zoom, visible ground bounds
