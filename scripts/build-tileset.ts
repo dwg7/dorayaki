@@ -35,6 +35,7 @@ import { jprcsToLatLng } from "../src/geodesy/jprcs.js";
 import { PmtilesCompression, PmtilesTileType, writePmtiles } from "../src/pmtiles.js";
 import { adaptiveGaussians } from "../src/pointcloud/adaptive.js";
 import { forEachLasRecord, parseLasHeader } from "../src/pointcloud/las.js";
+import { parseLasSpec } from "../src/pointcloud/las-spec.js";
 import { buildPyramidFrom, pyramidVoxelSizes, type PyramidConfig } from "../src/pointcloud/pyramid.js";
 import { VoxelAccumulator } from "../src/pointcloud/voxel-accumulator.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../src/tile-geometry.js";
@@ -48,26 +49,7 @@ const OUT = `demo/tiles/${name}`;
 /** DORAYAKI_BLOCK_VERSION=6 writes version 6 blocks (12-byte records, E016); the default is version 5. */
 const blockVersion = process.env.DORAYAKI_BLOCK_VERSION === "6" ? (6 as const) : undefined;
 
-/** `path@c2+1@first` -> path and a point filter (all points when no filter is given). */
-function parseSpec(spec: string): { path: string; keep: (cls: number, returns: number) => boolean } {
-  const [path, ...filters] = spec.split("@");
-  let classes: Set<number> | undefined;
-  let which: "first" | "last" | undefined;
-  for (const f of filters) {
-    if (f.startsWith("c")) classes = new Set(f.slice(1).split("+").map(Number));
-    else if (f === "first" || f === "last") which = f;
-    else throw new Error(`unknown filter @${f}; use @c<class>[+<class>...], @first or @last`);
-  }
-  return {
-    path: path!,
-    keep: (cls, returns) => {
-      if (classes && !classes.has(cls)) return false;
-      const n = returns & 7, of = (returns >> 3) & 7;
-      return which === undefined || (which === "first" ? n === 1 : n === of);
-    },
-  };
-}
-const specs = file.split(",").map(parseSpec);
+const specs = file.split(",").map(parseLasSpec);
 const files = specs.map((s) => s.path);
 const heads = files.map((f) => {
   const fd = openSync(f, "r");

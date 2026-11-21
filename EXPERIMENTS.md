@@ -1462,3 +1462,73 @@ more than 0.5 m off over a mesh against under 5 mm for the tile frame; unknown z
 `prototype:tile-scatter` now uses the module. Airborne 08OF4062 (18,206,201 points): 7.5 s, 2.43 million points per second; error 0.61 mm mean and 1.69 mm worst
 over 4,000 exact checks (the flat frame: 0.633 m and 1.624 m); 69 points clamped (0.0004 %). First 20 million points of the MMS file 08OF4060: 6.0 s, 3.32 million
 points per second, 3 z17 tiles, 57 points clamped.
+
+### E022 step 2: the tile-local build function (2026-11-19)
+
+`buildTilePieces` (`src/pointcloud/tile-build.ts`, `test/tile-build.test.ts`): the points of one z17 tile in the tile's frame (metres east and south of its
+corner, height) in; the splats of that tile at z17 and its pieces of z16 and z15 out, in tile units of the target tiles. The voxel grid is the tile's
+(width / 512; z16 and z15 cells exactly 2 and 4 times larger), the merge rule and the sparse scaling are those of `build-tileset.ts`. No file access, so it
+can run in a worker. `splatOfGaussian` was lifted out of `placeGaussians` (same output). Tests: tiles and ranges of the pieces, two heights at one x/y both
+kept, order of the points irrelevant, empty and one-point tiles, a class slot carried by `opacityOf`, bad arguments refused.
+
+`npm run compare:tile-build -- <file.las> <zone> [x y]` runs it against the present build on the same points of one tile (the present path: a flat frame around
+the file's centre; its Gaussians are carried back to plane coordinates and into the tile frame by `TileFramer`, which undoes the rotation). Airborne 08OF4062,
+densest tile 17/116125/52009 (8,131,011 points), Kawazu recipe (thickness 0.2, color 0.2, 3 levels, sparse 24 x 10 per zoom):
+
+| zoom | cell | new splats | present | new / present | distance to the nearest splat of the other build, median / p90 | mean color difference of nearest pairs (of 255) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 17 | 49 cm | 323,031 | 323,389 | 0.999 | 35 / 72 cm | 7.8 |
+| 16 | 98 cm | 27,403 | 27,474 | 0.997 | 100 / 179 cm | 4.8 |
+| 15 | 196 cm | 2,929 | 3,033 | 0.966 | 132 / 385 cm | 3.0 (40 splats without a neighbor within 4 m) |
+
+Mean colors per zoom agree to 0.1 of 255. Time (three zooms, one tile, one process): new 13.6 to 17.1 s, present 31.5 to 59.3 s on the same points (the present
+path accumulates in a hash keyed by the flat frame; the two runs were on a machine that was also doing other work, so read the ratio as rough); memory 0.4 GB in
+the process (the points are held as arrays).
+
+Reading: the counts agree to within 0.3 % at z17 and z16 and 3.4 % at z15 (the sparse threshold of 2,400 points is sharp on a few cells), the colors agree, and
+the distances are of the order of the cell size, which is what a different grid phase gives; no sign of a systematic shift or loss. What it does not show: that the
+pieces look the same on screen (the E012 renderer comparison is not done), and the seam between tiles (the next step builds adjacent tiles). The same comparison
+was run with no class slots; the class plane through this path is only tested on a synthetic case.
+
+### E022 step 3: scatter, tile jobs, gather (2026-11-20 to 21)
+
+`scripts/build-tiled.ts` (`npm run build:tiled`): the Kawazu recipe by tile. Scatter (one job per LAS file): each point through `TileFramer` into the shard file of its z17
+tile, 16-byte records (`src/pointcloud/tile-shard.ts`); tile jobs (one per z17 tile, biggest first): shards in file order -> `buildTilePieces` -> the final z17 tile
+(with class plane) and z16 / z15 pieces as JSON; gather: pieces joined by source tile order into the z16 and z15 tiles; archive in memory (the streaming writer is
+step 4). Child processes of the same script, N at a time; finished files and tiles leave markers, so an interrupted run resumes (it did: the machine restarted in the middle
+of the first full run, with scatter done and 5 of 30 tile jobs; the rerun finished the other 25). Run on the nine Kawazu meshes (13 LAS files, 476,004,940 points, version 6 blocks with class planes):
+
+| | tiled build | present archive (cls6) |
+| --- | --- | --- |
+| tiles (z17 / z16 / z15) | 46 (30 / 12 / 4) | 46 (30 / 12 / 4) |
+| splats z17 / z16 / z15 | 6,174,468 / 678,444 / 82,526 | 6,172,195 / 678,826 / 84,477 |
+| PMTiles | 83,887,706 B | 84,036,082 B (-0.18 %) |
+
+Shards 7,616,079,040 B (16 bytes per point); scatter 252 s of CPU in all (13 jobs, on a loaded machine); tile jobs peak 1.6 GB.
+
+Tile stage, wall time, 30 tile jobs, same shards (8 GB machine, 8 cores, other applications running and swap already in use at idle):
+
+| workers | seconds |
+| --- | --- |
+| 1 | 288 |
+| 2 | 413 |
+| 4 | 650 |
+| 8 | 1,359 |
+
+**More workers made it slower** on this machine: memory, not CPU, is the limit (up to 1.6 GB per job, 8 GB of RAM shared with other applications, 3.4 GB of swap in use). The result
+is not a measure of the design's scaling; it needs a machine where N jobs fit in memory. What it does show: the output is **byte-identical for 1, 2, 4 and 8 workers** (all tile files; only the
+metadata of the archive names the worker count), so the build does not depend on scheduling.
+
+A bug found on the way: float32 shards round a value just under the tile width up to the width, which put a point in cell 512 and a splat at x = 1.0000000014 (the encoder refused it; 5
+tiles of the northern row). Fixed by clamping to 0.1 mm inside the tile in scatter and again on reading (`a4b5107`); the 25 tiles finished before the fix were not rebuilt (the clamp changes only
+points at the edge, and an affected tile would have failed to encode).
+
+Seams: six cameras (four on mesh boundaries) compared by `measure:quality` between the present archive and the tiled one at z17: holes and extra 0.05 to 2.8 % of the pixels at full resolution, 0 to 0.7 % at 4 x 4 blocks;
+mean absolute difference 3 to 10 of 255. The images look alike; a jog at a mesh boundary is not visible in forest, so this does **not yet show that the seam jogs are gone**; a view across a building or road on a boundary is the
+test still to be made. Also not done: a run on an idle machine with enough memory, the streaming archive writer (step 4), re-measuring the DEM shift and the terrain lift on the new archive.
+
+Seam measurement (2026-11-21; `npm run measure:seam -- <tileset dir>...`, `scripts/measure-seam.ts`): the z17 splats within 14 m of the four interior mesh edges of the 3 x 3 grid (E 40,400 and 40,800; N -133,800 and -134,100),
+counted by distance from the edge (1 m bins) relative to the level 8 to 14 m away, and an overlap index (other splats within 0.25 m). Present archive (cls6): the two bins next to the edge hold 0.871 and
+0.876 of the far density (the other bins within 0.94 to 1.02: a dip of about 12 % exactly at the seam, where a mesh-cut voxel is fitted from the points of one side only); the overlap index is 0.109 in the strip against 0.095 far.
+Tiled archive: 0.990 and 0.983 in those bins (all bins 0.96 to 1.03), overlap 0.103 against 0.096. The seam that the mesh-by-mesh build leaves in the splat density is gone in the tiled build.
+What this does not measure: the lateral jog itself (up to 1.8 m between neighbouring meshes, E022), only its signature in the density; a feature crossing a boundary (a building edge) compared directly is still not done.

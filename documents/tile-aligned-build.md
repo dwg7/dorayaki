@@ -98,6 +98,29 @@ const loc = framer.locate(easting, northing);     // { x, y, east, south, widthM
 - Throughput in JavaScript, including 4,000 exact checks and a per-tile map lookup: 2.4 million points per second on airborne points, 3.3 on MMS points.
 - The conversion takes the survey convention (x northing, y easting); a LAS file stores the easting in X and the northing in Y.
 
+## Outside observations (UNopenGIS/7#1030, a comment of 2026-11-17)
+
+A reader building a point-cloud viewer for the whole city of Shizuoka (same source data) described a three-stage level of detail: wide area from
+a plan view and elevation extracted from the points; middle zooms (z14 to z17) as Gaussian splats in 3D Tiles with SPZ compression; the highest
+zooms by a ranged read of COPC with the splats made on the device. Splat conversion runs on a GPU, 8 jobs in parallel, 24 s per cell; a
+laptop with an M5 chip is smooth, an M1 Mac mini stutters. These are reported claims, not measured here (cell size, point density and what the
+conversion fits are not stated). What they change in this plan:
+
+- **Step 2's function must not depend on Node.** Points of one tile in, splats of that tile out, with `TileFramer` for the frame: no file or stream
+  access inside. The same function could then run in a worker for the on-device stage (points of a COPC range -> splats of the tile on screen) without
+  a second implementation. This costs nothing now and is not an optimization in advance; running it in the browser is deferred.
+- **Hand-off at low zoom** (not built): the buried splats at z12.7 and the terrain lift are the same problem the plan view and elevation stage
+  solves. A tile range below some zoom drawn as a raster or terrain layer instead of splats is a candidate; to be judged by the E012 renderer
+  against the aggregated zooms we have.
+- **Size comparison** (not done): SPZ is a published splat format with its own quantization; a fair comparison with Surfel Block v6 (12 bytes per
+  splat before gzip) needs the same splats in both. `measure:encoding` can give our side; the SPZ side is unverified.
+- **Frame-rate budget** (not done): a stutter on weaker GPUs says the cost per frame (splat count, the soft look's two passes) should be measured on
+  an M1-class machine and tied to the byte-aware cap for `?mixed=1`.
+- **Cost reference**: our fit is about 100 CPU-hours per 1,000 km2; a GPU job of 24 s per cell cannot be compared until the cell size and what is fitted
+  are known. Questions to ask in the issue: cell size, point count per cell, and whether the conversion is a trained 3DGS or a fit from points.
+- **The seam finding may concern them too**: meshes placed up to 1.8 m apart by the meridian convergence matter for any build that works cell by
+  cell on mesh-wise files; worth telling them once the tile-local build confirms it.
+
 ## Risks and open questions
 
 - **The first archive after the change moves** (by up to a metre inside a mesh, 1.8 m across seams): the DEM shift of 2 m (E010, the DEM against the
@@ -113,8 +136,8 @@ const loc = framer.locate(easting, northing);     // { x, y, east, south, widthM
 ## Proposed next steps (each small enough for one change)
 
 1. **Done**: `TileFramer` (`src/geodesy/tile-frame.ts`, `test/tile-frame.test.ts`): the fitted frame per tile, anchored deterministically at the tile's centre, the step-and-clamp rule, tested against the exact conversion. See "TileFramer" below.
-2. The tile-local build as a function (`points of one tile -> z17, z16, z15 pieces`), run on the prototype's densest tile and compared with the
+2. **Done** (`src/pointcloud/tile-build.ts`, E022 step 2; counts within 0.3 % at z17/z16, 3.4 % at z15 on the densest tile of 08OF4062; seams and on-screen look not yet compared): the tile-local build as a function (`points of one tile -> z17, z16, z15 pieces`), run on the prototype's densest tile and compared with the
    present build of the same area after undoing the rotation: same splat counts within the seam strip, same colors.
-3. Scatter to shard files and a tile job runner (processes, a manifest), on the nine Kawazu meshes: compare the archive with the present one
+3. **Done, with open points** (`scripts/build-tiled.ts`, E022 step 3: archive 83,887,706 B against 84,036,082 B, same tile and splat counts to within 3 % at z15; identical bytes for 1, 2, 4 and 8 workers; speed-up not measured because the 8 GB machine is memory-bound; the density dip of about 12 % that the mesh seams leave is gone; the lateral jog itself not measured directly): scatter to shard files and a tile job runner (processes, a manifest), on the nine Kawazu meshes: compare the archive with the present one
    (size, seam jogs gone) and the time with 1, 4 and 8 workers.
 4. The gather step and a streaming PMTiles writer; then the same for a larger area.
