@@ -56,5 +56,5 @@ for (const dir of process.argv.slice(2)) {
   pts.forEach((p, i) => { const a = Math.abs(p[3]); const g = a < 1.5 ? sums.strip : a >= 8 ? sums.far : undefined; if (g) { g[0]! += near(i); g[1]!++; } });
   console.log(`${dir}: ${pts.length} splat-line pairs within ${RANGE} m of the four interior mesh edges`);
   console.table([...bins].sort((a, b) => a[0] - b[0]).filter(([b]) => Math.abs(b + 0.5) <= 6).map(([b, c]) => ({ "distance m": `${b}..${b + 1}`, splats: c, "ratio to far": +(c / far).toFixed(3) })));
-  console.log(`overlap index (neighbors within ${R} m per splat): strip |d|<1.5 m ${(sums.strip[0] / sums.strip[1]).toFixed(3)} (${sums.strip[1]} splats), far |d|>=8 m ${(sums.far[0] / sums.far[1]).toFixed(3)} (${sums.far[1]} splats)`);
+  console.log(`overlap index (neighbors within ${R} m per splat): strip |d|<1.5 m ${(sums.strip[0]! / sums.strip[1]!).toFixed(3)} (${sums.strip[1]} splats), far |d|>=8 m ${(sums.far[0]! / sums.far[1]!).toFixed(3)} (${sums.far[1]} splats)`);
 }
