@@ -103,8 +103,9 @@ function scatterJob([work, fiArg, zoneArg, specArg]: string[]): void {
         t = { buf: b0, view: new DataView(b0.buffer), n: 0, path: `${shards}/${key}/${fi}.bin`, width: loc.widthMetres, total: 0 };
         perTile.set(key, t);
       }
-      // A point clamped into its tile after stepping can lie millimetres outside it: keep every point inside [0, width).
-      const hi = t.width * (1 - 1e-9);
+      // A point clamped into its tile after stepping can lie millimetres outside it, and float32 rounds a value just under the width up to the
+      // width (resolution 2e-5 m at 250 m): keep every point 0.1 mm inside [0, width).
+      const hi = t.width - 1e-4;
       writeShardRecord(t.view, t.n * SHARD_RECORD_BYTES, Math.min(hi, Math.max(0, loc.east)), Math.min(hi, Math.max(0, loc.south)), z, r >> 8, g >> 8, b >> 8, classPlane ? planeClassSlot(c, returns) : -1);
       t.n++; t.total++; kept++;
       if (t.n * SHARD_RECORD_BYTES === BUF) flush(t);
@@ -127,7 +128,10 @@ function tileJob([work, x, y]: string[]): void {
   const files = readdirSync(dir).filter((f) => f.endsWith(".bin")).sort((a, b) => parseInt(a) - parseInt(b));
   const CHUNK = 1 << 20; // records
   const buf = new Uint8Array(CHUNK * SHARD_RECORD_BYTES);
-  const pieces = buildTilePieces((add) => {
+  // The same bound again on reading: shards written by a run before that fix hold values rounded up to the width.
+  const hi = tileWidthMetres(tile) - 1e-4;
+  const pieces = buildTilePieces((feedPoint) => {
+    const add = (e: number, s: number, u: number, r: number, g: number, b: number, slot: number): void => feedPoint(Math.min(e, hi), Math.min(s, hi), u, r, g, b, slot);
     for (const f of files) {
       const fd = openSync(`${dir}/${f}`, "r");
       const total = statSync(`${dir}/${f}`).size / SHARD_RECORD_BYTES;
