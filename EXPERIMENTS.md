@@ -1489,3 +1489,40 @@ Reading: the counts agree to within 0.3 % at z17 and z16 and 3.4 % at z15 (the s
 the distances are of the order of the cell size, which is what a different grid phase gives; no sign of a systematic shift or loss. What it does not show: that the
 pieces look the same on screen (the E012 renderer comparison is not done), and the seam between tiles (the next step builds adjacent tiles). The same comparison
 was run with no class slots; the class plane through this path is only tested on a synthetic case.
+
+### E022 step 3: scatter, tile jobs, gather (2026-11-20 to 21)
+
+`scripts/build-tiled.ts` (`npm run build:tiled`): the Kawazu recipe by tile. Scatter (one job per LAS file): each point through `TileFramer` into the shard file of its z17
+tile, 16-byte records (`src/pointcloud/tile-shard.ts`); tile jobs (one per z17 tile, biggest first): shards in file order -> `buildTilePieces` -> the final z17 tile
+(with class plane) and z16 / z15 pieces as JSON; gather: pieces joined by source tile order into the z16 and z15 tiles; archive in memory (the streaming writer is
+step 4). Child processes of the same script, N at a time; finished files and tiles leave markers, so an interrupted run resumes (it did: the machine restarted in the middle
+of the first full run, with scatter done and 5 of 30 tile jobs; the rerun finished the other 25). Run on the nine Kawazu meshes (13 LAS files, 476,004,940 points, version 6 blocks with class planes):
+
+| | tiled build | present archive (cls6) |
+| --- | --- | --- |
+| tiles (z17 / z16 / z15) | 46 (30 / 12 / 4) | 46 (30 / 12 / 4) |
+| splats z17 / z16 / z15 | 6,174,468 / 678,444 / 82,526 | 6,172,195 / 678,826 / 84,477 |
+| PMTiles | 83,887,706 B | 84,036,082 B (-0.18 %) |
+
+Shards 7,616,079,040 B (16 bytes per point); scatter 252 s of CPU in all (13 jobs, on a loaded machine); tile jobs peak 1.6 GB.
+
+Tile stage, wall time, 30 tile jobs, same shards (8 GB machine, 8 cores, other applications running and swap already in use at idle):
+
+| workers | seconds |
+| --- | --- |
+| 1 | 288 |
+| 2 | 413 |
+| 4 | 650 |
+| 8 | 1,359 |
+
+**More workers made it slower** on this machine: memory, not CPU, is the limit (up to 1.6 GB per job, 8 GB of RAM shared with other applications, 3.4 GB of swap in use). The result
+is not a measure of the design's scaling; it needs a machine where N jobs fit in memory. What it does show: the output is **byte-identical for 1, 2, 4 and 8 workers** (all tile files; only the
+metadata of the archive names the worker count), so the build does not depend on scheduling.
+
+A bug found on the way: float32 shards round a value just under the tile width up to the width, which put a point in cell 512 and a splat at x = 1.0000000014 (the encoder refused it; 5
+tiles of the northern row). Fixed by clamping to 0.1 mm inside the tile in scatter and again on reading (`a4b5107`); the 25 tiles finished before the fix were not rebuilt (the clamp changes only
+points at the edge, and an affected tile would have failed to encode).
+
+Seams: six cameras (four on mesh boundaries) compared by `measure:quality` between the present archive and the tiled one at z17: holes and extra 0.05 to 2.8 % of the pixels at full resolution, 0 to 0.7 % at 4 x 4 blocks;
+mean absolute difference 3 to 10 of 255. The images look alike; a jog at a mesh boundary is not visible in forest, so this does **not yet show that the seam jogs are gone**; a view across a building or road on a boundary is the
+test still to be made. Also not done: a run on an idle machine with enough memory, the streaming archive writer (step 4), re-measuring the DEM shift and the terrain lift on the new archive.
