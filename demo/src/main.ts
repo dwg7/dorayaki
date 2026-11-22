@@ -250,15 +250,16 @@ map.on("load", () => {
     const extent = get("extent", 0);
     return {
       vivid: Math.max(0, get("vivid", isExternal(tileset) ? 1.5 : 0)),
+      jitter: Math.max(0, get("jitter", isExternal(tileset) ? 0.6 : 0)),
       shade: Math.min(1, Math.max(0, get("shade", 1))),
       extent: extent > 0 ? extent : 1,
       clearance: Math.max(0, get("clearance", 15)),
-      softcore: Math.max(0.05, get("softcore", 0.85)),
+      softcore: Math.max(0.05, get("softcore", 1)),
       softscale: Math.max(0.05, get("softscale", 2)),
       softfalloff: Math.max(0.5, get("softfalloff", 5.5)),
     };
   };
-  // The soft look (E018, tuned 2026-11-22: core 0.85, size 2, edge 5.5; 52 against 56 frames per second on an M1) is the default for
+  // The soft look (E018, tuned 2026-11-22: core 0.85 until 2026-11-22 evening, then 1.0 to close the dark dots on flat ground; size 2, edge 5.5; 52 against 56 frames per second on an M1) is the default for
   // the point-cloud tilesets; `?look=flat` draws opaque ellipses, `?look=soft` forces the soft look on the synthetic fixtures.
   const softOf = (look: string | null): boolean => (look === null ? isExternal(tileset) : look === "soft");
   const tuneDefaults = tuneFrom(false);
@@ -311,6 +312,7 @@ map.on("load", () => {
   /** The tune state onto a layer (`extent` scales every splat's semi-axes, to cover gaps between neighbours; the soft look is E018). */
   const applyTune = (l: SurfelLayer): void => {
     l.vivid = tune.vivid;
+    l.jitter = tune.jitter;
     l.shade = tune.shade;
     l.extent = tune.extent;
     l.look = tune.soft ? "soft" : "flat";
@@ -353,6 +355,7 @@ map.on("load", () => {
   const repaint = (): void => { applyTune(layer); map.triggerRepaint(); syncUrl(); };
   const sliderSpecs = [
     { key: "vivid", label: "vivid", min: 0, max: 3, step: 0.05, title: "Brighten and saturate the stored colors (0: as stored)" },
+    { key: "jitter", label: "jitter", min: 0, max: 1.5, step: 0.05, title: "Deterministic per-splat shift and growth; breaks the regular lattice (0: as stored)" },
     { key: "shade", label: "shade", min: 0, max: 1, step: 0.05, title: "Strength of the shading (0: the colors as stored)" },
     { key: "extent", label: "splat size", min: 0.5, max: 2.5, step: 0.05, title: "Factor on every splat's semi-axes; covers gaps between neighbours" },
     { key: "softcore", label: "soft core", min: 0.2, max: 1.5, step: 0.05, title: "Soft look: scale of the opaque core that carries the depth" },

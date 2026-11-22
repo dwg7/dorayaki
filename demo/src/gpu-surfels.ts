@@ -28,6 +28,24 @@ vec3 grade(vec3 c) {
   return clamp(mix(vec3(l), c, 1.0 + 0.6 * u_vivid), 0.0, 1.0);
 }`;
 
+/**
+ * Deterministic per-splat irregularity (`?jitter=`, E024): on a regular voxel grid, equal discs in a diagonal lattice look
+ * mechanical. A hash of the instance index moves each splat inside its own plane by up to `u_jitter / 2` of its semi-axes
+ * and enlarges it by up to `u_jitter / 2`; it never shrinks one, so no gap opens. 0 draws the splats as stored. The same
+ * index gives the same offsets in every pass and every frame.
+ */
+const JITTER_GLSL = `uniform float u_jitter;     // 0: the splats as stored; 1: up to half a semi-axis of shift and 50 % of growth
+vec3 jitterHash(uint n) {
+  n = (n ^ 61u) ^ (n >> 16u);
+  n *= 9u;
+  n ^= n >> 4u;
+  n *= 0x27d4eb2du;
+  n ^= n >> 15u;
+  uint m = n * 747796405u + 2891336453u;
+  m = ((m >> ((m >> 28u) + 4u)) ^ m) * 277803737u;
+  return vec3(float(n & 1023u), float((n >> 10u) & 1023u), float(m & 1023u)) / 1023.0;
+}`;
+
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
 uniform mat4 u_matrix;      // local metric frame (metres; east, south, up) -> clip
@@ -39,6 +57,7 @@ uniform vec3 u_right;       // camera right in the local metric frame, normalize
 uniform vec3 u_up;
 uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colors as stored (no shading)
 ${GRADE_GLSL}
+${JITTER_GLSL}
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
 uniform float u_class_color; // 1: color by class instead of the stored color
@@ -75,6 +94,11 @@ void main() {
     v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
     shade = mix(1.0, 0.35 + 0.65 * abs(dot(normalize(a_normal), u_light)), u_shade);
   }
+  vec3 jh = jitterHash(uint(gl_InstanceID));
+  centre += (u * (jh.x - 0.5) + v * (jh.y - 0.5)) * u_jitter;
+  float jgrow = 1.0 + u_jitter * 0.5 * jh.z;
+  u *= jgrow;
+  v *= jgrow;
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
@@ -157,6 +181,7 @@ uniform vec3 u_right;
 uniform vec3 u_up;
 uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colors as stored (no shading)
 ${GRADE_GLSL}
+${JITTER_GLSL}
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
 uniform float u_class_color; // 1: color by class instead of the stored color
@@ -226,6 +251,11 @@ ${decode}
     v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
     shade = mix(1.0, 0.35 + 0.65 * abs(dot(normalize(an), u_light)), u_shade);
   }
+  vec3 jh = jitterHash(uint(gl_InstanceID));
+  centre += (u * (jh.x - 0.5) + v * (jh.y - 0.5)) * u_jitter;
+  float jgrow = 1.0 + u_jitter * 0.5 * jh.z;
+  u *= jgrow;
+  v *= jgrow;
   vec3 p = centre + a_corner.x * u + a_corner.y * v;
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
@@ -259,6 +289,7 @@ export interface SurfelProgram {
   uSoft: WebGLUniformLocation;
   uShade: WebGLUniformLocation;
   uVivid: WebGLUniformLocation;
+  uJitter: WebGLUniformLocation;
   uHideMask: WebGLUniformLocation;
   uHasClass: WebGLUniformLocation;
   uClassColor: WebGLUniformLocation;
@@ -351,6 +382,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
     uSoft: uniform("u_soft"),
     uShade: uniform("u_shade"),
     uVivid: uniform("u_vivid"),
+    uJitter: uniform("u_jitter"),
     uHideMask: uniform("u_hide_mask"),
     uHasClass: uniform("u_has_class"),
     uClassColor: uniform("u_class_color"),
@@ -452,6 +484,8 @@ export interface DrawOptions {
   shade?: number;
   /** Strength of the color grade, 0..: 0 leaves the stored colors, 1 brightens and saturates (see GRADE_GLSL). Default 0. */
   vivid?: number;
+  /** Deterministic per-splat shift and growth (JITTER_GLSL); 0 or omitted: as stored. */
+  jitter?: number;
   /** Exponent of the Gaussian falloff over the quad in the soft pass (default 3.5 here; the layer uses 6.5, a Gaussian over 3.6 sigma across). */
   falloff?: number;
 }
@@ -477,6 +511,7 @@ export function drawSurfels(
   gl.uniform1f(p.uSoft, soft ? 1 : 0);
   gl.uniform1f(p.uShade, opts.shade ?? 1);
   gl.uniform1f(p.uVivid, opts.vivid ?? 0);
+  gl.uniform1f(p.uJitter, opts.jitter ?? 0);
   gl.uniform4uiv(p.uHideMask, opts.hideMask ?? NO_HIDDEN_CLASSES);
   gl.uniform1f(p.uHasClass, b.hasClasses ? 1 : 0);
   gl.uniform1f(p.uClassColor, opts.classColor ? 1 : 0);
