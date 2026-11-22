@@ -14,6 +14,7 @@ import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
+import { keepCameraClearance } from "./camera-clearance.js";
 import { vegetationFlags } from "./vegetation.js";
 import { classStyle } from "./class-palette.js";
 import { decodeClassPlane, readClassPlane, VEGETATION_CLASSES, CLASS_DERIVED_CANOPY, CLASS_UNCLASSIFIED, type ClassPlane } from "../../src/class-plane.js";
@@ -253,6 +254,10 @@ map.on("load", () => {
     // A pan drag over terrain ends at another zoom, and panning toward higher ground brings the camera down onto the
     // slope (pan-zoom-keeper.ts); keep the zoom instead. `?keepzoom=0` leaves the map as MapLibre moves it.
     if (flag("keepzoom", tileset) !== "0") keepZoomAcrossPans(map);
+    // `?clearance=<metres>`: lower the pitch just enough to keep the camera that high above the ground under it
+    // (camera-clearance.ts); 15 m by default with terrain on, `?clearance=0` leaves the map as MapLibre moves it.
+    const clearance = Number(flag("clearance", tileset) ?? 15);
+    if (clearance > 0) keepCameraClearance(map, clearance);
   }
   // Debug overlay on top of the basemap: the demo tile's boundary.
   map.addSource("tile-outline", {

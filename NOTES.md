@@ -766,3 +766,20 @@ Not addressed: a right-drag that raises the pitch past about 78 degrees at zoom 
 camera to the slope behind it. MapLibre keeps it on the terrain with no clearance, which is inside the point cloud
 (trees and the bridge stand above the DEM), and the drag's end moved the center about 600 m and the zoom from 18.61
 to 16.87.
+
+## 2026-11-22: the camera sinks onto a slope and the splats in front of it vanish (terrain on)
+
+Observed in the demo (`?fixture=kawazu-stars`, MapLibre GL JS 6.16.0, terrain on): at zoom 20, pitch 78, bearing 90 (looking
+uphill), moving the center east in 10 m steps (`jumpTo`) took the camera's height above the ground under it from 30 m to
+6.7 m to 0.6 m. MapLibre then lowered the pitch (78 to 68) and the zoom (20 to 19.93) itself but left almost no clearance;
+the lower-left half of the screen turned white with a sharp diagonal edge (no splats). Drawing without the depth test
+brought back part of it (terrain hiding splats); the rest was right in front of the camera (near plane). This is the
+situation of maplibre-gl-js#1542 (camera inside terrain), still open there.
+A blink when DEM tiles load was not reproduced: the center elevation moved from 508.60 to 508.69 m when the z16 DEM tiles
+arrived, and the white fraction stayed under 1 %.
+Workaround in the demo (camera-clearance.ts): on `move`, lower the pitch around the same center just until the camera is
+15 m above the ground under it (`?clearance=<m>`, 0 = off). Same path afterwards: clearance 15.0, 14.9, 51, 61, 68 m, zoom
+stays 20, pitch 56; no white area; pushing the pitch up again stays at the clamped value (no oscillation). Not measured: a
+real mouse drag, other bearings, the effect on the frame rate. The pitch does not come back up when the camera moves to
+lower ground (it only ever lowers it).
+
