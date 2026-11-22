@@ -14,6 +14,20 @@ import type { Splat } from "../../src/surfel-block.js";
 import { classPaletteArray } from "./class-palette.js";
 import { cameraAxes, splatInstances, type SplatInstances } from "./splat-instances.js";
 
+/**
+ * Color grade of the stored splat colors, before shading (`?vivid=`, E023): brightness, contrast around mid gray, then
+ * saturation, in the order of the CSS filters used to find the values. `u_vivid` 0 leaves the colors as stored; 1 is
+ * brightness 1.35, contrast 1.2, saturation 1.6; the three move linearly with it. The point cloud's colors are dark
+ * (mean RGB about 70 of 255 in Kawazu), so the render looks dull without it.
+ */
+const GRADE_GLSL = `uniform float u_vivid;      // 0: the colors as stored; 1: brightness 1.35, contrast 1.2, saturation 1.6
+vec3 grade(vec3 c) {
+  c *= 1.0 + 0.35 * u_vivid;
+  c = (c - 0.5) * (1.0 + 0.2 * u_vivid) + 0.5;
+  float l = dot(c, vec3(0.213, 0.715, 0.072));
+  return clamp(mix(vec3(l), c, 1.0 + 0.6 * u_vivid), 0.0, 1.0);
+}`;
+
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
 uniform mat4 u_matrix;      // local metric frame (metres; east, south, up) -> clip
@@ -24,6 +38,7 @@ uniform vec3 u_light;       // local metric frame, normalized
 uniform vec3 u_right;       // camera right in the local metric frame, normalized
 uniform vec3 u_up;
 uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colors as stored (no shading)
+${GRADE_GLSL}
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
 uniform float u_class_color; // 1: color by class instead of the stored color
@@ -64,7 +79,8 @@ void main() {
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
   vec3 base = (u_class_color > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : a_color.rgb;
-  v_color = base * shade;
+  bool byClass = u_class_color > 0.5 && u_has_class > 0.5;
+  v_color = (byClass ? base : grade(base)) * shade;
 }`;
 
 const FRAGMENT_SHADER = `#version 300 es
@@ -140,6 +156,7 @@ uniform vec3 u_light;
 uniform vec3 u_right;
 uniform vec3 u_up;
 uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colors as stored (no shading)
+${GRADE_GLSL}
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
 uniform float u_class_color; // 1: color by class instead of the stored color
@@ -213,7 +230,8 @@ ${decode}
   gl_Position = u_matrix * vec4(p, 1.0);
   v_corner = a_corner;
   vec3 base = (u_class_color > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : rgb;
-  v_color = base * shade;
+  bool byClass = u_class_color > 0.5 && u_has_class > 0.5;
+  v_color = (byClass ? base : grade(base)) * shade;
 }`;
 }
 
@@ -240,6 +258,7 @@ export interface SurfelProgram {
   uUp: WebGLUniformLocation;
   uSoft: WebGLUniformLocation;
   uShade: WebGLUniformLocation;
+  uVivid: WebGLUniformLocation;
   uHideMask: WebGLUniformLocation;
   uHasClass: WebGLUniformLocation;
   uClassColor: WebGLUniformLocation;
@@ -331,6 +350,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
     uUp: uniform("u_up"),
     uSoft: uniform("u_soft"),
     uShade: uniform("u_shade"),
+    uVivid: uniform("u_vivid"),
     uHideMask: uniform("u_hide_mask"),
     uHasClass: uniform("u_has_class"),
     uClassColor: uniform("u_class_color"),
@@ -430,6 +450,8 @@ export interface DrawOptions {
   classColor?: boolean;
   /** Strength of the shading, 0..1 (default 1: the fixed Lambert light; 0: colors as stored). */
   shade?: number;
+  /** Strength of the color grade, 0..: 0 leaves the stored colors, 1 brightens and saturates (see GRADE_GLSL). Default 0. */
+  vivid?: number;
   /** Exponent of the Gaussian falloff over the quad in the soft pass (default 3.5 here; the layer uses 6.5, a Gaussian over 3.6 sigma across). */
   falloff?: number;
 }
@@ -454,6 +476,7 @@ export function drawSurfels(
   const soft = opts.pass === "soft";
   gl.uniform1f(p.uSoft, soft ? 1 : 0);
   gl.uniform1f(p.uShade, opts.shade ?? 1);
+  gl.uniform1f(p.uVivid, opts.vivid ?? 0);
   gl.uniform4uiv(p.uHideMask, opts.hideMask ?? NO_HIDDEN_CLASSES);
   gl.uniform1f(p.uHasClass, b.hasClasses ? 1 : 0);
   gl.uniform1f(p.uClassColor, opts.classColor ? 1 : 0);

@@ -92,6 +92,8 @@ export class SurfelLayer implements CustomLayerInterface {
   softFalloff = 6.5;
   /** Strength of the shading, 0..1 (`?shade=`; 0 draws the colors as stored, like a 3D Gaussian splat). */
   shade = 1;
+  /** Strength of the color grade of the stored colors (`?vivid=`, gpu-surfels.ts GRADE_GLSL): 0 as stored, 1 brighter and more saturated. */
+  vivid = 0;
   /** The class codes whose splats are not drawn, as a 128-bit mask (set with setHideClasses; the demo's checkbox, `?hide=`; E021). */
   private hideMask: Uint32Array<ArrayBuffer> = new Uint32Array(4);
   /** Color by class (`?color=class`): the palette of class-palette.ts instead of the stored colors. */
@@ -210,6 +212,7 @@ export class SurfelLayer implements CustomLayerInterface {
           pass,
           falloff: this.softFalloff,
           shade: this.shade,
+          vivid: this.vivid,
           hideMask: this.hideMask,
           classColor: this.classColor,
         });

@@ -292,6 +292,7 @@ src/pointcloud/tile-shard.ts shard records (16 bytes) of the tiled build; src/po
 scripts/measure-quality.ts   E012/E015 quality comparison between tile zooms, tilesets, or the mixed-zoom choice
 demo/src/camera.ts           map view camera model, effective zoom, visible ground bounds
 demo/src/pan-zoom-keeper.ts  keep the zoom across a pan drag over terrain (workaround for the camera sinking onto slopes)
+demo/src/camera-clearance.ts keep the camera a minimum height above the ground under it by lowering the pitch (`?clearance=`, default 15 m with terrain)
 demo/src/mixed-selection.ts  tiles of several zooms by distance from the camera (?mixed=1)
 scripts/measure-adaptive.ts  E005 splat counts for a grid of merge limits
 scripts/merge-tilesets.ts    merge tilesets built apart (one per mesh) into one

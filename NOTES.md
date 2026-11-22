@@ -766,3 +766,27 @@ Not addressed: a right-drag that raises the pitch past about 78 degrees at zoom 
 camera to the slope behind it. MapLibre keeps it on the terrain with no clearance, which is inside the point cloud
 (trees and the bridge stand above the DEM), and the drag's end moved the center about 600 m and the zoom from 18.61
 to 16.87.
+
+## 2026-11-22: the camera sinks onto a slope and the splats in front of it vanish (terrain on)
+
+Observed in the demo (`?fixture=kawazu-stars`, MapLibre GL JS 6.16.0, terrain on): at zoom 20, pitch 78, bearing 90 (looking
+uphill), moving the center east in 10 m steps (`jumpTo`) took the camera's height above the ground under it from 30 m to
+6.7 m to 0.6 m. MapLibre then lowered the pitch (78 to 68) and the zoom (20 to 19.93) itself but left almost no clearance;
+the lower-left half of the screen turned white with a sharp diagonal edge (no splats). Drawing without the depth test
+brought back part of it (terrain hiding splats); the rest was right in front of the camera (near plane). This is the
+situation of maplibre-gl-js#1542 (camera inside terrain), still open there.
+A blink when DEM tiles load was not reproduced: the center elevation moved from 508.60 to 508.69 m when the z16 DEM tiles
+arrived, and the white fraction stayed under 1 %.
+Workaround in the demo (camera-clearance.ts): on `move`, lower the pitch around the same center just until the camera is
+15 m above the ground under it (`?clearance=<m>`, 0 = off). Same path afterwards: clearance 15.0, 14.9, 51, 61, 68 m, zoom
+stays 20, pitch 56; no white area; pushing the pitch up again stays at the clamped value (no oscillation). Not measured: a
+real mouse drag, other bearings, the effect on the frame rate. The pitch does not come back up when the camera moves to
+lower ground (it only ever lowers it).
+
+
+## 2026-11-22: a color grade on the stored colors (`?vivid=`)
+
+The point cloud's colors are dark (the splats on screen in Kawazu, z18.8 pitch 55: mean RGB 66, 69, 64 of 255 with the shading, 68, 71, 67 at z18.5). Judged by eye with CSS filters over the demo canvas (the whole canvas, after shading): brightness 1.35, contrast 1.2, saturation 1.6 reads as natural and clearly more vivid (green canopy, bluish water); brightness 1.6, contrast 1.3, saturation 2.2 is garish and clips the highlights.
+`?vivid=<s>` does it in the vertex shader on the stored color, before the shading (gpu-surfels.ts `GRADE_GLSL`): brightness 1 + 0.35 s, contrast 1 + 0.2 s about mid gray, saturation 1 + 0.6 s, clamped. s = 1 is the first setting above and is the default for the point-cloud tilesets (the synthetic fixtures keep s = 0); `?vivid=0` leaves the stored colors. Class colors (`?color=class`) are not graded. Nothing stored changes.
+Measured with the same view: mean RGB 66, 69, 64 at s = 0 and 87, 94, 82 at s = 1 (brighter by about 30 %, green up a little more). It looks milder than the CSS preview, which also stretches the shaded values; larger s (1.5, 2) was not judged yet. Not checked: the soft look (`?look=soft`) and the dark basemap together, the program for the 16-byte records (versions 4 and 5) and the one for decoded splats got the same edit but were not run (Kawazu is version 6, the 12-byte program).
+Strength tried on the same view (z18.8, pitch 55; mean RGB, mean saturation max-min over max, share of pixels above 250): s = 0: 66, 69, 64, 0.118, 0 %; s = 1: 87, 94, 82, 0.232, 0.01 %; s = 1.5: 99, 109, 93, 0.272, 0.03 %; s = 2: 110, 125, 103, 0.302, 0.08 %; s = 3: 131, 149, 121, 0.318, 0.21 %. Saturation gains fade after s = 2 while brightness keeps rising. By eye 1.5 is rich without looking hazy, 2 is a little washed. The default for the point-cloud tilesets is now 1.5.

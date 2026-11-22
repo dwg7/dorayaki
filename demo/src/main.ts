@@ -14,6 +14,7 @@ import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
+import { keepCameraClearance } from "./camera-clearance.js";
 import { vegetationFlags } from "./vegetation.js";
 import { classStyle } from "./class-palette.js";
 import { decodeClassPlane, readClassPlane, VEGETATION_CLASSES, CLASS_DERIVED_CANOPY, CLASS_UNCLASSIFIED, type ClassPlane } from "../../src/class-plane.js";
@@ -145,7 +146,7 @@ const outlines = tiles.filter((t) => t.z === deepest).map((t) => [[0, 0], [1, 0]
  * Basemap: hfu/stars' bvmap-starlight style (GSI optimized vector tiles,
  * nationwide), served by stars.optgeo.org. Used for every tileset.
  */
-const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-starlight";
+const BASEMAP_STYLE = new URLSearchParams(location.search).get("basemap") ?? "https://stars.optgeo.org/style/bvmap-starlight"; // `?basemap=<style URL>`: preview another style
 
 const map = new MapLibreMap({
   container: "map",
@@ -253,6 +254,10 @@ map.on("load", () => {
     // A pan drag over terrain ends at another zoom, and panning toward higher ground brings the camera down onto the
     // slope (pan-zoom-keeper.ts); keep the zoom instead. `?keepzoom=0` leaves the map as MapLibre moves it.
     if (flag("keepzoom", tileset) !== "0") keepZoomAcrossPans(map);
+    // `?clearance=<metres>`: lower the pitch just enough to keep the camera that high above the ground under it
+    // (camera-clearance.ts); 15 m by default with terrain on, `?clearance=0` leaves the map as MapLibre moves it.
+    const clearance = Number(flag("clearance", tileset) ?? 15);
+    if (clearance > 0) keepCameraClearance(map, clearance);
   }
   // Debug overlay on top of the basemap: the demo tile's boundary.
   map.addSource("tile-outline", {
@@ -283,6 +288,9 @@ map.on("load", () => {
       l.softScale = num("softscale", l.softScale);
       l.softFalloff = num("softfalloff", l.softFalloff);
     }
+    // `?vivid=<strength>`: brighten and saturate the stored colors (0 as stored; 1.5 default for point-cloud tilesets).
+    const vivid = Number(flag("vivid", tileset) ?? (isExternal(tileset) ? 1.5 : 0));
+    if (Number.isFinite(vivid) && vivid >= 0) l.vivid = vivid;
     const shade = flag("shade", tileset);
     if (shade !== undefined && shade !== null && shade !== "" && Number.isFinite(Number(shade))) l.shade = Math.min(1, Math.max(0, Number(shade))); // 0: no shading
     if (mixed) l.drawAllTiles = true; // the streamer chose tiles of several zooms by distance
