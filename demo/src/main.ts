@@ -15,6 +15,8 @@ import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
 import { keepCameraClearance } from "./camera-clearance.js";
+import { buildSliders } from "./controls.js";
+import { changedParams } from "./tune-params.js";
 import { vegetationFlags } from "./vegetation.js";
 import { classStyle } from "./class-palette.js";
 import { decodeClassPlane, readClassPlane, VEGETATION_CLASSES, CLASS_DERIVED_CANOPY, CLASS_UNCLASSIFIED, type ClassPlane } from "../../src/class-plane.js";
@@ -146,7 +148,12 @@ const outlines = tiles.filter((t) => t.z === deepest).map((t) => [[0, 0], [1, 0]
  * Basemap: hfu/stars' bvmap-starlight style (GSI optimized vector tiles,
  * nationwide), served by stars.optgeo.org. Used for every tileset.
  */
-const BASEMAP_STYLE = new URLSearchParams(location.search).get("basemap") ?? "https://stars.optgeo.org/style/bvmap-starlight"; // `?basemap=<style URL>`: preview another style
+const BASEMAPS = { nightsky: "https://stars.optgeo.org/style/bvmap-nightsky", starlight: "https://stars.optgeo.org/style/bvmap-starlight" } as const;
+/** `?basemap=nightsky|starlight` or a style URL; the default is bvmap-nightsky (the dark companion of starlight, dwg7/bvmap#1). */
+const BASEMAP_PARAM = new URLSearchParams(location.search).get("basemap") ?? "nightsky";
+const BASEMAP_STYLE: string = Object.hasOwn(BASEMAPS, BASEMAP_PARAM) ? BASEMAPS[BASEMAP_PARAM as keyof typeof BASEMAPS] : BASEMAP_PARAM;
+/** Under a dark basemap the page behind the map is dark too: the basemap is faded and the gaps must not show white. */
+const DARK_BASEMAP = BASEMAP_STYLE === BASEMAPS.nightsky || /night|dark/i.test(BASEMAP_PARAM);
 
 const map = new MapLibreMap({
   container: "map",
@@ -163,6 +170,7 @@ const map = new MapLibreMap({
   attributionControl: external?.attribution ? { customAttribution: external.attribution } : {},
 });
 map.addControl(new NavigationControl({ visualizePitch: true }));
+if (DARK_BASEMAP) map.getContainer().style.background = "#2f3a30";
 
 const urlOf = (t: TileAddress): string => (external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t));
 
@@ -231,6 +239,30 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
 }
 
 map.on("load", () => {
+  // The look parameters (the panel's sliders and the flags `?vivid=`, `?shade=`, `?extent=`, `?clearance=`, `?look=soft`,
+  // `?softcore=`, `?softscale=`, `?softfalloff=`): one state, applied to the layer by `applyTune`, edited by the sliders.
+  const tuneFrom = (useUrl: boolean) => {
+    const get = (name: string, fallback: number): number => {
+      const raw = useUrl ? flag(name, tileset) : (TILESET_DEFAULTS[tileset]?.[name] ?? null);
+      const v = raw === null || raw === "" ? NaN : Number(raw);
+      return Number.isFinite(v) ? v : fallback;
+    };
+    const extent = get("extent", 0);
+    return {
+      vivid: Math.max(0, get("vivid", isExternal(tileset) ? 1.5 : 0)),
+      shade: Math.min(1, Math.max(0, get("shade", 1))),
+      extent: extent > 0 ? extent : 1,
+      clearance: Math.max(0, get("clearance", 15)),
+      softcore: Math.max(0.05, get("softcore", 0.85)),
+      softscale: Math.max(0.05, get("softscale", 2)),
+      softfalloff: Math.max(0.5, get("softfalloff", 5.5)),
+    };
+  };
+  // The soft look (E018, tuned 2026-11-22: core 0.85, size 2, edge 5.5; 52 against 56 frames per second on an M1) is the default for
+  // the point-cloud tilesets; `?look=flat` draws opaque ellipses, `?look=soft` forces the soft look on the synthetic fixtures.
+  const softOf = (look: string | null): boolean => (look === null ? isExternal(tileset) : look === "soft");
+  const tuneDefaults = tuneFrom(false);
+  const tune = { ...tuneFrom(true), soft: softOf(flag("look", tileset)) };
   // Fade the basemap from zoom 15.5 (to 20 % at zoom 19) so the splats stand out; `?fade=0` keeps it as is.
   // Only layers whose opacity is a plain number are changed.
   const fade = (v: number): ExpressionSpecification => ["interpolate", ["linear"], ["zoom"], 15.5, v, 19, v * 0.2];
@@ -256,8 +288,7 @@ map.on("load", () => {
     if (flag("keepzoom", tileset) !== "0") keepZoomAcrossPans(map);
     // `?clearance=<metres>`: lower the pitch just enough to keep the camera that high above the ground under it
     // (camera-clearance.ts); 15 m by default with terrain on, `?clearance=0` leaves the map as MapLibre moves it.
-    const clearance = Number(flag("clearance", tileset) ?? 15);
-    if (clearance > 0) keepCameraClearance(map, clearance);
+    keepCameraClearance(map, () => tune.clearance);
   }
   // Debug overlay on top of the basemap: the demo tile's boundary.
   map.addSource("tile-outline", {
@@ -271,30 +302,27 @@ map.on("load", () => {
     paint: { "line-color": "#d03030", "line-width": 2, "line-dasharray": [2, 2] },
   });
   const lod = Number(flag("lod", tileset));
-  const extent = Number(flag("extent", tileset));
   const dz = Number(flag("dz", tileset));
   // `?mixed=1`: tiles of several zooms at once, by distance from the camera (documents/demo-and-site.md, E015).
   const mixed = flag("mixed", tileset) === "1";
   // With terrain on, MapLibre's terrain at low zoom is coarser than the ground and lies above it in places, covering
   // the splats; raise them by a zoom-dependent amount (terrain-lift.ts). `?dz=` raises everything by dz metres (debug).
   const zoomLift = (): number => (terrain > 0 ? terrainLift(map.getZoom()) : 0);
+  /** The tune state onto a layer (`extent` scales every splat's semi-axes, to cover gaps between neighbours; the soft look is E018). */
+  const applyTune = (l: SurfelLayer): void => {
+    l.vivid = tune.vivid;
+    l.shade = tune.shade;
+    l.extent = tune.extent;
+    l.look = tune.soft ? "soft" : "flat";
+    l.coreScale = tune.softcore;
+    l.softScale = tune.softscale;
+    l.softFalloff = tune.softfalloff;
+  };
   const makeLayer = (): SurfelLayer => {
     const l = new SurfelLayer("surfels");
     if (lod > 0) l.zoomOverride = lod; // debug: pick tiles and levels as if the map were at this zoom
-    if (flag("look", tileset) === "soft") {
-      l.look = "soft"; // Gaussian-feathered splats (E018); `?softcore=`, `?softscale=`, `?softfalloff=` tune it
-      const num = (name: string, fallback: number): number => { const v = Number(flag(name, tileset)); return v > 0 ? v : fallback; };
-      l.coreScale = num("softcore", l.coreScale);
-      l.softScale = num("softscale", l.softScale);
-      l.softFalloff = num("softfalloff", l.softFalloff);
-    }
-    // `?vivid=<strength>`: brighten and saturate the stored colors (0 as stored; 1.5 default for point-cloud tilesets).
-    const vivid = Number(flag("vivid", tileset) ?? (isExternal(tileset) ? 1.5 : 0));
-    if (Number.isFinite(vivid) && vivid >= 0) l.vivid = vivid;
-    const shade = flag("shade", tileset);
-    if (shade !== undefined && shade !== null && shade !== "" && Number.isFinite(Number(shade))) l.shade = Math.min(1, Math.max(0, Number(shade))); // 0: no shading
+    applyTune(l);
     if (mixed) l.drawAllTiles = true; // the streamer chose tiles of several zooms by distance
-    if (extent > 0) l.extent = extent; // debug: scale every splat's semi-axes, to cover gaps between neighbours
     l.setZOffset(dz + zoomLift());
     l.setDepthTest(depthEl.checked);
     l.setHideClasses(hideCodes());
@@ -304,6 +332,57 @@ map.on("load", () => {
   };
   let layer = makeLayer();
   depthEl.addEventListener("change", () => layer.setDepthTest(depthEl.checked));
+  // The look panel: sliders edit `tune`, the layer follows, and the address bar carries the changed values (`link`).
+  type TuneKey = keyof typeof tuneDefaults;
+  const softEl = document.getElementById("soft") as HTMLInputElement;
+  const basemapEl = document.getElementById("basemap") as HTMLSelectElement;
+  softEl.checked = tune.soft;
+  if (!Object.hasOwn(BASEMAPS, BASEMAP_PARAM)) basemapEl.add(new Option("custom (?basemap=)", BASEMAP_PARAM, true, true));
+  else basemapEl.value = BASEMAP_PARAM;
+  const syncUrl = (): string => {
+    const q = new URLSearchParams(location.search);
+    for (const k of Object.keys(tuneDefaults)) q.delete(k);
+    q.delete("look");
+    const { soft: _soft, ...numbers } = tune;
+    for (const [k, v] of changedParams(numbers, tuneDefaults)) q.set(k, v);
+    if (tune.soft !== softOf(TILESET_DEFAULTS[tileset]?.look ?? null)) q.set("look", tune.soft ? "soft" : "flat");
+    const url = `${location.pathname}${q.size ? `?${q}` : ""}${location.hash}`;
+    history.replaceState(null, "", url);
+    return url;
+  };
+  const repaint = (): void => { applyTune(layer); map.triggerRepaint(); syncUrl(); };
+  const sliderSpecs = [
+    { key: "vivid", label: "vivid", min: 0, max: 3, step: 0.05, title: "Brighten and saturate the stored colors (0: as stored)" },
+    { key: "shade", label: "shade", min: 0, max: 1, step: 0.05, title: "Strength of the shading (0: the colors as stored)" },
+    { key: "extent", label: "splat size", min: 0.5, max: 2.5, step: 0.05, title: "Factor on every splat's semi-axes; covers gaps between neighbours" },
+    { key: "softcore", label: "soft core", min: 0.2, max: 1.5, step: 0.05, title: "Soft look: scale of the opaque core that carries the depth" },
+    { key: "softscale", label: "soft size", min: 1, max: 4, step: 0.05, title: "Soft look: scale of the feathered splat" },
+    { key: "softfalloff", label: "soft edge", min: 1, max: 12, step: 0.25, title: "Soft look: Gaussian falloff exponent (larger: a tighter center)" },
+    { key: "clearance", label: "camera m", min: 0, max: 60, step: 1, title: "Minimum height of the camera above the ground (terrain on; 0: off)" },
+  ] as const;
+  const setSlider = buildSliders(
+    document.getElementById("tune-body") as HTMLElement,
+    sliderSpecs.map((x) => ({ ...x, value: tune[x.key] })),
+    (key, value) => { tune[key as TuneKey] = value; repaint(); },
+  );
+  softEl.addEventListener("change", () => { tune.soft = softEl.checked; repaint(); });
+  basemapEl.addEventListener("change", () => {
+    const q = new URLSearchParams(location.search);
+    q.set("basemap", basemapEl.value);
+    location.search = q.toString(); // a style swap would drop the custom layer: reload
+  });
+  (document.getElementById("tune-reset") as HTMLButtonElement).addEventListener("click", () => {
+    Object.assign(tune, tuneDefaults, { soft: softOf(TILESET_DEFAULTS[tileset]?.look ?? null) });
+    softEl.checked = tune.soft;
+    for (const k of Object.keys(tuneDefaults)) setSlider(k, tune[k as TuneKey]);
+    repaint();
+  });
+  (document.getElementById("tune-link") as HTMLAnchorElement).addEventListener("click", (e) => {
+    e.preventDefault();
+    const url = location.origin + syncUrl();
+    void navigator.clipboard?.writeText(url).catch(() => undefined);
+    (e.currentTarget as HTMLAnchorElement).textContent = "link (copied)";
+  });
   // A class feature was switched: tiles loaded without classes (no plane, and the guess not made because no feature was on) are loaded again.
   const onClassFeature = (): void => {
     layer.setHideClasses(hideCodes());

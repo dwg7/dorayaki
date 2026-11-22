@@ -37,6 +37,14 @@
         <label><input type="checkbox" id="depth" checked /> depth test</label><br />
         <label title="Uses the tile's class plane when it has one; otherwise a guess from the splats (height above the local ground, round shape)"><input type="checkbox" id="hideveg" /> hide vegetation</label><br />
         <label title="Color by class (false color) needs tiles with a class plane (E021)">color: <select id="colormode"><option value="stored">stored</option><option value="class">by class</option></select></label>
+        <details id="tune" style="margin-top: 4px">
+          <summary title="Drawing parameters; the link below reproduces them">look</summary>
+          <label>basemap: <select id="basemap"><option value="nightsky">bvmap-nightsky (dark)</option><option value="starlight">bvmap-starlight (light)</option></select></label><br />
+          <label><input type="checkbox" id="soft" /> soft look (Gaussian-feathered)</label>
+          <div id="tune-body" style="display:grid;gap:2px"></div>
+          <button id="tune-reset" type="button" style="font:inherit;margin-top:3px">reset</button>
+          <a id="tune-link" href="#" style="margin-left:0.6em">link</a>
+        </details>
         <div id="legend" style="font-size: 11px; line-height: 1.5"></div>
         <small>Red dashed line: tile boundary. Ctrl/right-drag to rotate and pitch.</small>
       </div>
