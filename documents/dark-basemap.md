@@ -1,6 +1,6 @@
 # Dark basemap for the splat demo (proposal)
 
-Status: **proposed**, with one prototype measured in the demo. Nothing here is hosted or part of bvmap yet.
+Status: **proposed** (name chosen: `bvmap-nightsky`), with one prototype measured in the demo. Nothing here is hosted or part of bvmap yet.
 
 ## Why
 
@@ -44,12 +44,13 @@ serves both. Notes for the sessions that own them:
 
 ## Name
 
-Starlight names the palette (low saturation, bright, silver gray). The user wants a general-purpose dark style kept
-under a name that replaces it. Candidates in the same family (star, sky, light): `bvmap-nightsky`, `bvmap-midnight`,
-`bvmap-moonlight`. The tea names stay with koicha (the tile set). The choice is the owner's.
+Starlight names the palette (low saturation, bright, silver gray). The general-purpose dark style that is kept beside it
+is named **`bvmap-nightsky`** (chosen by the owner on 2026-11-22; the other candidates were `bvmap-midnight` and
+`bvmap-moonlight`). The tea names stay with koicha (the tile set), so a koicha style from it would follow koicha's own
+naming rule (D20), which is for that repository to settle.
 
 ## Next steps (not started)
 
-1. Pick the name; send this note to the bvmap session (palette, halo, sprite) and the koicha session (generated style).
+1. Send this note to the bvmap session (palette, halo, sprite) and the koicha session (generated style); neither session was running on 2026-11-22.
 2. Prototype as a second palette in `starlight-input.yaml`; compare with the mechanical version above.
 3. Then publish through hfu/stars, with the owner's approval, and point the demo at it.
