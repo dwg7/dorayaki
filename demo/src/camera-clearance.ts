@@ -82,17 +82,22 @@ export interface ClearanceMap {
   setPitch(pitch: number): unknown;
 }
 
-/** Starts keeping the camera `minClearance` metres above the ground on `map`; returns a function that stops it. */
-export function keepCameraClearance(map: ClearanceMap, minClearance: number): () => void {
+/**
+ * Starts keeping the camera `minClearance` metres above the ground on `map`; returns a function that stops it. A function
+ * is asked at every move, so the value can change while it runs (the demo's slider); 0 or less keeps nothing.
+ */
+export function keepCameraClearance(map: ClearanceMap, minClearance: number | (() => number)): () => void {
   let working = false;
   const onMove = (): void => {
     if (working) return;
+    const min = typeof minClearance === "function" ? minClearance() : minClearance;
+    if (!(min > 0)) return;
     const c = map.getCenter();
     const view: ClearanceView = {
       lng: c.lng, lat: c.lat, zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing(),
       heightPx: map.getCanvas().clientHeight, centreElevation: map.getCenterElevation(),
     };
-    const pitch = pitchForClearance(view, (lng, lat) => map.queryTerrainElevation({ lng, lat }) ?? null, minClearance);
+    const pitch = pitchForClearance(view, (lng, lat) => map.queryTerrainElevation({ lng, lat }) ?? null, min);
     if (pitch >= view.pitch - 1e-6) return;
     working = true;
     try {
