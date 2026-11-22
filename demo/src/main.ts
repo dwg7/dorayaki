@@ -288,8 +288,8 @@ map.on("load", () => {
       l.softScale = num("softscale", l.softScale);
       l.softFalloff = num("softfalloff", l.softFalloff);
     }
-    // `?vivid=<strength>`: brighten and saturate the stored colors (0 as stored; 1 default for point-cloud tilesets, E023).
-    const vivid = Number(flag("vivid", tileset) ?? (isExternal(tileset) ? 1 : 0));
+    // `?vivid=<strength>`: brighten and saturate the stored colors (0 as stored; 1.5 default for point-cloud tilesets).
+    const vivid = Number(flag("vivid", tileset) ?? (isExternal(tileset) ? 1.5 : 0));
     if (Number.isFinite(vivid) && vivid >= 0) l.vivid = vivid;
     const shade = flag("shade", tileset);
     if (shade !== undefined && shade !== null && shade !== "" && Number.isFinite(Number(shade))) l.shade = Math.min(1, Math.max(0, Number(shade))); // 0: no shading
