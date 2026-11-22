@@ -146,7 +146,7 @@ const outlines = tiles.filter((t) => t.z === deepest).map((t) => [[0, 0], [1, 0]
  * Basemap: hfu/stars' bvmap-starlight style (GSI optimized vector tiles,
  * nationwide), served by stars.optgeo.org. Used for every tileset.
  */
-const BASEMAP_STYLE = "https://stars.optgeo.org/style/bvmap-starlight";
+const BASEMAP_STYLE = new URLSearchParams(location.search).get("basemap") ?? "https://stars.optgeo.org/style/bvmap-starlight"; // `?basemap=<style URL>`: preview another style
 
 const map = new MapLibreMap({
   container: "map",
