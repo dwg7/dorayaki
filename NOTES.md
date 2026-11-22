@@ -783,3 +783,9 @@ stays 20, pitch 56; no white area; pushing the pitch up again stays at the clamp
 real mouse drag, other bearings, the effect on the frame rate. The pitch does not come back up when the camera moves to
 lower ground (it only ever lowers it).
 
+
+## 2026-11-22: a color grade on the stored colors (`?vivid=`)
+
+The point cloud's colors are dark (the splats on screen in Kawazu, z18.8 pitch 55: mean RGB 66, 69, 64 of 255 with the shading, 68, 71, 67 at z18.5). Judged by eye with CSS filters over the demo canvas (the whole canvas, after shading): brightness 1.35, contrast 1.2, saturation 1.6 reads as natural and clearly more vivid (green canopy, bluish water); brightness 1.6, contrast 1.3, saturation 2.2 is garish and clips the highlights.
+`?vivid=<s>` does it in the vertex shader on the stored color, before the shading (gpu-surfels.ts `GRADE_GLSL`): brightness 1 + 0.35 s, contrast 1 + 0.2 s about mid gray, saturation 1 + 0.6 s, clamped. s = 1 is the first setting above and is the default for the point-cloud tilesets (the synthetic fixtures keep s = 0); `?vivid=0` leaves the stored colors. Class colors (`?color=class`) are not graded. Nothing stored changes.
+Measured with the same view: mean RGB 66, 69, 64 at s = 0 and 87, 94, 82 at s = 1 (brighter by about 30 %, green up a little more). It looks milder than the CSS preview, which also stretches the shaded values; larger s (1.5, 2) was not judged yet. Not checked: the soft look (`?look=soft`) and the dark basemap together, the program for the 16-byte records (versions 4 and 5) and the one for decoded splats got the same edit but were not run (Kawazu is version 6, the 12-byte program).
