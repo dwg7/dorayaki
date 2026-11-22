@@ -156,11 +156,19 @@ gives tile URLs ending in `?v=20261117c`, which miss the stale entries (the four
 and the formerly cached 404 tested were served with the new sizes). The site is built
 with a versioned URL; bump `v` whenever the archive behind a name is replaced.
 
+## Tile-aligned build hosted (2026-11-22)
+
+The hosted archive is now the tile-aligned build of E022 step 3 (`npm run build:tiled`, same recipe and nine meshes):
+83,887,706 bytes (0.18 % smaller than the previous 84,036,082), SHA-256 `6da2b76e...`, equal on the host; a served z17
+tile was byte-identical to the local file. The mesh seam's density dip (about 12 %) measured in the previous archive
+is gone (`measure:seam`). The TileJSON URL is now `?v=20261122a`. The previous archive is kept only locally as
+`demo/tiles/dorayaki-kawazu-cls6.pmtiles`.
+
 The site is rebuilt with:
 
 ```sh
 DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu \
-DORAYAKI_KAWAZU_TILEJSON='https://stars.optgeo.org/dorayaki-kawazu?v=20261117c' npm run site
+DORAYAKI_KAWAZU_TILEJSON='https://stars.optgeo.org/dorayaki-kawazu?v=20261122a' npm run site
 ```
 
 The demo opens Kawazu with terrain on (lowered by 2 m) and splat scale 1.3 by
