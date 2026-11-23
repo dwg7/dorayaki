@@ -24,8 +24,8 @@ export interface PanZoomMap {
 /** A zoom difference below this is rounding, not a change. */
 export const ZOOM_TOLERANCE = 1e-6;
 
-/** Milliseconds the zoom takes to return (about 0.3 zoom levels; long enough not to lurch, short enough not to lag). */
-export const RESTORE_DURATION_MS = 450;
+/** Milliseconds the zoom takes to return: slow enough to read as a camera drift, not a lurch (450 ms was tried first). */
+export const RESTORE_DURATION_MS = 1500;
 
 /**
  * Starts keeping the zoom across pan drags on `map`.

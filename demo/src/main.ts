@@ -287,7 +287,7 @@ map.on("load", () => {
     // A pan drag over terrain ends at another zoom, and panning toward higher ground brings the camera down onto the
     // slope (pan-zoom-keeper.ts); keep the zoom instead. `?keepzoom=0` leaves the map as MapLibre moves it.
     if (flag("keepzoom", tileset) !== "0") {
-      const ease = Number(flag("zoomease", tileset)); // `?zoomease=` milliseconds the zoom takes to return (default 450; 0: jump)
+      const ease = Number(flag("zoomease", tileset)); // `?zoomease=` milliseconds the zoom takes to return (default 1500; 0: jump)
       keepZoomAcrossPans(map, Number.isFinite(ease) && flag("zoomease", tileset) ? Math.max(0, ease) : undefined);
     }
     // `?clearance=<metres>`: lower the pitch just enough to keep the camera that high above the ground under it
