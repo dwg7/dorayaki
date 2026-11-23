@@ -117,7 +117,7 @@ What the larger area showed:
 - **The nine-tile limit** (the streamer holds the nine tiles nearest to the map centre): at zoom 17.2 and pitch 65 the view is 1.1 x 1.6 km and nine z17 tiles
   (0.77 km across, 0.95 million splats, about 11 MB) cover part of it; at 16.6 the nine z16 tiles hold 2.5 million splats, at 15.6 the nine z15 tiles 2.5 million
   (30 MB) for a view of 2.5 x 3.6 km that the data area (11 z15 tiles) exceeds by two. `?mixed=1` (up to 24 tiles of two zooms by distance) at the first view
-  loaded 20 tiles (13 z17, 7 z16): 4.3 million splats, 52 MB, delivered in 1.3 s locally, and fills the view. A count of tiles is a poor budget: a z17 tile
+  loaded 20 tiles (13 z17, 7 z16): 4.3 million splats, 52 MB, delivered in 1.3 s locally, and fills the view. (Decided 2026-11-23: `?mixed=1` is the default for `sasebo`; a first version drew the far tiles empty, fixed, see NOTES.md.) A count of tiles is a poor budget: a z17 tile
   holds 0.1 million splats and a z16 tile 0.3 million; a budget in bytes (or splats) would follow cost. Not decided.
 - At zoom 16.2, pitch 60 the harbour, a park, a river and the town read well in the demo (nine z16 tiles, 3.0 million splats, 36 MB).
 
