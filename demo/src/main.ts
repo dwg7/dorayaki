@@ -74,6 +74,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-lp-sp24": "tiles/kawazu-lp-sp24/tilejson.json",
         "kawazu-mix-sp12": "tiles/kawazu-mix-sp12/tilejson.json",
         "kawazu-mix-sp24": "tiles/kawazu-mix-sp24/tilejson.json",
+        "sasebo-3513": "tiles/sasebo-3513/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;

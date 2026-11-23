@@ -1,6 +1,6 @@
 # Sasebo Bay: areal expansion with the Open Nagasaki point cloud
 
-Status: investigation of one file (2026-11-23) and arithmetic from it. Nothing of Sasebo has been built or rendered yet.
+Status: investigation of one file and a first build of it (2026-11-23), looked at in the local demo. The wide area has not been built.
 
 ## Goal
 
@@ -37,10 +37,36 @@ Streaming voxel counts (`npm run measure:stream -- <las> 1 15 16 17 18`; 4.7 s, 
 | 17 | 0.5 m | 4,878,174 | 1.5 |
 | 18 | 0.25 m | 6,677,153 | 1.1 |
 
+## First build of the one sheet (measured)
+
+`DORAYAKI_BLOCK_VERSION=6 DORAYAKI_ATTRIBUTION='点群: 長崎県 オープンナガサキ (CC BY 4.0) を加工して作成' npm run build:tileset -- 01JE3513.las 1 sasebo-3513 17 16 15`:
+the plain recipe, no adaptive merging and no sparse rule (Kawazu's recipe uses both), 210 s, 0.64 GB resident, 28 tiles.
+
+| zoom | splats | bytes (v6) |
+| ---: | ---: | ---: |
+| 15 | 630,093 | 7.56 MB |
+| 16 | 2,074,342 | 24.89 MB |
+| 17 | 4,878,174 | 58.54 MB |
+| all | 7,582,609 | 90.99 MB (PMTiles 90,994,864 B) |
+
+That is **121 B/m2** for the three zooms and 43 B/m2 for z15 and z16 alone (the estimate below said 44). One splat per voxel at every zoom, so
+the splat counts equal the voxel counts of the table above.
+
+Looked at in the local demo (`?fixture=sasebo-3513`, a development entry, flat look, no terrain; Apple M1, the Browser pane):
+
+- It reads as an aerial photograph made of splats: roofs, roads, a slope covered in trees, in 3D. At z17 with the view tilted 62 degrees (zoom 17.6) and
+  at z16 (zoom 16.9) the result is good.
+- z17 at zoom 18.6, straight down, with the default splat size shows white gaps between splats (1.5 points per voxel); `?extent=1.8` closes them.
+  z17 is therefore usable but thin; z16 (1 m, 3.5 points per voxel) is the better base for this density.
+- The sheet's edges are visible (the data ends at the sheet), as expected for one sheet.
+- The tileset's attribution was the Shizuoka text, hard-coded in `build-tileset.ts` and `build-tiled.ts`; it is now `DORAYAKI_ATTRIBUTION` when set.
+- In the pane the splats appeared only after a `triggerRepaint()` and the status line stayed at "0/6 tiles" although all six had been delivered; not
+  investigated (the pane was freshly opened; may be the hidden-pane effect of NOTES.md).
+
 ## What follows (estimates, not measured on a build)
 
-- **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a fitted splat; 1 m voxels hold 3.5. The useful maxzoom for this data is
-  probably 16 (1 m), with z17 sparse or absent. Not tried: a build of this sheet.
+- **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
+  with a larger splat size (see the first build above).
 - **Size**: z16 alone is 2.07 million splats per 0.75 km2 (12 B each in Surfel Block v6: 25 MB), about 33 B/m2, 44 B/m2 with z15 and z14 above it. For
   about 110 km2 of land, **roughly 5 GB**; with z17 (78 B/m2, the Kawazu figure) about 9 GB. The sea sheets are small.
 - **Input**: about 150 land sheets at 130 to 400 MB: **25 to 60 GB of LAS**.
@@ -53,13 +79,14 @@ Streaming voxel counts (`npm run measure:stream -- <las> 1 15 16 17 18`; 4.7 s, 
 ## Not checked
 
 - Vertical datum against the DEM the demo uses (E010 style comparison); sea level reads about 0 m in this file.
-- How the splats look at 1 m voxels (no build yet), and whether the coast and the water edge need special handling (no returns on water).
+- Whether the coast and the water edge need special handling (no returns on water; this sheet has no sea).
+- Adaptive merging and the sparse rule on this data; terrain in the demo (the Kawazu DEM shift of 2 m is not known to apply).
 - The other sheets' point density and classification (the Nagasaki station sheet has 24 points/m2; this one 9.8).
 - Whether sheets overlap or leave gaps at their edges.
 - The file paths of the other sheets (`<date>/<municipality>` differs by area).
 
 ## Proposed next steps
 
-1. Build this one sheet (`build:tileset`, zone 1, maxzoom 16 and 17) and look at it in the demo; compare z16 against z17.
+1. **Done** (above). Next: the same with the adaptive recipe, and a second sheet beside it (a coastal one) to see the seam and the water edge.
 2. Decide the build route for the whole area against the disk (above); ask the stars session about a multi-GB archive.
 3. Learn the paths of the sheets of the target area (the site's page keeps them in a closure; the selection list shows only ids and sizes).
