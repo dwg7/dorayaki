@@ -63,6 +63,23 @@ Looked at in the local demo (`?fixture=sasebo-3513`, a development entry, flat l
 - In the pane the splats appeared only after a `triggerRepaint()` and the status line stayed at "0/6 tiles" although all six had been delivered; not
   investigated (the pane was freshly opened; may be the hidden-pane effect of NOTES.md).
 
+## Two sheets: one process fails, the tile-aligned build works (measured)
+
+Sheets `01JE3513` and the southern neighbour `01JE3531` (115,026,453 B zip, SHA-256 `5b0898458d2f40a9b5d9bb157ce4d01fd72ec14993e419c6035b3fc52bed30ac`;
+6,473,740 points, 8.6 points/m2, all class 1, RGB present; 1.6 million voxels at 1 m and 4.1 million at 0.5 m), together 13.8 million points on 1.5 km2.
+
+- `build:tileset` with both files in one process (plain recipe) **ran out of memory** after 13 minutes (the 8 GB heap; the voxel Gaussians are ordinary JS
+  objects, `documents/large-point-clouds.md`). One sheet alone takes 210 s and 0.7 GB, so the cost is not linear: a second sheet is the difference.
+- `build:tiled` (E022 step 3) on the same two files with 3 workers, the recipe merging at 3 levels (thickness 0.2, color tolerance 0.2, no sparse rule):
+  **47 s wall** (scatter 2 s, tile jobs 32 s, gather 12 s; the tile jobs add up to 92 s, largest 0.84 GB), shards 221 MB (16 bytes per point as
+  estimated), 51 tiles, 6.14 million splats (z15 0.93 M, z16 2.18 M, z17 3.03 M), **73.7 MB** (PMTiles 73,667,270 B, 49 B/m2). The z17 count is
+  3.0 million against 9 million for the plain recipe of the two sheets. For this extrapolation, about 110 km2 would take about an hour with 3 workers and produce
+  about 5 GB.
+- Seen in the demo (`?fixture=sasebo-tiled`, a development entry; default look): it renders; I did not see a seam at the sheet edge at zoom 18.2, pitch 50.
+  The merging makes large flat discs on parking lots and roofs and visibly coarser areas than the plain z17; whether the recipe (taken from Kawazu) is right
+  for this density was not tuned.
+- The archive is built in memory (E022 step 4 is not done): at 5 GB it would not fit in 8 GB of RAM.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
