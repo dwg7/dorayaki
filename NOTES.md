@@ -818,3 +818,13 @@ Not checked: frame rate on weaker GPUs, the soft look on the 16-byte (versions 4
 2026-11-23: the stars archive `dorayaki-sasebo.pmtiles` is now the eight-sheet one (203,951,931 B, 6 km2, SHA-256 `ed7f8d01...`); the TileJSON pin of the site is `?v=20261123b`. The old pin `?v=20261123a` serves the new file once Cloudflare's 4-hour copies expire (the deployed site lists up to 4,096 tiles, so it copes). Not checked: the deployed page after the merge.
 
 2026-11-23: size against 3D Tiles point clouds (documents/size-vs-3d-tiles.md, `npm run measure:pnts`): the published Open Nagasaki 3D Tiles (Smart Maps, `.pnts`) carry 15.0 bytes per point (measured on six files' headers); on Sasebo airborne points gzip/brotli bring that to 11.3 to 12.6 and 16-bit positions to about 8 (Kawazu airborne: 7.8 to 9.3). Dorayaki is 2.8 times smaller than `.pnts` at Sasebo (204 MB for 37.85 M points; 1.5 times smaller than 16-bit + brotli) and 85 times at Kawazu (83.9 MB for 476 M points; 44 to 47 times). The advantage follows density, because splats, not points, are stored; the price is the individual points. Draco and a real 3D Tiles tool were not run.
+
+## 2026-11-23: `?mixed=1` drew the far tiles empty (Sasebo)
+
+Observed at Sasebo (`?fixture=sasebo&mixed=1`, camera 16.6 / pitch 45 to 60): everything north of the view centre was dark although 20 tiles were "drawn".
+The layer's tile list showed the z16 tiles with `packed: 0` (the float-attribute path) and no splats, while the z17 tiles were packed and visible.
+Cause: the demo hands each tile's data to the layer and drops its own copy. With `staged`, the z16 stage set and the final set share z16 tiles; the
+final `setTiles` replaced the stage set before the next frame applied it, so those tiles reached the layer the second time with no data and were uploaded empty.
+Fix: `inheritPendingData` (`demo/src/pending-tiles.ts`) gives a tile arriving without data the data of the same tile in the unapplied set. After the fix the same view
+draws 20 tiles, 3.68 million splats, 44 MB, and the far half is filled (nine z16 tiles of the default selection: 2.60 million splats, 31 MB).
+
