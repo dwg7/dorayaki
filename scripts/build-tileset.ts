@@ -203,7 +203,7 @@ const stats = {
 };
 const manifest = {
   name: `${name}: aggregated z${config.aggregatedZooms.join(",")}, maxzoom z${config.maxzoom}`,
-  attribution: "点群: 静岡県 VIRTUAL SHIZUOKA (CC BY) を加工して作成",
+  attribution: process.env.DORAYAKI_ATTRIBUTION ?? "点群: 静岡県 VIRTUAL SHIZUOKA (CC BY) を加工して作成", // `DORAYAKI_ATTRIBUTION` for other sources
   verticalDatum: "orthometric height (標高), metres, as in the source LAS",
   centre: [origin.lng, origin.lat], maxzoom: config.maxzoom, tiles: manifestTiles, bounds, stats,
 };

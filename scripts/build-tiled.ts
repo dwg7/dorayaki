@@ -276,7 +276,7 @@ async function orchestrate(argv: string[]): Promise<void> {
     const stats = { inputs: specs, workers, points: scatterStats.reduce((n, s) => n + s.kept, 0), tiles: manifestTiles.length, maxzoomTiles: top.length, perZoom, tileBytes: manifestTiles.reduce((n, t) => n + t.bytes, 0) };
     const manifest = {
       name: `${name}: tile-aligned build, aggregated z16,15, maxzoom z${ZOOM}`,
-      attribution: "点群: 静岡県 VIRTUAL SHIZUOKA (CC BY) を加工して作成",
+      attribution: process.env.DORAYAKI_ATTRIBUTION ?? "点群: 静岡県 VIRTUAL SHIZUOKA (CC BY) を加工して作成", // `DORAYAKI_ATTRIBUTION` for other sources
       verticalDatum: "orthometric height (標高), metres, as in the source LAS",
       centre: [origin.lng, origin.lat], maxzoom: ZOOM, tiles: manifestTiles, bounds, stats,
     };
