@@ -11,7 +11,7 @@
  */
 import type { TileAddress } from "../../src/tile-geometry.js";
 import { selectZoom } from "./tile-selection.js";
-import { viewTiles, type LngLatBoundsArray } from "./tile-view.js";
+import { viewTiles, type LngLatArray, type LngLatBoundsArray } from "./tile-view.js";
 
 export interface StreamedTile<T> { tile: TileAddress; data: T }
 
@@ -73,11 +73,14 @@ export class TileStreamer<T> {
     }));
   }
 
-  /** Ask for the tiles of the zoom selected for `displayZoom` that intersect `bounds`. */
-  update(displayZoom: number, bounds: LngLatBoundsArray): void {
+  /**
+   * Ask for the tiles of the zoom selected for `displayZoom` that intersect `bounds`; when there are more than `limit`,
+   * keep those nearest to `centre` (the point the map looks at; default: the centre of `bounds`).
+   */
+  update(displayZoom: number, bounds: LngLatBoundsArray, centre?: LngLatArray): void {
     const wanted = this.opts.select
       ? this.opts.select(displayZoom, bounds)
-      : viewTiles(this.opts.candidates, selectZoom(this.zooms, displayZoom), bounds, this.limit);
+      : viewTiles(this.opts.candidates, selectZoom(this.zooms, displayZoom), bounds, this.limit, centre);
     const zoom = this.opts.select ? Math.max(-Infinity, ...wanted.map((t) => t.z)) : selectZoom(this.zooms, displayZoom);
     const signature = wanted.map(key).join(",");
     if (signature === this.lastSignature) return;
@@ -89,7 +92,7 @@ export class TileStreamer<T> {
     // First delivery: the next coarser zoom of this view, if the target is still loading when it arrives.
     const stageZoom = this.opts.staged && !this.delivered ? Math.max(-Infinity, ...this.zooms.filter((z) => z < zoom)) : -Infinity;
     if (Number.isFinite(stageZoom)) {
-      const stage = this.opts.select ? this.opts.select(displayZoom, bounds, stageZoom) : viewTiles(this.opts.candidates, stageZoom, bounds, this.limit);
+      const stage = this.opts.select ? this.opts.select(displayZoom, bounds, stageZoom) : viewTiles(this.opts.candidates, stageZoom, bounds, this.limit, centre);
       void this.fetchSet(stage).then((results) => {
         for (const [i, t] of stage.entries()) { this.inflight.delete(key(t)); this.held.set(key(t), results[i] ?? null); }
         if (generation !== this.generation || this.delivered) return; // superseded, or the target set got there first

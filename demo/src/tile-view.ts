@@ -1,15 +1,22 @@
 /**
  * Which tiles of one zoom to load for a view: those that intersect the view's
  * bounds, nearest to its centre first, at most `limit`. No DOM, network or WebGL.
+ *
+ * `centre` is the point the nearness is measured from: the point the map is looking at. Without it the centre of the
+ * bounds is used, which is wrong for a tilted view (the bounds run out towards the horizon, so their centre lies on
+ * the far side and the tiles under the camera are the ones dropped by `limit`).
  */
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 
 /** [west, south, east, north] in degrees. */
 export type LngLatBoundsArray = readonly [number, number, number, number];
 
-export function viewTiles(candidates: readonly TileAddress[], zoom: number, bounds: LngLatBoundsArray, limit: number): TileAddress[] {
+/** [longitude, latitude] in degrees. */
+export type LngLatArray = readonly [number, number];
+
+export function viewTiles(candidates: readonly TileAddress[], zoom: number, bounds: LngLatBoundsArray, limit: number, centre?: LngLatArray): TileAddress[] {
   const [w, s, e, n] = bounds;
-  const cx = (w + e) / 2, cy = (s + n) / 2;
+  const cx = centre ? centre[0] : (w + e) / 2, cy = centre ? centre[1] : (s + n) / 2;
   const scored: Array<{ tile: TileAddress; d: number }> = [];
   for (const t of candidates) {
     if (t.z !== zoom) continue;
