@@ -8,55 +8,68 @@
  * and `moveend`, with no `zoomstart`.
  *
  * This puts the zoom back to what it was when the drag started, so the camera keeps its distance to the center and
- * rises with the ground. A zoom the user asks for during the drag (`zoomstart`: wheel, pinch, double click) is kept.
- * It is a workaround in the demo, not a change to MapLibre.
+ * rises with the ground. It does so with a short ease, not a jump: a jump read as a lurch right after the drag. A
+ * zoom the user asks for during the drag (`zoomstart`: wheel, pinch, double click) is kept, and a new drag or zoom
+ * during the ease stops it where it is. It is a workaround in the demo, not a change to MapLibre.
  */
 
 /** The part of a MapLibre map this needs. */
 export interface PanZoomMap {
-  on(type: "dragstart" | "zoomstart" | "moveend", listener: () => void): unknown;
-  off(type: "dragstart" | "zoomstart" | "moveend", listener: () => void): unknown;
+  on(type: "dragstart" | "dragend" | "zoomstart" | "moveend", listener: () => void): unknown;
+  off(type: "dragstart" | "dragend" | "zoomstart" | "moveend", listener: () => void): unknown;
   getZoom(): number;
-  jumpTo(options: { zoom: number }): unknown;
+  easeTo(options: { zoom: number; duration: number }): unknown;
 }
 
 /** A zoom difference below this is rounding, not a change. */
 export const ZOOM_TOLERANCE = 1e-6;
 
+/** Milliseconds the zoom takes to return (about 0.3 zoom levels; long enough not to lurch, short enough not to lag). */
+export const RESTORE_DURATION_MS = 450;
+
 /**
  * Starts keeping the zoom across pan drags on `map`.
  * @returns a function that stops it
  */
-export function keepZoomAcrossPans(map: PanZoomMap): () => void {
+export function keepZoomAcrossPans(map: PanZoomMap, duration = RESTORE_DURATION_MS): () => void {
   /** The zoom when the pan drag under way started; null when no drag is under way or the user zoomed during it. */
   let zoomAtDragStart: number | null = null;
-  /** True while this puts the zoom back, so that the events of its own `jumpTo` are not taken for the user's. */
-  let restoring = false;
+  /** The zoom the ease in progress is heading for; null when none is. The events of that ease are not the user's. */
+  let restoringTo: number | null = null;
+
+  /** Whether a drag is under way: a `moveend` then is the end of something it interrupted, not of the drag. */
+  let dragging = false;
 
   const onDragStart = (): void => {
-    zoomAtDragStart = map.getZoom();
+    dragging = true;
+    // A drag that interrupts the ease keeps the zoom the ease was heading for, not the half-way value.
+    zoomAtDragStart = restoringTo ?? map.getZoom();
+    restoringTo = null;
+  };
+  const onDragEnd = (): void => {
+    dragging = false;
   };
   const onZoomStart = (): void => {
-    if (!restoring) zoomAtDragStart = null;
+    if (restoringTo === null) zoomAtDragStart = null;
   };
   const onMoveEnd = (): void => {
-    if (restoring || zoomAtDragStart === null) return;
+    if (dragging) return;
+    if (restoringTo !== null) { restoringTo = null; return; } // the ease ended (or was stopped by the user)
+    if (zoomAtDragStart === null) return;
     const zoom = zoomAtDragStart;
     zoomAtDragStart = null;
     if (Math.abs(map.getZoom() - zoom) < ZOOM_TOLERANCE) return;
-    restoring = true;
-    try {
-      map.jumpTo({ zoom });
-    } finally {
-      restoring = false;
-    }
+    restoringTo = zoom;
+    map.easeTo({ zoom, duration });
   };
 
   map.on("dragstart", onDragStart);
+  map.on("dragend", onDragEnd);
   map.on("zoomstart", onZoomStart);
   map.on("moveend", onMoveEnd);
   return () => {
     map.off("dragstart", onDragStart);
+    map.off("dragend", onDragEnd);
     map.off("zoomstart", onZoomStart);
     map.off("moveend", onMoveEnd);
   };

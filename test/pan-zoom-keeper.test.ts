@@ -3,13 +3,19 @@ import { test } from "node:test";
 
 import { keepZoomAcrossPans, type PanZoomMap } from "../demo/src/pan-zoom-keeper.js";
 
-type EventType = "dragstart" | "zoomstart" | "moveend";
+type EventType = "dragstart" | "dragend" | "zoomstart" | "moveend";
 
-/** A map that keeps a zoom, counts `jumpTo` calls and fires `zoomstart` and `moveend` from `jumpTo`, as MapLibre does. */
+/**
+ * A map that keeps a zoom and records `easeTo` calls. Like MapLibre it fires `zoomstart` when an ease begins and
+ * `moveend` when it ends (`finishEase`) or is stopped (`stopEase`); the zoom is already at the target when it ends.
+ */
 class FakeMap implements PanZoomMap {
   zoom: number;
+  /** The zooms asked for by `easeTo`, and their durations. */
   jumps: number[] = [];
-  private listeners: Record<EventType, Array<() => void>> = { dragstart: [], zoomstart: [], moveend: [] };
+  durations: number[] = [];
+  private easing: number | null = null;
+  private listeners: Record<EventType, Array<() => void>> = { dragstart: [], dragend: [], zoomstart: [], moveend: [] };
 
   constructor(zoom: number) {
     this.zoom = zoom;
@@ -26,17 +32,32 @@ class FakeMap implements PanZoomMap {
   getZoom(): number {
     return this.zoom;
   }
-  jumpTo({ zoom }: { zoom: number }): void {
+  easeTo({ zoom, duration }: { zoom: number; duration: number }): void {
     this.jumps.push(zoom);
-    this.zoom = zoom;
+    this.durations.push(duration);
+    this.easing = zoom;
     this.fire("zoomstart");
+  }
+  /** The ease in progress runs to its end. */
+  finishEase(): void {
+    assert.notEqual(this.easing, null, "no ease in progress");
+    this.zoom = this.easing!;
+    this.easing = null;
     this.fire("moveend");
   }
-  /** A pan drag whose end leaves the map at `zoomAfter`, as MapLibre's re-solve over terrain does. */
+  /** The ease in progress is stopped half way (by the user starting something else). */
+  stopEase(halfWay: number): void {
+    this.zoom = halfWay;
+    this.easing = null;
+    this.fire("moveend");
+  }
+  /** A pan drag whose end leaves the map at `zoomAfter`, as MapLibre's re-solve over terrain does; any restore is run out. */
   panDrag(zoomAfter: number): void {
     this.fire("dragstart");
+    this.fire("dragend");
     this.zoom = zoomAfter;
     this.fire("moveend");
+    if (this.easing !== null) this.finishEase();
   }
 }
 
@@ -68,6 +89,7 @@ test("a zoom the user asks for during the drag is kept", () => {
   keepZoomAcrossPans(map);
   map.fire("dragstart");
   map.fire("zoomstart");
+  map.fire("dragend");
   map.zoom = 19;
   map.fire("moveend");
   assert.deepEqual(map.jumps, []);
@@ -99,4 +121,49 @@ test("stopping it leaves the map as MapLibre moves it", () => {
   map.panDrag(17.373);
   assert.deepEqual(map.jumps, []);
   assert.equal(map.getZoom(), 17.373);
+});
+
+test("the zoom is put back with an ease, not a jump", () => {
+  const map = new FakeMap(17.72);
+  keepZoomAcrossPans(map);
+  map.fire("dragstart");
+  map.fire("dragend");
+  map.zoom = 18.3;
+  map.fire("moveend");
+  assert.deepEqual(map.jumps, [17.72]);
+  assert.ok(map.durations[0]! >= 200, "an ease long enough to be seen as one");
+  assert.equal(map.getZoom(), 18.3, "the zoom is still MapLibre's until the ease runs");
+  map.finishEase();
+  assert.equal(map.getZoom(), 17.72);
+  assert.deepEqual(map.jumps, [17.72], "the end of the ease does not start another");
+});
+
+test("a drag that interrupts the ease heads for the zoom the ease was heading for", () => {
+  const map = new FakeMap(17.72);
+  keepZoomAcrossPans(map);
+  map.fire("dragstart");
+  map.fire("dragend");
+  map.zoom = 18.3;
+  map.fire("moveend");             // the ease towards 17.72 starts
+  map.fire("dragstart");           // the user drags again, half way ...
+  map.stopEase(18.0);              // ... which stops the ease at 18.0 (a moveend during the drag)
+  assert.deepEqual(map.jumps, [17.72], "no new ease while the drag is under way");
+  map.fire("dragend");
+  map.zoom = 18.4;                 // MapLibre's re-solve at the end of this drag
+  map.fire("moveend");
+  assert.deepEqual(map.jumps, [17.72, 17.72]);
+});
+
+test("a zoom the user asks for during the ease is not undone afterwards", () => {
+  const map = new FakeMap(17.72);
+  keepZoomAcrossPans(map);
+  map.fire("dragstart");
+  map.fire("dragend");
+  map.zoom = 18.3;
+  map.fire("moveend");             // ease starts
+  map.stopEase(19);                // the wheel stops it at the user's zoom
+  assert.equal(map.getZoom(), 19);
+  map.zoom = 18;
+  map.fire("moveend");             // a later plain move
+  assert.deepEqual(map.jumps, [17.72]);
 });
