@@ -93,6 +93,34 @@ tiles because Martin 1.14 cannot read gzip MLT; 51 tiles, 6.14 million splats, z
 - Demo defaults for `sasebo`: terrain on and splat size 1.3 as for Kawazu; the dark basemap (bvmap-nightsky) like every point-cloud tileset.
 - A showing view: `#map=16.4/33.1768/129.7215/-30/62` (the site's own start is zoom 18.5, close on a wooded slope).
 
+## Eight sheets, 6 km2 (measured, local; not yet hosted)
+
+The six sheets beside the first two (west, with the harbour, and south), all under `storage/20230712/sasebo-si_saza-chou/` on the Open Nagasaki site:
+
+| sheet | zip bytes | SHA-256 of the zip |
+| --- | ---: | --- |
+| `01JE3424` | 146,696,906 | `6761d3af9f7a1cd8bf7341dbec4d7261087079bdb3e522208ea3c2216642c8d5` |
+| `01JE3442` | 119,937,444 | `f40a1784fc09c5fee25c0f4ce16fc0a0ace1b94894e3c75f061c318a6c76309b` |
+| `01JE3444` | 67,739,094 | `a65d42f0b60954fb8f2294eab0f4e6fef7d205b68a2d98eeef3d124a71d1f946` |
+| `01JE3533` | 69,996,545 | `86e506c084d32311c4850caff916d3a160b44c907a89faaefcf807b6aa04b87e` |
+| `01JE4422` | 16,514,268 | `d14ddaa992fe8d88ef1431043cf1879f216780b0e881d27278e1af1b1adb1c64` |
+| `01JE4511` | 6,892,309 | `3c14a9097752a90512095649d37fca5ca56a565dae31cca1380734ca4b4fe525` |
+
+`build:tiled` on the eight sheets (37.85 million points; the same recipe as the two-sheet build; 3 workers): **104 s**, 145 tiles (103 at z17), 17.0 million splats
+(z15 2.54 M, z16 6.05 M, z17 8.41 M), **204.0 MB** (PMTiles 203,951,931 B; 34 B/m2 of the 6 km2 including the sea), shards 606 MB, a tile job
+at most 1.05 GB, the whole process 1.1 GB. Written with the streaming writer.
+
+What the larger area showed:
+
+- **The demo refused it**: the TileJSON lists every tile of the bounds at every zoom (164 here) and the demo's guard was 64. The guard is now 4,096 and counts before it lists
+  (a country-sized bound used to overflow the stack in `tiles.push(...)` before the guard looked).
+- **The nine-tile limit** (the streamer holds the nine tiles nearest to the map centre): at zoom 17.2 and pitch 65 the view is 1.1 x 1.6 km and nine z17 tiles
+  (0.77 km across, 0.95 million splats, about 11 MB) cover part of it; at 16.6 the nine z16 tiles hold 2.5 million splats, at 15.6 the nine z15 tiles 2.5 million
+  (30 MB) for a view of 2.5 x 3.6 km that the data area (11 z15 tiles) exceeds by two. `?mixed=1` (up to 24 tiles of two zooms by distance) at the first view
+  loaded 20 tiles (13 z17, 7 z16): 4.3 million splats, 52 MB, delivered in 1.3 s locally, and fills the view. A count of tiles is a poor budget: a z17 tile
+  holds 0.1 million splats and a z16 tile 0.3 million; a budget in bytes (or splats) would follow cost. Not decided.
+- At zoom 16.2, pitch 60 the harbour, a park, a river and the town read well in the demo (nine z16 tiles, 3.0 million splats, 36 MB).
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable

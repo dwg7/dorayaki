@@ -9,7 +9,8 @@
  *            data/tiled-work/<name>/shards/<x>_<y>/<file index>.bin (16-byte records, src/pointcloud/tile-shard.ts);
  *   tile     one job per z17 tile, the biggest first: its shards in file order -> buildTilePieces -> the final z17 tile, and the pieces of z16 and z15 as JSON;
  *   gather   the pieces joined by position into the z16 and z15 tiles;
- *   archive  demo/tiles/<name>/ (tiles, tilejson.json, manifest.json) and demo/tiles/dorayaki-<name>.pmtiles (built in memory; a streaming writer is step 4).
+ *   archive  demo/tiles/<name>/ (tiles, tilejson.json, manifest.json) and demo/tiles/dorayaki-<name>.pmtiles, written from the tile files on disk one at a
+ *            time (src/pmtiles-file.ts, E022 step 4): memory does not grow with the size of the archive.
  * A finished scatter file or tile job leaves a marker, so a rerun with the same work directory skips it. The recipe comes from the same
  * environment as build-tileset.ts: DORAYAKI_ADAPTIVE_LEVELS (required), _THICKNESS, _COLOR, _SPARSE, _SPARSE_SCALE, DORAYAKI_CLASS_PLANE,
  * DORAYAKI_BLOCK_VERSION, DORAYAKI_TILE_COMPRESSION. The result does not depend on the number of workers (same bytes).
@@ -25,7 +26,8 @@ import { encodeDemoTile } from "../demo/src/demo-tile.js";
 import { encodeClassPlane } from "../src/class-plane.js";
 import { jprcsToLatLng } from "../src/geodesy/jprcs.js";
 import { TileFramer } from "../src/geodesy/tile-frame.js";
-import { PmtilesCompression, PmtilesTileType, writePmtiles } from "../src/pmtiles.js";
+import { PmtilesCompression, PmtilesTileType } from "../src/pmtiles.js";
+import { writePmtilesFile } from "../src/pmtiles-file.js";
 import { PLANE_CLASS_SLOTS, planeClassSlot, planeOpacityOf, planeSlotToCode } from "../src/pointcloud/class-slots.js";
 import { forEachLasRecord, parseLasHeader } from "../src/pointcloud/las.js";
 import { parseLasSpec } from "../src/pointcloud/las-spec.js";
@@ -230,19 +232,18 @@ async function orchestrate(argv: string[]): Promise<void> {
   const jobStats = tiles.map((t) => JSON.parse(readFileSync(`${work}/done/${t.x}_${t.y}.json`, "utf8")) as { points: number; seconds: number; maxRssMB: number; perZoom: Record<number, number> });
 
   // gather
-  const archiveTiles: Array<{ z: number; x: number; y: number; data: Uint8Array }> = [];
+  const archiveTiles: TileAddress[] = [];
   const manifestTiles: Array<TileAddress & { levels: number[]; bytes: number }> = [];
   const perZoom: Record<number, { tiles: number; splats: number; bytes: number }> = {};
-  const add = (t: TileAddress, data: Uint8Array, splats: number): void => {
-    archiveTiles.push({ ...t, data });
-    manifestTiles.push({ ...t, levels: [splats], bytes: data.byteLength });
+  const add = (t: TileAddress, bytes: number, splats: number): void => {
+    archiveTiles.push(t);
+    manifestTiles.push({ ...t, levels: [splats], bytes });
     const pz = (perZoom[t.z] ??= { tiles: 0, splats: 0, bytes: 0 });
-    pz.tiles++; pz.splats += splats; pz.bytes += data.byteLength;
+    pz.tiles++; pz.splats += splats; pz.bytes += bytes;
   };
   await clock("gather", () => {
     for (const t of tiles) {
-      const data = new Uint8Array(readFileSync(`${out}/${ZOOM}/${t.x}/${t.y}.mlt`));
-      add({ z: ZOOM, x: t.x, y: t.y }, data, jobStats[tiles.indexOf(t)]!.perZoom[ZOOM]!);
+      add({ z: ZOOM, x: t.x, y: t.y }, statSync(`${out}/${ZOOM}/${t.x}/${t.y}.mlt`).size, jobStats[tiles.indexOf(t)]!.perZoom[ZOOM]!);
     }
     for (const z of [16, 15]) {
       for (const xd of readdirSync(`${work}/pieces/${z}`)) for (const yd of readdirSync(`${work}/pieces/${z}/${xd}`)) {
@@ -259,7 +260,7 @@ async function orchestrate(argv: string[]): Promise<void> {
         const data = encodeTile(splats);
         mkdirSync(`${out}/${z}/${t.x}`, { recursive: true });
         writeFileSync(`${out}/${z}/${t.x}/${t.y}.mlt`, data);
-        add(t, data, splats.length);
+        add(t, data.byteLength, splats.length);
       }
     }
     archiveTiles.sort((a, b) => a.z - b.z || a.x - b.x || a.y - b.y);
@@ -283,14 +284,16 @@ async function orchestrate(argv: string[]): Promise<void> {
     writeFileSync(`${out}/manifest.json`, JSON.stringify(manifest, null, 2) + "\n");
     writeFileSync(`${out}/tilejson.json`, JSON.stringify({ tilejson: "3.0.0", name: manifest.name, attribution: manifest.attribution, tiles: ["{z}/{x}/{y}.mlt"], minzoom: 15, maxzoom: ZOOM, bounds, center: [origin.lng, origin.lat, ZOOM] }, null, 2) + "\n");
     const gzipTiles = process.env.DORAYAKI_TILE_COMPRESSION === "gzip";
-    const archive = writePmtiles(gzipTiles ? archiveTiles.map((t) => ({ ...t, data: gz(t.data) })) : archiveTiles, {
+    const tileFile = (t: TileAddress): string => `${out}/${t.z}/${t.x}/${t.y}.mlt`;
+    const archiveBytes = writePmtilesFile(`demo/tiles/dorayaki-${name}.pmtiles`, archiveTiles.map((t) => ({
+      ...t, read: () => (gzipTiles ? gz(readFileSync(tileFile(t))) : new Uint8Array(readFileSync(tileFile(t)))),
+    })), {
       tileType: PmtilesTileType.Mlt, bounds, ...(gzipTiles ? { tileCompression: PmtilesCompression.Gzip } : {}), center: [origin.lng, origin.lat, ZOOM],
       internal: { compression: PmtilesCompression.Gzip, compress: (b) => new Uint8Array(gzipSync(b)) },
       metadata: { name: manifest.name, attribution: manifest.attribution, dorayaki: manifest },
     });
-    writeFileSync(`demo/tiles/dorayaki-${name}.pmtiles`, archive);
     console.log(JSON.stringify({
-      ...stats, pmtilesBytes: archive.byteLength, shardBytes, seconds: stage,
+      ...stats, pmtilesBytes: archiveBytes, shardBytes, seconds: stage,
       tileJobs: { count: jobStats.length, secondsSum: jobStats.reduce((n, s) => n + s.seconds, 0), maxRssMB: Math.max(...jobStats.map((s) => s.maxRssMB)) },
       scatterClamped: scatterStats.reduce((n, s) => n + s.clamped, 0), tileWidthMetres: tileWidthMetres({ z: ZOOM, x: tiles[0]!.x, y: tiles[0]!.y }),
     }, null, 2));

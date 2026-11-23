@@ -160,20 +160,36 @@ function buildDirectories(entries: readonly DirEntry[], pack: (bytes: Uint8Array
   }
 }
 
-export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOptions): Uint8Array {
-  if (tiles.length === 0) throw new RangeError("no tiles");
-  const entries = tiles
-    .map((t) => ({ id: zxyToTileId(t.z, t.x, t.y), t }))
-    .sort((a, b) => a.id - b.id);
-  for (let i = 1; i < entries.length; i++) {
-    if (entries[i]!.id === entries[i - 1]!.id) throw new RangeError(`duplicate tile ${entries[i]!.t.z}/${entries[i]!.t.x}/${entries[i]!.t.y}`);
-  }
+/** What the archive's directories need to know about one tile: its ID, zoom and stored length. */
+export interface PmtilesIndexEntry {
+  tileId: number;
+  z: number;
+  length: number;
+}
 
-  // Tile data offsets (contiguous, in tile-ID order).
-  const dataOffsets: number[] = [];
+/** Tiles sorted by tile ID, checked for duplicates (`describe` names tile i in the error). */
+export function sortedIndex(items: ReadonlyArray<{ z: number; x: number; y: number }>): Array<{ i: number; tileId: number }> {
+  const order = items.map((t, i) => ({ i, tileId: zxyToTileId(t.z, t.x, t.y) })).sort((a, b) => a.tileId - b.tileId);
+  for (let k = 1; k < order.length; k++) {
+    if (order[k]!.tileId === order[k - 1]!.tileId) {
+      const t = items[order[k]!.i]!;
+      throw new RangeError(`duplicate tile ${t.z}/${t.x}/${t.y}`);
+    }
+  }
+  return order;
+}
+
+/**
+ * Everything of the archive that comes before the tile data: header, root directory, metadata and leaf directories,
+ * for tiles stored contiguously in the order of `index` (sorted by tile ID, unique). The tile data itself follows
+ * (`tileDataLength` bytes), so a writer can produce it without holding it: `writePmtiles` appends it in memory and
+ * `writePmtilesFile` (pmtiles-file.ts) copies it from disk.
+ */
+export function pmtilesHead(index: readonly PmtilesIndexEntry[], options: PmtilesOptions): { head: Uint8Array; tileDataLength: number } {
+  if (index.length === 0) throw new RangeError("no tiles");
+  const dirEntries: DirEntry[] = [];
   let offset = 0;
-  for (const e of entries) { dataOffsets.push(offset); offset += e.t.data.byteLength; }
-  const dirEntries: DirEntry[] = entries.map((e, i) => ({ tileId: e.id, offset: dataOffsets[i]!, length: e.t.data.byteLength, runLength: 1 }));
+  for (const e of index) { dirEntries.push({ tileId: e.tileId, offset, length: e.length, runLength: 1 }); offset += e.length; }
 
   const pack = (bytes: Uint8Array) => (options.internal ? options.internal.compress(bytes) : bytes);
   const { root, leaves } = buildDirectories(dirEntries, pack);
@@ -184,7 +200,7 @@ export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOpti
   const leafOffset = metadataOffset + metadata.byteLength;
   const tileDataOffset = leafOffset + leaves.byteLength;
   const tileDataLength = offset;
-  const out = new Uint8Array(tileDataOffset + tileDataLength);
+  const out = new Uint8Array(tileDataOffset);
   const v = new DataView(out.buffer);
 
   "PMTiles".split("").forEach((c, i) => (out[i] = c.charCodeAt(0)));
@@ -197,16 +213,17 @@ export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOpti
   setU64(v, 48, leaves.byteLength);
   setU64(v, 56, tileDataOffset);
   setU64(v, 64, tileDataLength);
-  setU64(v, 72, entries.length); // addressed tiles
-  setU64(v, 80, entries.length); // tile entries
-  setU64(v, 88, entries.length); // tile contents
+  setU64(v, 72, index.length); // addressed tiles
+  setU64(v, 80, index.length); // tile entries
+  setU64(v, 88, index.length); // tile contents
   out[96] = 1; // clustered
   out[97] = options.internal?.compression ?? PmtilesCompression.None; // internal compression
   out[98] = options.tileCompression ?? PmtilesCompression.None;
   out[99] = options.tileType;
-  const zooms = tiles.map((t) => t.z);
-  out[100] = Math.min(...zooms);
-  out[101] = Math.max(...zooms);
+  let minZ = Infinity, maxZ = -Infinity;
+  for (const e of index) { if (e.z < minZ) minZ = e.z; if (e.z > maxZ) maxZ = e.z; }
+  out[100] = minZ;
+  out[101] = maxZ;
   const e7 = (deg: number) => Math.round(deg * 1e7);
   v.setInt32(102, e7(options.bounds[0]), true);
   v.setInt32(106, e7(options.bounds[1]), true);
@@ -219,10 +236,20 @@ export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOpti
   out.set(root, rootOffset);
   out.set(metadata, metadataOffset);
   out.set(leaves, leafOffset);
-  let o = tileDataOffset;
-  for (const e of entries) {
-    out.set(e.t.data, o);
-    o += e.t.data.byteLength;
+  return { head: out, tileDataLength };
+}
+
+export function writePmtiles(tiles: readonly PmtilesTile[], options: PmtilesOptions): Uint8Array {
+  if (tiles.length === 0) throw new RangeError("no tiles");
+  const order = sortedIndex(tiles);
+  const { head, tileDataLength } = pmtilesHead(order.map((o) => ({ tileId: o.tileId, z: tiles[o.i]!.z, length: tiles[o.i]!.data.byteLength })), options);
+  const out = new Uint8Array(head.byteLength + tileDataLength);
+  out.set(head, 0);
+  let o = head.byteLength;
+  for (const e of order) {
+    const data = tiles[e.i]!.data;
+    out.set(data, o);
+    o += data.byteLength;
   }
   return out;
 }
