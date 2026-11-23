@@ -469,7 +469,8 @@ map.on("load", () => {
   });
   const refresh = (): void => {
     const b = map.getBounds();
-    streamer.update(lod > 0 ? lod : map.getZoom(), [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+    const c = map.getCenter(); // nearness is measured from where the map looks, not from the middle of the bounds (tilted views)
+    streamer.update(lod > 0 ? lod : map.getZoom(), [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], [c.lng, c.lat]);
   };
   map.on("moveend", refresh);
   if (terrain > 0) map.on("zoom", () => layer.setZOffset(dz + zoomLift()));
