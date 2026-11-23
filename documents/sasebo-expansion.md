@@ -93,7 +93,7 @@ tiles because Martin 1.14 cannot read gzip MLT; 51 tiles, 6.14 million splats, z
 - Demo defaults for `sasebo`: terrain on and splat size 1.3 as for Kawazu; the dark basemap (bvmap-nightsky) like every point-cloud tileset.
 - A showing view: `#map=16.4/33.1768/129.7215/-30/62` (the site's own start is zoom 18.5, close on a wooded slope).
 
-## Eight sheets, 6 km2 (measured, local; not yet hosted)
+## Eight sheets, 6 km2 (measured; hosted 2026-11-23)
 
 The six sheets beside the first two (west, with the harbour, and south), all under `storage/20230712/sasebo-si_saza-chou/` on the Open Nagasaki site:
 
@@ -120,6 +120,10 @@ What the larger area showed:
   loaded 20 tiles (13 z17, 7 z16): 4.3 million splats, 52 MB, delivered in 1.3 s locally, and fills the view. A count of tiles is a poor budget: a z17 tile
   holds 0.1 million splats and a z16 tile 0.3 million; a budget in bytes (or splats) would follow cost. Not decided.
 - At zoom 16.2, pitch 60 the harbour, a park, a river and the town read well in the demo (nine z16 tiles, 3.0 million splats, 36 MB).
+
+Hosted: `dorayaki-sasebo.pmtiles` on stars was replaced by this archive (203,951,931 B, SHA-256 `ed7f8d01a03243c62dc9135ddd6e54795d81b751e3f4c2d3c993c6c9220e0375`; the two-sheet one, `f49dc400...`, is kept locally as
+`demo/tiles/dorayaki-sasebo-2sheets.pmtiles`). The site's TileJSON pin is `?v=20261123b`. Procedure: scp to `.dorayaki-sasebo.pmtiles.new.<rand>`, sha256 on the host, `rm` of the old file, 8 s, `mv -n`
+(the `rm` of a served file was refused by the session's permission classifier until the user allowed it). Checked afterwards: the TileJSON (bounds 129.7018 to 129.7266, 33.1536 to 33.1835) and 10 sampled tiles of z15 to z17, from all three zooms, are identical to the local files.
 
 ## What follows (estimates, not measured on a build)
 
