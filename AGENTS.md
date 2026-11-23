@@ -277,6 +277,7 @@ documents/large-point-clouds.md   streaming build, Virtual Shizuoka data, Kawazu
 documents/adaptive-merging.md     E005 merging and E006 gap coverage
 documents/size-and-scale.md       tile and prefecture size arithmetic, browser memory
 documents/kawazu-demo.md          the Kawazu tileset: recipe, size, hosting plan
+documents/decisions-2026-11.md    decisions and work of 2026-11-21 to 23 (Sasebo expansion, look, view), with reasons and open items
 scripts/measure-numazu.ts    density and size measurements on the Numazu data
 scripts/measure-omission.ts  E002 omission measurements
 scripts/measure-pnts.ts      bytes per point of a LAS file as 3D Tiles point tiles would carry it (documents/size-vs-3d-tiles.md)
