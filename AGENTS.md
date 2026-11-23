@@ -241,7 +241,8 @@ src/class-plane.ts           class plane: one class code per splat beside the bl
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
 src/tiling.ts                centre-ownership split of a tile block into tiles
 src/progressive.ts           nested refinement order for maxzoom tiles (v3 level table)
-src/pmtiles.ts               minimal PMTiles v3 writer (leaf directories when the root exceeds 16 KiB; archive built in memory)
+src/pmtiles.ts               minimal PMTiles v3 writer (leaf directories when the root exceeds 16 KiB; archive built in memory); pmtilesHead: the part before the tile data
+src/pmtiles-file.ts          streaming PMTiles writer (Node): the same archive written from tile files one at a time (E022 step 4; used by build:tiled)
 src/fixtures/plane.ts        deterministic plane fixture generator
 src/fixtures/bridge.ts       deterministic bridge fixture generator
 src/fixtures/overhang.ts     deterministic overhang fixture generator
