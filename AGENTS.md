@@ -224,6 +224,7 @@ npm run measure:precision -- <tileset dir> <zoom>  # E016: which precision reduc
 DORAYAKI_CLASS_PLANE=1 npm run build:tileset -- ...   # also write a class plane (E021); merge:tilesets joins the planes
 DORAYAKI_BLOCK_VERSION=6 npm run build:tileset -- ...   # write version 6 blocks (12-byte records); default is version 5
 npm run measure:quality -- <tileset dir> <ref zoom> <cand zoom|mixed> [<cand dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]  # E012: software-render both from fixed cameras, print holes/color/depth differences, optional PNGs
+npm run measure:pnts -- <file.las> [cell m]  # bytes per point as 3D Tiles point tiles (.pnts, quantized, gzip, brotli) would carry a LAS file: documents/size-vs-3d-tiles.md
 npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
 npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=gzip gzips PMTiles tiles (default raw; Martin 1.14 cannot read gzip MLT tiles); DORAYAKI_ATTRIBUTION sets the TileJSON/PMTiles attribution (default: Shizuoka text)
 npm run merge:tilesets -- <name> <dir name> [<dir name> ...]  # merge tilesets of demo/tiles/<dir>/ (tiles with one address are concatenated)
@@ -278,6 +279,7 @@ documents/size-and-scale.md       tile and prefecture size arithmetic, browser m
 documents/kawazu-demo.md          the Kawazu tileset: recipe, size, hosting plan
 scripts/measure-numazu.ts    density and size measurements on the Numazu data
 scripts/measure-omission.ts  E002 omission measurements
+scripts/measure-pnts.ts      bytes per point of a LAS file as 3D Tiles point tiles would carry it (documents/size-vs-3d-tiles.md)
 scripts/measure-codec.ts     codec timing in Node
 scripts/measure-coarse.ts    E003 coarse Gaussian measurements
 scripts/measure-stream.ts    streaming voxelisation of a LAS file (chunked read)
