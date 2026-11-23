@@ -22,7 +22,7 @@
  * into docs/. It is hosted as dorayaki-numazu.pmtiles on stars, where Martin
  * serves it as z/x/y. Set DORAYAKI_NUMAZU_TILEJSON to its TileJSON URL
  * (https://stars.optgeo.org/dorayaki-numazu) to list it on the site, and
- * DORAYAKI_KAWAZU_TILEJSON likewise for Kawazu; without
+ * DORAYAKI_KAWAZU_TILEJSON likewise for Kawazu and DORAYAKI_SASEBO_TILEJSON for Sasebo (Open Nagasaki, CC BY 4.0); without
  * it the site omits Numazu and hides its link.
  */
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -38,12 +38,15 @@ const WORKER = "maplibre-gl-worker.mjs";
 
 const numazuTileJson = process.env.DORAYAKI_NUMAZU_TILEJSON;
 const kawazuTileJson = process.env.DORAYAKI_KAWAZU_TILEJSON;
+const saseboTileJson = process.env.DORAYAKI_SASEBO_TILEJSON;
 const externals: Record<string, string> = {
   ...(numazuTileJson ? { numazu: numazuTileJson } : {}),
   ...(kawazuTileJson ? { kawazu: kawazuTileJson } : {}),
+  ...(saseboTileJson ? { sasebo: saseboTileJson } : {}),
 };
 console.log(numazuTileJson ? `Numazu from ${numazuTileJson}` : "DORAYAKI_NUMAZU_TILEJSON not set: the site omits Numazu");
 console.log(kawazuTileJson ? `Kawazu from ${kawazuTileJson}` : "DORAYAKI_KAWAZU_TILEJSON not set: the site omits Kawazu");
+console.log(saseboTileJson ? `Sasebo from ${saseboTileJson}` : "DORAYAKI_SASEBO_TILEJSON not set: the site omits Sasebo");
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });

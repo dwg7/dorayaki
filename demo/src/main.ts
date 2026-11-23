@@ -74,8 +74,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-lp-sp24": "tiles/kawazu-lp-sp24/tilejson.json",
         "kawazu-mix-sp12": "tiles/kawazu-mix-sp12/tilejson.json",
         "kawazu-mix-sp24": "tiles/kawazu-mix-sp24/tilejson.json",
-        "sasebo-3513": "tiles/sasebo-3513/tilejson.json",
-        "sasebo-tiled": "tiles/sasebo-tiled/tilejson.json",
+        sasebo: "tiles/sasebo/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
@@ -99,6 +98,7 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-s4": { terrain: "1", extent: "1.3" },
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
+  sasebo: { terrain: "1", extent: "1.3" }, // the same as Kawazu: merged splats, hills above the sea
 };
 /** A query flag: the URL's value, else the tileset's default. */
 const flag = (name: string, tileset: string): string | null =>

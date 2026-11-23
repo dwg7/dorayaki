@@ -80,6 +80,19 @@ Sheets `01JE3513` and the southern neighbour `01JE3531` (115,026,453 B zip, SHA-
   for this density was not tuned.
 - The archive is built in memory (E022 step 4 is not done): at 5 GB it would not fit in 8 GB of RAM.
 
+## Hosted on stars (2026-11-23)
+
+The two-sheet tile-aligned build is on stars as `dorayaki-sasebo.pmtiles` (73,667,266 B, SHA-256 `f49dc400e8f8790c50c526e04c374b19bc2537e0dd93fbda09b3775246047cc7`, raw
+tiles because Martin 1.14 cannot read gzip MLT; 51 tiles, 6.14 million splats, z15 to z17, attribution 「点群: 長崎県 オープンナガサキ (CC BY 4.0) を加工して作成」):
+
+- Naming: `dorayaki-<place>` as for Kawazu and Numazu; no mesh codes, dates or `-area` in the name; the version is the `?v=` of the TileJSON URL,
+  `https://stars.optgeo.org/dorayaki-sasebo?v=20261123a`. When the area grows the same name is replaced.
+- Verified: TileJSON served with the Pages origin; one z17 tile byte-identical to the local file; the site build (`DORAYAKI_SASEBO_TILEJSON`) loads it from stars
+  (6 tiles at zoom 18.5, 9 at zoom 16.4) and lists `sasebo` among the fixtures.
+- Recipe: `DORAYAKI_ADAPTIVE_LEVELS=3 _THICKNESS=0.2 _COLOR=0.2 _SPARSE=0 DORAYAKI_BLOCK_VERSION=6 DORAYAKI_ATTRIBUTION=... npm run build:tiled -- sasebo 1 "<01JE3513.las>,<01JE3531.las>" --workers 3 --centre 129.7198,33.1790`.
+- Demo defaults for `sasebo`: terrain on and splat size 1.3 as for Kawazu; the dark basemap (bvmap-nightsky) like every point-cloud tileset.
+- A showing view: `#map=16.4/33.1768/129.7215/-30/62` (the site's own start is zoom 18.5, close on a wooded slope).
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
