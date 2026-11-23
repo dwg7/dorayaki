@@ -125,4 +125,4 @@ fast network. What limits the browser is memory and CPU, not the network:
   It now loads only the tiles in view (the nearest nine of the selected zoom,
   documents/demo-and-site.md); a prefecture-sized archive additionally needs a
   tile list that is not enumerated from the TileJSON bounds (the demo caps that
-  list at 64 tiles).
+  list at 4,096 tiles; it was 64 until Sasebo's 6 km2 listed 164).

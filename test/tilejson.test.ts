@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { tileUrl, tilesCovering } from "../demo/src/tilejson.js";
+import { MAX_TILES, loadTileJson, tileUrl, tilesCovering } from "../demo/src/tilejson.js";
 import { tileLatitude, tileLongitude } from "../src/tile-geometry.js";
 
 test("tilesCovering lists the tiles intersecting a bounding box", () => {
@@ -24,4 +24,24 @@ test("bounds ending exactly on tile edges do not pull in neighbours", () => {
 
 test("tileUrl fills the z/x/y placeholders", () => {
   assert.equal(tileUrl("https://stars.optgeo.org/dorayaki-numazu/{z}/{x}/{y}", { z: 18, x: 1, y: 2 }), "https://stars.optgeo.org/dorayaki-numazu/18/1/2");
+});
+
+/** `loadTileJson` with `fetch` answering one TileJSON. */
+async function listed(tj: object): Promise<number> {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () => new Response(JSON.stringify(tj), { status: 200 })) as typeof fetch;
+  try {
+    return (await loadTileJson("https://example.test/tj.json", "https://example.test/")).tiles.length;
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+test("an area of several square kilometres (Sasebo, 164 tiles over z15 to z17) is listed", async () => {
+  const n = await listed({ tiles: ["https://example.test/{z}/{x}/{y}"], bounds: [129.7071, 33.1630, 129.7368, 33.1873], minzoom: 15, maxzoom: 17 });
+  assert.ok(n > 64 && n < MAX_TILES, `${n} tiles`);
+});
+
+test("bounds that would list more than MAX_TILES are refused", async () => {
+  await assert.rejects(listed({ tiles: ["https://example.test/{z}/{x}/{y}"], bounds: [128, 32, 131, 35], minzoom: 15, maxzoom: 17 }), /exceed the demo's limit/);
 });
