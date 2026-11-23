@@ -29,6 +29,7 @@ import {
 import type { SplatInstances } from "./splat-instances.js";
 import { metricToMercatorMatrix, multiplyMat4, type Mat4 } from "./tile-matrix.js";
 import { drawPlan, selectZoom, type TileDraw } from "./tile-selection.js";
+import { inheritPendingData } from "./pending-tiles.js";
 
 export interface LayerTile {
   tile: TileAddress;
@@ -132,7 +133,9 @@ export class SurfelLayer implements CustomLayerInterface {
    * change happens at the start of the next frame.
    */
   setTiles(tiles: readonly LayerTile[]): void {
-    this.pending = tiles;
+    // A set that replaces one the next frame has not applied yet: the caller hands the data over and drops its copy,
+    // so a tile in both sets arrives here without data the second time; take it from the first.
+    this.pending = this.pending ? inheritPendingData(this.pending, tiles) : tiles;
     this.map?.triggerRepaint();
   }
 

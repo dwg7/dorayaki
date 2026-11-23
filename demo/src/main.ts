@@ -98,7 +98,7 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-s4": { terrain: "1", extent: "1.3" },
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
-  sasebo: { terrain: "1", extent: "1.3" }, // the same as Kawazu: merged splats, hills above the sea
+  sasebo: { terrain: "1", extent: "1.3", mixed: "1" }, // as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance: the nine-tile limit covered only part of a tilted view (`?mixed=0` switches it off)
 };
 /** A query flag: the URL's value, else the tileset's default. */
 const flag = (name: string, tileset: string): string | null =>
