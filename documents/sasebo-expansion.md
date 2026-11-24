@@ -197,6 +197,18 @@ old and the new sheets. The TileJSON lists tiles over the whole bounding box, so
 `3524`, `3541`, `3542`, `3543`, `3544`, if the code scheme holds there; not confirmed on the site), and one column (E 19000, N 15000 to 17250) west of the new block. In the demo they show as dark holes.
 Not done: other browsers, drag behavior, memory in the browser at the widest views, hosting this archive.
 
+### 32 sheets: the nine gap sheets added (measured, 2026-11-25; not hosted yet)
+
+Nine sheets filled the hole between the two groups (`01JE3514`, `3523`, `3524`, `3532`, `3534`, `3541`, `3542`, `3543`, `3544`; 1.68 GB of zips, 93.3 million points; fetched by `curl` from the same folder
+after a HEAD request of each; `data/nagasaki/SHA256SUMS-01JE35.txt`). With the 23 before: **32 sheets, 201.1 million points**.
+
+The first 32-sheet build **ran out of disk** (the work directory passed the 14 GB that were free; the machine has no external disk): the z16 and z15 pieces were JSON text, 4.7 GB at 23 sheets and about 9 GB at 32.
+`build:tiled` now writes them as gzipped float64 (the same numbers; **the 51 tiles of a two-sheet build are byte-identical** to the JSON version, only the manifest's name differs), about a third of the size:
+the work directory of the 32-sheet build peaked at about 6.4 GB. Result, recipe 3 / 0.2 / 0.2 / sparse 0, block version 6, 3 workers: **518 tiles (z15 32, z16 105, z17 381)**, **PMTiles 1,234,118,714 B**
+(SHA-256 `961254299d13f9e0872eeb063ec497f0183b5fc4ae10ed9cc576460bf0a43577`). Tile sizes: z15 mean 5.48 MB (max 15.92), z16 mean 4.25 MB (max 15.88), z17 mean 1.61 MB (max 6.68).
+In the local demo (`?fixture=sasebo-32`) the area is continuous at zoom 14.6 (no dark hole between the groups); that view loads **12 z15 tiles, 5.45 million splats, 65 MB** (the eight-sheet archive: 30 MB), so the low-zoom
+tile size (see above) now matters for a viewer: not changed in this build. Not looked at: the near views of the filled area, other browsers, the hosted archive.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
