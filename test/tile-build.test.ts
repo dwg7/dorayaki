@@ -71,3 +71,20 @@ test("a tile of another zoom, a zoom above 17 and maxLevel above 3 are rejected"
   assert.throws(() => buildTilePieces(() => undefined, TILE, { ...CONFIG, zooms: [18] }), RangeError);
   assert.throws(() => buildTilePieces(() => undefined, TILE, { adaptive: { ...CONFIG.adaptive, maxLevel: 4 } }), RangeError);
 });
+
+test("cellScale 2 gives coarser z16 and z15 and leaves z17 alone; a scale that breaks the groups is rejected", () => {
+  const base = buildTilePieces(scene(5), TILE, CONFIG);
+  const coarse = buildTilePieces(scene(5), TILE, { ...CONFIG, cellScale: 2 });
+  assert.equal(coarse[0]!.splats.length, base[0]!.splats.length);
+  assert.equal(coarse[1]!.voxels < base[1]!.voxels, true);
+  assert.equal(coarse[2]!.voxels < base[2]!.voxels, true);
+  assert.throws(() => buildTilePieces(scene(5), TILE, { ...CONFIG, cellScale: 3 }), RangeError);
+  assert.throws(() => buildTilePieces(scene(5), TILE, { ...CONFIG, cellScale: 64 }), RangeError);
+});
+
+test("thicknessScale and colorScale only act below z17", () => {
+  const base = buildTilePieces(scene(6), TILE, CONFIG);
+  const strong = buildTilePieces(scene(6), TILE, { ...CONFIG, thicknessScale: 4, colorScale: 3 });
+  assert.equal(strong[0]!.splats.length, base[0]!.splats.length);
+  assert.ok(strong[1]!.splats.length <= base[1]!.splats.length && strong[2]!.splats.length <= base[2]!.splats.length);
+});

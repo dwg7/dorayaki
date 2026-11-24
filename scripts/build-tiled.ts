@@ -12,7 +12,7 @@
  *   archive  demo/tiles/<name>/ (tiles, tilejson.json, manifest.json) and demo/tiles/dorayaki-<name>.pmtiles, written from the tile files on disk one at a
  *            time (src/pmtiles-file.ts, E022 step 4): memory does not grow with the size of the archive.
  * A finished scatter file or tile job leaves a marker, so a rerun with the same work directory skips it. The recipe comes from the same
- * environment as build-tileset.ts: DORAYAKI_ADAPTIVE_LEVELS (required), _THICKNESS, _COLOR, _SPARSE, _SPARSE_SCALE, DORAYAKI_CLASS_PLANE,
+ * environment as build-tileset.ts: DORAYAKI_ADAPTIVE_LEVELS (required), _THICKNESS, _COLOR, _SPARSE, _SPARSE_SCALE, DORAYAKI_ZOOM_CELL_SCALE, _THICKNESS_SCALE, _COLOR_SCALE (E023), DORAYAKI_CLASS_PLANE,
  * DORAYAKI_BLOCK_VERSION, DORAYAKI_TILE_COMPRESSION. The result does not depend on the number of workers (same bytes).
  * The work directory is removed at the end unless --keep is given.
  */
@@ -53,6 +53,10 @@ function recipe(): TileBuildConfig {
       ...(classPlane ? { opacityOf: planeOpacityOf } : {}),
     },
     ...(classPlane ? { classSlots: PLANE_CLASS_SLOTS } : {}),
+    // E023: coarser zooms below z17 (all default to 1, which builds as before).
+    cellScale: Number(process.env.DORAYAKI_ZOOM_CELL_SCALE ?? 1),
+    thicknessScale: Number(process.env.DORAYAKI_ZOOM_THICKNESS_SCALE ?? 1),
+    colorScale: Number(process.env.DORAYAKI_ZOOM_COLOR_SCALE ?? 1),
   };
 }
 

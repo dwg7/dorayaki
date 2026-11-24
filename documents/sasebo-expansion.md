@@ -156,6 +156,27 @@ What the demo shows (soft look, `extent` 1.3, default jitter; local entries `sr-
 Not done: the recipes on the eight-sheet area, z16 and z15 looked at separately (merging acts on all three zooms), a per-zoom recipe, the sparse rule (`DORAYAKI_ADAPTIVE_SPARSE`) at this density, other sheets (the city sheets have more buildings than this one), a judgment by viewers other than the author.
 Not a finding: that the stricter recipe is "right"; it is a larger file with more detail.
 
+### Smaller tiles at z15 and z16 (E023, same sheet, 2026-11-24)
+
+Direction (hfu): a z15 or z16 tile should be about a quarter of today's size (hosted archive: z15 mean 2.77 MB, max 9.27 MB; z16 mean 2.34 MB, max 7.79 MB; z17 mean 0.98 MB),
+because a lower zoom covers four times the area with the same 512 x 512 cells. New settings of `build:tiled` (default 1 = as before; `src/pointcloud/tile-build.ts`, 2 tests):
+`DORAYAKI_ZOOM_CELL_SCALE` (voxel edge of every zoom below z17: 2 gives 2 m at z16 and 4 m at z15), `DORAYAKI_ZOOM_THICKNESS_SCALE` and `DORAYAKI_ZOOM_COLOR_SCALE` (merge thickness and color
+tolerance multiplied per zoom below z17), and the existing `DORAYAKI_ADAPTIVE_SPARSE` with `_SPARSE_SCALE`. Built on `01JE3513` from the hosted recipe (3, 0.2, 0.2); z17 is identical in all (20 tiles, 21.1 MB).
+
+| variant | z15 mean / max | z16 mean / max | PMTiles | z15, z16 against the hosted recipe |
+| --- | ---: | ---: | ---: | ---: |
+| hosted recipe (`sr-cur`) | 3.22 / 5.94 MB | 2.59 / 4.01 MB | 43.1 MB | 100 %, 100 % |
+| cell scale 2 (`lz-cell2`) | 0.84 / 1.52 MB | 1.07 / 1.72 MB | 29.2 MB | 26 %, 41 % |
+| thickness x2, color x1.5 per zoom (`lz-thick`) | 1.82 / 3.39 MB | 1.79 / 2.78 MB | 35.4 MB | 57 %, 69 % |
+| sparse 1, scale 4 (`lz-sparse`) | 2.36 / 4.35 MB | 2.21 / 3.40 MB | 39.1 MB | 73 %, 85 % |
+| all three (`lz-all`) | 0.64 / 1.17 MB | 0.90 / 1.44 MB | 27.7 MB | 20 %, 35 % |
+
+(The sheet holds 2 z15 and 6 z16 tiles, partly at its edge, so the means are of few tiles; compare the rows with each other.) Merging and sparse rules alone do not reach a quarter;
+the coarser cell does at z15 and nearly at z16 (41 %), because it removes cells, which the others only join. Looked at in the demo at zoom 16.2, pitch 55 (z16 tiles; the local entries `lz-cell2`
+and `lz-all`): the town, the wooded hill and the roads read the same at this scale; `lz-cell2` is only slightly rougher than the hosted recipe on roofs, and `lz-all` blotchier in the dense houses on the left.
+Not looked at: z15 itself (zoom 15), the near view (the z17 tiles are unchanged), several sheets, the tile edges between sheets (a coarser cell does not change the guarantee that a merge group stays in its tile).
+Not decided: which variant to use; the next step is to build the wider area with the hosted recipe first (hfu), then change the low zooms.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
