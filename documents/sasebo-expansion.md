@@ -125,6 +125,37 @@ Hosted: `dorayaki-sasebo.pmtiles` on stars was replaced by this archive (203,951
 `demo/tiles/dorayaki-sasebo-2sheets.pmtiles`). The site's TileJSON pin is `?v=20261123b`. Procedure: scp to `.dorayaki-sasebo.pmtiles.new.<rand>`, sha256 on the host, `rm` of the old file, 8 s, `mv -n`
 (the `rm` of a served file was refused by the session's permission classifier until the user allowed it). Checked afterwards: the TileJSON (bounds 129.7018 to 129.7266, 33.1536 to 33.1835) and 10 sampled tiles of z15 to z17, from all three zooms, are identical to the local files.
 
+## Merge recipe at about 10 points/m2 (E023, measured on the sheet `01JE3513`, 2026-11-24)
+
+Question: the recipe of the hosted archive (adaptive levels 3, thickness 0.2 m, color 0.2, sparse 0) was tuned on Kawazu (121 to 440 points/m2). Does a
+stricter merge pay at 10 points/m2? One sheet (5.4 million points) built with `build:tiled` (24 to 30 s each, 3 workers, block version 6, z15 to z17, same
+sheet and same tile grid), compared with the unmerged `sasebo-3513` build (one splat per voxel, 4,878,174 z17 splats, 90,994,864 B).
+
+| recipe (levels, thickness, color) | z17 splats | PMTiles | against unmerged |
+| --- | ---: | ---: | ---: |
+| unmerged (reference) | 4,878,174 | 90,994,864 B | 100 % |
+| 3, 0.2, 0.2 (**hosted**) | 1,754,924 | 43,052,617 B | 47 % |
+| 2, 0.2, 0.2 | 1,815,276 | 43,845,694 B | 48 % |
+| 1, 0.2, 0.2 | 2,421,279 | 52,079,420 B | 57 % |
+| 3, 0.1, 0.1 | 2,533,135 | 56,866,683 B | 62 % |
+| 3, 0.05, 0.1 (the script defaults) | 2,882,268 | 62,420,114 B | 69 % |
+
+What the software renderer says (`measure:quality`, z17 against the unmerged build, three cameras): **it does not separate the recipes**. Mean absolute difference at 1-pixel blocks
+is 8.0 to 9.4 (view 1), 13.9 to 14.7 (view 2) and 21.1 to 22.6 (view 3) for all five; the order between recipes is inconsistent between views (the strictest has the most holes, the hosted
+one the most extra pixels). The reference is a different build with its own noise, and the renderer draws flat discs without the demo's soft look or `extent`, so the measure sees the lattice of
+merged discs on bare ground (white gaps between large discs) but not what the demo hides. Do not choose a recipe by these numbers.
+
+What the demo shows (soft look, `extent` 1.3, default jitter; local entries `sr-cur`, `sr-t1c1`, `sr-l2`, `sr-t05c1`, `sr-l1`, `sasebo-3513`; Apple M1, the Browser pane):
+
+- Unmerged is speckled: with 1.5 points per voxel at z17 many splats are poorly fitted and the roofs and walls look grainy.
+- The hosted recipe is smooth but flat: roof structure, bare ground and cars melt into large patches of one color ("painted"). At zoom 17, pitch 55 the bare ground at the right
+  of the view is washed out.
+- Thickness 0.05 / color 0.1 keeps roof edges, texture on bare ground and single cars, at 1.64 times the splats (+45 % bytes: the hosted 204 MB would become about 295 MB). The
+  difference is visible at zoom 17 to 18 and small in an overview at zoom 16.
+
+Not done: the recipes on the eight-sheet area, z16 and z15 looked at separately (merging acts on all three zooms), a per-zoom recipe, the sparse rule (`DORAYAKI_ADAPTIVE_SPARSE`) at this density, other sheets (the city sheets have more buildings than this one), a judgment by viewers other than the author.
+Not a finding: that the stricter recipe is "right"; it is a larger file with more detail.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
