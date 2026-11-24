@@ -177,6 +177,26 @@ and `lz-all`): the town, the wooded hill and the roads read the same at this sca
 Not looked at: z15 itself (zoom 15), the near view (the z17 tiles are unchanged), several sheets, the tile edges between sheets (a coarser cell does not change the guarantee that a merge group stays in its tile).
 Not decided: which variant to use; the next step is to build the wider area with the hosted recipe first (hfu), then change the low zooms.
 
+## 23 sheets, about 17 km2, the hosted recipe (measured, 2026-11-25; not hosted yet)
+
+hfu's order: build a wider area with the hosted recipe first and see that nothing breaks, then change the low zooms. Fifteen sheets were added: the whole `01JE45` block
+(4 x 4 sheets of 1,000 x 750 m south and east of the harbor; `01JE4511` was already held), 69.9 million points, 1.16 GB of zips
+(`data/nagasaki/zips45/SHA256SUMS.txt`, kept locally; all 15 pass `unzip -tq`). All LAS 1.2, point format 2, like the first eight. The site's browser queue stopped at the first error
+(`01JE4533`, cause unknown), so the sheets were fetched with `curl` from `https://opennagasaki.nerc.or.jp/storage/20230712/sasebo-si_saza-chou/<code>.las.zip` (the same files the page offers;
+checked first against the size of a sheet already saved from the page).
+
+`build:tiled`, 23 sheets (107.8 million points), 3 workers, recipe 3 / 0.2 / 0.2 / sparse 0, block version 6, z15 to z17: **340 s wall**, process 1.18 GB, a tile job at most 1.13 GB,
+273 z17 tiles, 81 z16, 26 z15; **PMTiles 619,693,411 B** (SHA-256 `d49a28b59fe062df924565e9c7bffb4ce324d18d51419f4dae13e43e5df38f70`; about 51.6 million splats by the tile bytes).
+Tile sizes: z15 mean 3.59 MB (max 9.30), z16 mean 2.75 MB (max 8.49), z17 mean 1.11 MB (max 3.73).
+**Disk** (the machine was at 99 %, 7 GB free during the build): the work directory reached **6.4 GB** (shards 1.7 GB, z16 and z15 pieces as JSON **4.7 GB**), so the intermediate pieces,
+not the shards, are the cost of a wide build; it is removable after the archive is written.
+
+Looked at in the local demo (`?fixture=sasebo-23`, mixed on): at zoom 16, pitch 55, 18 tiles, 2.8 million splats, 33.7 MB; at zoom 14.7 (z15) the town, hills and the harbor read well and I saw no seam between the
+old and the new sheets. The TileJSON lists tiles over the whole bounding box, so the demo asks for tiles that do not exist (a few 404 per view; they come back as empty, as designed).
+**Gaps**: the 23 sheets do not form a block. Nine sheets are missing between the two groups, east of the first eight and north of the `01JE45` block (by the sheet grid: `01JE3514`, `3532`, `3534`, `3523`,
+`3524`, `3541`, `3542`, `3543`, `3544`, if the code scheme holds there; not confirmed on the site), and one column (E 19000, N 15000 to 17250) west of the new block. In the demo they show as dark holes.
+Not done: other browsers, drag behavior, memory in the browser at the widest views, hosting this archive.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
