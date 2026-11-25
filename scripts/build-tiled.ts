@@ -7,12 +7,12 @@
  *   plan     read the LAS headers;
  *   scatter  one job per input file: each point goes through TileFramer into the frame of its z17 tile and is appended to that tile's shard file
  *            data/tiled-work/<name>/shards/<x>_<y>/<file index>.bin (16-byte records, src/pointcloud/tile-shard.ts);
- *   tile     one job per z17 tile, the biggest first: its shards in file order -> buildTilePieces -> the final z17 tile, and the pieces of z16 and z15 as JSON;
+ *   tile     one job per z17 tile, the biggest first: its shards in file order -> buildTilePieces -> the final z17 tile, and the pieces of z16 and z15 as gzipped float64;
  *   gather   the pieces joined by position into the z16 and z15 tiles;
  *   archive  demo/tiles/<name>/ (tiles, tilejson.json, manifest.json) and demo/tiles/dorayaki-<name>.pmtiles, written from the tile files on disk one at a
  *            time (src/pmtiles-file.ts, E022 step 4): memory does not grow with the size of the archive.
  * A finished scatter file or tile job leaves a marker, so a rerun with the same work directory skips it. The recipe comes from the same
- * environment as build-tileset.ts: DORAYAKI_ADAPTIVE_LEVELS (required), _THICKNESS, _COLOR, _SPARSE, _SPARSE_SCALE, DORAYAKI_CLASS_PLANE,
+ * environment as build-tileset.ts: DORAYAKI_ADAPTIVE_LEVELS (required), _THICKNESS, _COLOR, _SPARSE, _SPARSE_SCALE, DORAYAKI_ZOOM_CELL_SCALE, _THICKNESS_SCALE, _COLOR_SCALE (E023), DORAYAKI_CLASS_PLANE,
  * DORAYAKI_BLOCK_VERSION, DORAYAKI_TILE_COMPRESSION. The result does not depend on the number of workers (same bytes).
  * The work directory is removed at the end unless --keep is given.
  */
@@ -20,7 +20,7 @@ import { spawn } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gzipSync } from "node:zlib";
+import { gunzipSync, gzipSync } from "node:zlib";
 
 import { encodeDemoTile } from "../demo/src/demo-tile.js";
 import { encodeClassPlane } from "../src/class-plane.js";
@@ -53,9 +53,15 @@ function recipe(): TileBuildConfig {
       ...(classPlane ? { opacityOf: planeOpacityOf } : {}),
     },
     ...(classPlane ? { classSlots: PLANE_CLASS_SLOTS } : {}),
+    // E023: coarser zooms below z17 (all default to 1, which builds as before).
+    cellScale: Number(process.env.DORAYAKI_ZOOM_CELL_SCALE ?? 1),
+    thicknessScale: Number(process.env.DORAYAKI_ZOOM_THICKNESS_SCALE ?? 1),
+    colorScale: Number(process.env.DORAYAKI_ZOOM_COLOR_SCALE ?? 1),
   };
 }
 
+/** Fields of a splat in a piece file (x, y, z, sx, sy, sz, qw, qx, qy, qz, r, g, b, a). */
+const PIECE_FIELDS = 14;
 const gz = (b: Uint8Array) => new Uint8Array(gzipSync(b, { level: 9 }));
 /** The block of a tile's splats and, with class planes, the plane (the class travels in the opacity byte until here, as in build-tileset.ts). */
 function encodeTile(splats: Splat[]): Uint8Array {
@@ -159,8 +165,11 @@ function tileJob([work, x, y]: string[]): void {
     } else {
       const d = `${work}/pieces/${p.tile.z}/${p.tile.x}/${p.tile.y}`;
       mkdirSync(d, { recursive: true });
-      // Every field, full precision; z16 and z15 pieces are about a tenth of the z17 tile.
-      writeFileSync(`${d}/${x}_${y}.json`, JSON.stringify(p.splats.map((s) => [s.x, s.y, s.z, s.sx, s.sy, s.sz, s.qw, s.qx, s.qy, s.qz, s.r, s.g, s.b, s.a])));
+      // Every field, full precision (float64: the same numbers JSON would carry), gzip level 1: JSON text of the pieces took 4.7 GB for 23 sheets and
+      // filled the disk at 32 (E023 note in documents/sasebo-expansion.md).
+      const f = new Float64Array(p.splats.length * PIECE_FIELDS);
+      p.splats.forEach((s, i) => f.set([s.x, s.y, s.z, s.sx, s.sy, s.sz, s.qw, s.qx, s.qy, s.qz, s.r, s.g, s.b, s.a], i * PIECE_FIELDS));
+      writeFileSync(`${d}/${x}_${y}.f64.gz`, gzipSync(new Uint8Array(f.buffer), { level: 1 }));
     }
   }
   stats.seconds = (performance.now() - t0) / 1000;
@@ -250,10 +259,12 @@ async function orchestrate(argv: string[]): Promise<void> {
         const d = `${work}/pieces/${z}/${xd}/${yd}`;
         const splats: Splat[] = [];
         // In the order of the source tiles (y, then x), so the tile does not depend on which job finished first.
-        const parts = readdirSync(d).map((f) => f.replace(".json", "").split("_").map(Number) as [number, number]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
+        const parts = readdirSync(d).map((f) => f.replace(".f64.gz", "").split("_").map(Number) as [number, number]).sort((a, b) => a[1] - b[1] || a[0] - b[0]);
         for (const [sx, sy] of parts) {
-          for (const s of JSON.parse(readFileSync(`${d}/${sx}_${sy}.json`, "utf8")) as number[][]) {
-            splats.push({ x: s[0]!, y: s[1]!, z: s[2]!, sx: s[3]!, sy: s[4]!, sz: s[5]!, qw: s[6]!, qx: s[7]!, qy: s[8]!, qz: s[9]!, r: s[10]!, g: s[11]!, b: s[12]!, a: s[13]! });
+          const raw = gunzipSync(readFileSync(`${d}/${sx}_${sy}.f64.gz`));
+          const f = new Float64Array(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)); // a copy: the buffer is not 8-byte aligned
+          for (let i = 0; i < f.length; i += PIECE_FIELDS) {
+            splats.push({ x: f[i]!, y: f[i + 1]!, z: f[i + 2]!, sx: f[i + 3]!, sy: f[i + 4]!, sz: f[i + 5]!, qw: f[i + 6]!, qx: f[i + 7]!, qy: f[i + 8]!, qz: f[i + 9]!, r: f[i + 10]!, g: f[i + 11]!, b: f[i + 12]!, a: f[i + 13]! });
           }
         }
         const t = { z, x: Number(xd), y: Number(yd) };

@@ -25,6 +25,14 @@ export interface TileBuildConfig {
   zooms?: readonly number[];
   /** The merge rule; `sparseSupport` is the threshold at z17, multiplied by `sparseScale` for each zoom below. */
   adaptive: Omit<AdaptiveOptions, "sparseSupport"> & { sparseSupport?: number; sparseScale?: number };
+  /**
+   * Coarser zooms (E023; every default is 1, which builds as before): `cellScale` multiplies the voxel edge of every zoom below z17 (2: cells of 2 m at z16
+   * and 4 m at z15 instead of 1 and 2 m; a power of two that leaves whole merge groups in the tile), `thicknessScale` and `colorScale` multiply the merge
+   * thickness and color tolerance for each zoom below z17 (like `sparseScale`).
+   */
+  cellScale?: number;
+  thicknessScale?: number;
+  colorScale?: number;
   /** Class slots per voxel (0 = the points carry no class); the class is carried by `adaptive.opacityOf`. */
   classSlots?: number;
 }
@@ -59,7 +67,15 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
   const cell = width / CELLS;
   const slots = config.classSlots ?? 0;
   // The tile's frame is east-north-up with north counted from the corner (y <= 0): the Gaussians come out east-north-up, as placement expects.
-  const accs = zooms.map((z) => new VoxelAccumulator(cell * 2 ** (TILE_ZOOM - z), 16, slots));
+  const cellScale = config.cellScale ?? 1;
+  if (!Number.isInteger(Math.log2(cellScale)) || cellScale < 1) throw new RangeError("cellScale must be a power of two (1, 2, 4, ...)");
+  for (const z of zooms) {
+    // Voxels along a z17 tile's edge at this zoom: whole groups of 2^maxLevel, or a merge group would cross the tile's edge.
+    const across = CELLS / (2 ** (TILE_ZOOM - z) * (z < TILE_ZOOM ? cellScale : 1));
+    if (!Number.isInteger(across) || across % 2 ** maxLevel !== 0) throw new RangeError(`z${z}: ${across} voxels along a tile edge do not divide into groups of ${2 ** maxLevel}`);
+  }
+  const edgeOf = (z: number): number => cell * 2 ** (TILE_ZOOM - z) * (z < TILE_ZOOM ? cellScale : 1);
+  const accs = zooms.map((z) => new VoxelAccumulator(edgeOf(z), 16, slots));
   feed((east, south, up, r, g, b, slot = -1) => { for (const a of accs) a.add(east, -south, up, r, g, b, slot); });
 
   return zooms.map((z, i) => {
@@ -68,7 +84,11 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
     const sparse = (config.adaptive.sparseSupport ?? 0) * (config.adaptive.sparseScale ?? 1) ** d;
     const result = acc.voxels === 0
       ? { gaussians: [] as Gaussian[], perLevel: new Array<number>(maxLevel + 1).fill(0) }
-      : adaptiveGaussians(acc, { ...config.adaptive, sparseSupport: sparse });
+      : adaptiveGaussians(acc, {
+        ...config.adaptive, sparseSupport: sparse,
+        ...(config.thicknessScale !== undefined ? { thickness: config.adaptive.thickness * config.thicknessScale ** d } : {}),
+        ...(config.colorScale !== undefined ? { colorTolerance: config.adaptive.colorTolerance * config.colorScale ** d } : {}),
+      });
     const target: TileAddress = { z, x: tile.x >> d, y: tile.y >> d };
     const ox = tile.x - (target.x << d), oy = tile.y - (target.y << d);
     const scale = 2 ** d;

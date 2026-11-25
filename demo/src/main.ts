@@ -75,6 +75,18 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-mix-sp12": "tiles/kawazu-mix-sp12/tilejson.json",
         "kawazu-mix-sp24": "tiles/kawazu-mix-sp24/tilejson.json",
         sasebo: "tiles/sasebo/tilejson.json",
+        "sr-cur": "tiles/sr-cur/tilejson.json",
+        "sr-t1c1": "tiles/sr-t1c1/tilejson.json",
+        "sr-l2": "tiles/sr-l2/tilejson.json",
+        "sr-t05c1": "tiles/sr-t05c1/tilejson.json",
+        "sr-l1": "tiles/sr-l1/tilejson.json",
+        "lz-cell2": "tiles/lz-cell2/tilejson.json",
+        "lz-thick": "tiles/lz-thick/tilejson.json",
+        "lz-sparse": "tiles/lz-sparse/tilejson.json",
+        "lz-all": "tiles/lz-all/tilejson.json",
+        "sasebo-32": "tiles/sasebo-32/tilejson.json",
+        "sasebo-23": "tiles/sasebo-23/tilejson.json",
+        "sasebo-3513": "tiles/sasebo-3513/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
@@ -98,6 +110,9 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-s4": { terrain: "1", extent: "1.3" },
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
+  ...Object.fromEntries(["sasebo-3513", "sr-cur", "sr-t1c1", "sr-l2", "sr-t05c1", "sr-l1", "lz-cell2", "lz-thick", "lz-sparse", "lz-all"].map((n) => [n, { terrain: "1", extent: "1.3" }])), // E023 recipe candidates (one sheet)
+  "sasebo-32": { terrain: "1", extent: "1.3", mixed: "1" },
+  "sasebo-23": { terrain: "1", extent: "1.3", mixed: "1" },
   sasebo: { terrain: "1", extent: "1.3", mixed: "1" }, // as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance: the nine-tile limit covered only part of a tilted view (`?mixed=0` switches it off)
 };
 /** A query flag: the URL's value, else the tileset's default. */

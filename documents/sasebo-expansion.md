@@ -125,6 +125,95 @@ Hosted: `dorayaki-sasebo.pmtiles` on stars was replaced by this archive (203,951
 `demo/tiles/dorayaki-sasebo-2sheets.pmtiles`). The site's TileJSON pin is `?v=20261123b`. Procedure: scp to `.dorayaki-sasebo.pmtiles.new.<rand>`, sha256 on the host, `rm` of the old file, 8 s, `mv -n`
 (the `rm` of a served file was refused by the session's permission classifier until the user allowed it). Checked afterwards: the TileJSON (bounds 129.7018 to 129.7266, 33.1536 to 33.1835) and 10 sampled tiles of z15 to z17, from all three zooms, are identical to the local files.
 
+## Merge recipe at about 10 points/m2 (E023, measured on the sheet `01JE3513`, 2026-11-24)
+
+Question: the recipe of the hosted archive (adaptive levels 3, thickness 0.2 m, color 0.2, sparse 0) was tuned on Kawazu (121 to 440 points/m2). Does a
+stricter merge pay at 10 points/m2? One sheet (5.4 million points) built with `build:tiled` (24 to 30 s each, 3 workers, block version 6, z15 to z17, same
+sheet and same tile grid), compared with the unmerged `sasebo-3513` build (one splat per voxel, 4,878,174 z17 splats, 90,994,864 B).
+
+| recipe (levels, thickness, color) | z17 splats | PMTiles | against unmerged |
+| --- | ---: | ---: | ---: |
+| unmerged (reference) | 4,878,174 | 90,994,864 B | 100 % |
+| 3, 0.2, 0.2 (**hosted**) | 1,754,924 | 43,052,617 B | 47 % |
+| 2, 0.2, 0.2 | 1,815,276 | 43,845,694 B | 48 % |
+| 1, 0.2, 0.2 | 2,421,279 | 52,079,420 B | 57 % |
+| 3, 0.1, 0.1 | 2,533,135 | 56,866,683 B | 62 % |
+| 3, 0.05, 0.1 (the script defaults) | 2,882,268 | 62,420,114 B | 69 % |
+
+What the software renderer says (`measure:quality`, z17 against the unmerged build, three cameras): **it does not separate the recipes**. Mean absolute difference at 1-pixel blocks
+is 8.0 to 9.4 (view 1), 13.9 to 14.7 (view 2) and 21.1 to 22.6 (view 3) for all five; the order between recipes is inconsistent between views (the strictest has the most holes, the hosted
+one the most extra pixels). The reference is a different build with its own noise, and the renderer draws flat discs without the demo's soft look or `extent`, so the measure sees the lattice of
+merged discs on bare ground (white gaps between large discs) but not what the demo hides. Do not choose a recipe by these numbers.
+
+What the demo shows (soft look, `extent` 1.3, default jitter; local entries `sr-cur`, `sr-t1c1`, `sr-l2`, `sr-t05c1`, `sr-l1`, `sasebo-3513`; Apple M1, the Browser pane):
+
+- Unmerged is speckled: with 1.5 points per voxel at z17 many splats are poorly fitted and the roofs and walls look grainy.
+- The hosted recipe is smooth but flat: roof structure, bare ground and cars melt into large patches of one color ("painted"). At zoom 17, pitch 55 the bare ground at the right
+  of the view is washed out.
+- Thickness 0.05 / color 0.1 keeps roof edges, texture on bare ground and single cars, at 1.64 times the splats (+45 % bytes: the hosted 204 MB would become about 295 MB). The
+  difference is visible at zoom 17 to 18 and small in an overview at zoom 16.
+
+Not done: the recipes on the eight-sheet area, z16 and z15 looked at separately (merging acts on all three zooms), a per-zoom recipe, the sparse rule (`DORAYAKI_ADAPTIVE_SPARSE`) at this density, other sheets (the city sheets have more buildings than this one), a judgment by viewers other than the author.
+Not a finding: that the stricter recipe is "right"; it is a larger file with more detail.
+
+### Smaller tiles at z15 and z16 (E023, same sheet, 2026-11-24)
+
+Direction (hfu): a z15 or z16 tile should be about a quarter of today's size (hosted archive: z15 mean 2.77 MB, max 9.27 MB; z16 mean 2.34 MB, max 7.79 MB; z17 mean 0.98 MB),
+because a lower zoom covers four times the area with the same 512 x 512 cells. New settings of `build:tiled` (default 1 = as before; `src/pointcloud/tile-build.ts`, 2 tests):
+`DORAYAKI_ZOOM_CELL_SCALE` (voxel edge of every zoom below z17: 2 gives 2 m at z16 and 4 m at z15), `DORAYAKI_ZOOM_THICKNESS_SCALE` and `DORAYAKI_ZOOM_COLOR_SCALE` (merge thickness and color
+tolerance multiplied per zoom below z17), and the existing `DORAYAKI_ADAPTIVE_SPARSE` with `_SPARSE_SCALE`. Built on `01JE3513` from the hosted recipe (3, 0.2, 0.2); z17 is identical in all (20 tiles, 21.1 MB).
+
+| variant | z15 mean / max | z16 mean / max | PMTiles | z15, z16 against the hosted recipe |
+| --- | ---: | ---: | ---: | ---: |
+| hosted recipe (`sr-cur`) | 3.22 / 5.94 MB | 2.59 / 4.01 MB | 43.1 MB | 100 %, 100 % |
+| cell scale 2 (`lz-cell2`) | 0.84 / 1.52 MB | 1.07 / 1.72 MB | 29.2 MB | 26 %, 41 % |
+| thickness x2, color x1.5 per zoom (`lz-thick`) | 1.82 / 3.39 MB | 1.79 / 2.78 MB | 35.4 MB | 57 %, 69 % |
+| sparse 1, scale 4 (`lz-sparse`) | 2.36 / 4.35 MB | 2.21 / 3.40 MB | 39.1 MB | 73 %, 85 % |
+| all three (`lz-all`) | 0.64 / 1.17 MB | 0.90 / 1.44 MB | 27.7 MB | 20 %, 35 % |
+
+(The sheet holds 2 z15 and 6 z16 tiles, partly at its edge, so the means are of few tiles; compare the rows with each other.) Merging and sparse rules alone do not reach a quarter;
+the coarser cell does at z15 and nearly at z16 (41 %), because it removes cells, which the others only join. Looked at in the demo at zoom 16.2, pitch 55 (z16 tiles; the local entries `lz-cell2`
+and `lz-all`): the town, the wooded hill and the roads read the same at this scale; `lz-cell2` is only slightly rougher than the hosted recipe on roofs, and `lz-all` blotchier in the dense houses on the left.
+Not looked at: z15 itself (zoom 15), the near view (the z17 tiles are unchanged), several sheets, the tile edges between sheets (a coarser cell does not change the guarantee that a merge group stays in its tile).
+Not decided: which variant to use; the next step is to build the wider area with the hosted recipe first (hfu), then change the low zooms.
+
+## 23 sheets, about 17 km2, the hosted recipe (measured, 2026-11-25; not hosted yet)
+
+hfu's order: build a wider area with the hosted recipe first and see that nothing breaks, then change the low zooms. Fifteen sheets were added: the whole `01JE45` block
+(4 x 4 sheets of 1,000 x 750 m south and east of the harbor; `01JE4511` was already held), 69.9 million points, 1.16 GB of zips
+(`data/nagasaki/zips45/SHA256SUMS.txt`, kept locally; all 15 pass `unzip -tq`). All LAS 1.2, point format 2, like the first eight. The site's browser queue stopped at the first error
+(`01JE4533`, cause unknown), so the sheets were fetched with `curl` from `https://opennagasaki.nerc.or.jp/storage/20230712/sasebo-si_saza-chou/<code>.las.zip` (the same files the page offers;
+checked first against the size of a sheet already saved from the page).
+
+`build:tiled`, 23 sheets (107.8 million points), 3 workers, recipe 3 / 0.2 / 0.2 / sparse 0, block version 6, z15 to z17: **340 s wall**, process 1.18 GB, a tile job at most 1.13 GB,
+273 z17 tiles, 81 z16, 26 z15; **PMTiles 619,693,411 B** (SHA-256 `d49a28b59fe062df924565e9c7bffb4ce324d18d51419f4dae13e43e5df38f70`; about 51.6 million splats by the tile bytes).
+Tile sizes: z15 mean 3.59 MB (max 9.30), z16 mean 2.75 MB (max 8.49), z17 mean 1.11 MB (max 3.73).
+**Disk** (the machine was at 99 %, 7 GB free during the build): the work directory reached **6.4 GB** (shards 1.7 GB, z16 and z15 pieces as JSON **4.7 GB**), so the intermediate pieces,
+not the shards, are the cost of a wide build; it is removable after the archive is written.
+
+Looked at in the local demo (`?fixture=sasebo-23`, mixed on): at zoom 16, pitch 55, 18 tiles, 2.8 million splats, 33.7 MB; at zoom 14.7 (z15) the town, hills and the harbor read well and I saw no seam between the
+old and the new sheets. The TileJSON lists tiles over the whole bounding box, so the demo asks for tiles that do not exist (a few 404 per view; they come back as empty, as designed).
+**Gaps**: the 23 sheets do not form a block. Nine sheets are missing between the two groups, east of the first eight and north of the `01JE45` block (by the sheet grid: `01JE3514`, `3532`, `3534`, `3523`,
+`3524`, `3541`, `3542`, `3543`, `3544`, if the code scheme holds there; not confirmed on the site), and one column (E 19000, N 15000 to 17250) west of the new block. In the demo they show as dark holes.
+Not done: other browsers, drag behavior, memory in the browser at the widest views, hosting this archive.
+
+### 32 sheets: the nine gap sheets added (measured, 2026-11-25; not hosted yet)
+
+Nine sheets filled the hole between the two groups (`01JE3514`, `3523`, `3524`, `3532`, `3534`, `3541`, `3542`, `3543`, `3544`; 1.68 GB of zips, 93.3 million points; fetched by `curl` from the same folder
+after a HEAD request of each; `data/nagasaki/SHA256SUMS-01JE35.txt`). With the 23 before: **32 sheets, 201.1 million points**.
+
+The first 32-sheet build **ran out of disk** (the work directory passed the 14 GB that were free; the machine has no external disk): the z16 and z15 pieces were JSON text, 4.7 GB at 23 sheets and about 9 GB at 32.
+`build:tiled` now writes them as gzipped float64 (the same numbers; **the 51 tiles of a two-sheet build are byte-identical** to the JSON version, only the manifest's name differs), about a third of the size:
+the work directory of the 32-sheet build peaked at about 6.4 GB. Result, recipe 3 / 0.2 / 0.2 / sparse 0, block version 6, 3 workers: **518 tiles (z15 32, z16 105, z17 381)**, **PMTiles 1,234,118,714 B**
+(SHA-256 `961254299d13f9e0872eeb063ec497f0183b5fc4ae10ed9cc576460bf0a43577`). Tile sizes: z15 mean 5.48 MB (max 15.92), z16 mean 4.25 MB (max 15.88), z17 mean 1.61 MB (max 6.68).
+In the local demo (`?fixture=sasebo-32`) the area is continuous at zoom 14.6 (no dark hole between the groups); that view loads **12 z15 tiles, 5.45 million splats, 65 MB** (the eight-sheet archive: 30 MB), so the low-zoom
+tile size (see above) now matters for a viewer: not changed in this build. Not looked at: the near views of the filled area, other browsers, the hosted archive.
+
+**Hosted 2026-11-25**: `dorayaki-sasebo.pmtiles` on stars was replaced by the 32-sheet archive (1,234,118,714 B, SHA-256 `961254299d13f9e0872eeb063ec497f0183b5fc4ae10ed9cc576460bf0a43577`; the eight-sheet one,
+`ed7f8d01...`, is kept locally as `demo/tiles/dorayaki-sasebo.pmtiles`). Procedure as before: state of the target and of the temporary name checked first, scp to `.dorayaki-sasebo.pmtiles.new.1034` (5 min 53 s), size and SHA-256 on the host,
+`rm`, 8 s, `mv -n` (the user said in chat to replace it). Checked afterwards: the TileJSON (bounds 129.7018 to 129.7595, 33.1330 to 33.1835, zoom 15 to 17, with `?v=20261125a`) and four tiles of z15 to z17, all identical to the local
+files. The site's pin is now `?v=20261125a`. The stars host: 1.3 TB free, 7.6 GB of RAM; no memory or time-to-first-picture measurement of Martin with a 1.2 GB archive was made.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
