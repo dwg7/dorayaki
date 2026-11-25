@@ -828,3 +828,10 @@ final `setTiles` replaced the stage set before the next frame applied it, so tho
 Fix: `inheritPendingData` (`demo/src/pending-tiles.ts`) gives a tile arriving without data the data of the same tile in the unapplied set. After the fix the same view
 draws 20 tiles, 3.68 million splats, 44 MB, and the far half is filled (nine z16 tiles of the default selection: 2.60 million splats, 31 MB).
 
+## 2026-11-25: smaller low zooms, z14/z13 and a covering view budget (E024)
+
+A per-tile size target (merge harder where the piece is over its share) brought the low-zoom tiles of the 32 Sasebo sheets from 4 to 5 MB on average and 16 MB at most to 0.6 to 0.9 MB and 1.7 MB at most, with z14 and z13 added;
+the archive went from 1.23 GB to 0.71 GB (z17 is now 86 % of it). The viewer's `?mixed=1` now covers the view with the coarsest tiles and refines the nearest within 40 MB / 4 million splats; a tilted view at zoom 16.3
+filled the screen with 29 MB, and a view of the whole area at zoom 13.8 took 6.0 MB (63 MB before at zoom 15.2). Compounding merge scales per zoom were too strong (z15 at 2 %); a flat scale or the target is used instead.
+Details: documents/sasebo-expansion.md.
+
