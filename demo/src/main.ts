@@ -75,6 +75,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-mix-sp12": "tiles/kawazu-mix-sp12/tilejson.json",
         "kawazu-mix-sp24": "tiles/kawazu-mix-sp24/tilejson.json",
         sasebo: "tiles/sasebo/tilejson.json",
+        t4q: "tiles/t4q/tilejson.json",
         "sr-cur": "tiles/sr-cur/tilejson.json",
         "sr-t1c1": "tiles/sr-t1c1/tilejson.json",
         "sr-l2": "tiles/sr-l2/tilejson.json",
@@ -113,6 +114,7 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   ...Object.fromEntries(["sasebo-3513", "sr-cur", "sr-t1c1", "sr-l2", "sr-t05c1", "sr-l1", "lz-cell2", "lz-thick", "lz-sparse", "lz-all"].map((n) => [n, { terrain: "1", extent: "1.3" }])), // E023 recipe candidates (one sheet)
   "sasebo-32": { terrain: "1", extent: "1.3", mixed: "1" },
   "sasebo-23": { terrain: "1", extent: "1.3", mixed: "1" },
+  t4q: { terrain: "1", extent: "1.3", mixed: "1" },
   sasebo: { terrain: "1", extent: "1.3", mixed: "1" }, // as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance: the nine-tile limit covered only part of a tilted view (`?mixed=0` switches it off)
 };
 /** A query flag: the URL's value, else the tileset's default. */

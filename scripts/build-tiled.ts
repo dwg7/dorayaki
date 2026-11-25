@@ -7,8 +7,8 @@
  *   plan     read the LAS headers;
  *   scatter  one job per input file: each point goes through TileFramer into the frame of its z17 tile and is appended to that tile's shard file
  *            data/tiled-work/<name>/shards/<x>_<y>/<file index>.bin (16-byte records, src/pointcloud/tile-shard.ts);
- *   tile     one job per z17 tile, the biggest first: its shards in file order -> buildTilePieces -> the final z17 tile, and the pieces of z16 and z15 as gzipped float64;
- *   gather   the pieces joined by position into the z16 and z15 tiles;
+ *   tile     one job per z17 tile, the biggest first: its shards in file order -> buildTilePieces -> the final z17 tile, and the pieces of the lower zooms as gzipped float64;
+ *   gather   the pieces joined by position into the lower-zoom tiles;
  *   archive  demo/tiles/<name>/ (tiles, tilejson.json, manifest.json) and demo/tiles/dorayaki-<name>.pmtiles, written from the tile files on disk one at a
  *            time (src/pmtiles-file.ts, E022 step 4): memory does not grow with the size of the archive.
  * A finished scatter file or tile job leaves a marker, so a rerun with the same work directory skips it. The recipe comes from the same
@@ -37,13 +37,29 @@ import type { Splat } from "../src/surfel-block.js";
 import { tileLatitude, tileLongitude, tileWidthMetres, type TileAddress } from "../src/tile-geometry.js";
 
 const ZOOM = 17;
+/** Zooms below z17 that are built from the z17 tiles (E024; `DORAYAKI_LOWER_ZOOMS=16,15,14,13`; default 16,15 as before). */
+const LOWER_ZOOMS = (process.env.DORAYAKI_LOWER_ZOOMS ?? "16,15").split(",").map(Number).sort((a, b) => b - a);
+if (LOWER_ZOOMS.some((z, i) => !Number.isInteger(z) || z >= 17 || z < 0 || LOWER_ZOOMS.indexOf(z) !== i)) throw new Error(`DORAYAKI_LOWER_ZOOMS must list distinct integers below 17, got ${process.env.DORAYAKI_LOWER_ZOOMS}`);
+const MIN_ZOOM = LOWER_ZOOMS.length > 0 ? LOWER_ZOOMS[LOWER_ZOOMS.length - 1]! : ZOOM;
 const blockVersion = process.env.DORAYAKI_BLOCK_VERSION === "6" ? (6 as const) : undefined;
 const classPlane = process.env.DORAYAKI_CLASS_PLANE === "1";
+
+function parseTargets(spec: string): number | Record<number, number> {
+  if (/^\d+$/.test(spec)) return Number(spec);
+  const out: Record<number, number> = {};
+  for (const part of spec.split(",")) {
+    const m = /^(\d+):(\d+)$/.exec(part.trim());
+    if (!m) throw new Error(`DORAYAKI_ZOOM_TARGET_SPLATS: "${spec}" is not a number or a list like 16:45000,15:50000`);
+    out[Number(m[1])] = Number(m[2]);
+  }
+  return out;
+}
 
 function recipe(): TileBuildConfig {
   if (process.env.DORAYAKI_ADAPTIVE_LEVELS === undefined) throw new Error("DORAYAKI_ADAPTIVE_LEVELS is required (the tiled build always merges)");
   if (Number(process.env.DORAYAKI_ADAPTIVE_REFINE ?? 0) !== 0) throw new Error("DORAYAKI_ADAPTIVE_REFINE is not supported by the tiled build");
   return {
+    zooms: [ZOOM, ...LOWER_ZOOMS],
     adaptive: {
       maxLevel: Number(process.env.DORAYAKI_ADAPTIVE_LEVELS),
       thickness: Number(process.env.DORAYAKI_ADAPTIVE_THICKNESS ?? 0.05),
@@ -57,6 +73,8 @@ function recipe(): TileBuildConfig {
     cellScale: Number(process.env.DORAYAKI_ZOOM_CELL_SCALE ?? 1),
     thicknessScale: Number(process.env.DORAYAKI_ZOOM_THICKNESS_SCALE ?? 1),
     colorScale: Number(process.env.DORAYAKI_ZOOM_COLOR_SCALE ?? 1),
+    // E024: size as the criterion: splats per whole tile below z17 (`50000`, or `16:45000,15:50000`); a piece over its share is merged harder.
+    ...(process.env.DORAYAKI_ZOOM_TARGET_SPLATS ? { targetSplats: parseTargets(process.env.DORAYAKI_ZOOM_TARGET_SPLATS) } : {}),
   };
 }
 
@@ -158,6 +176,7 @@ function tileJob([work, x, y]: string[]): void {
   const stats: Record<string, unknown> = { tile: `${x}/${y}`, points: pieces[0]!.points, voxels: pieces[0]!.voxels, perZoom: {} as Record<number, number> };
   for (const p of pieces) {
     (stats.perZoom as Record<number, number>)[p.tile.z] = p.splats.length;
+    if (p.mergeScale !== undefined) ((stats.mergeScale ??= {}) as Record<number, number>)[p.tile.z] = p.mergeScale;
     if (p.tile.z === ZOOM) {
       const path = `${out}/${ZOOM}/${x}/${y}.mlt`;
       mkdirSync(dirname(path), { recursive: true });
@@ -254,7 +273,7 @@ async function orchestrate(argv: string[]): Promise<void> {
     for (const t of tiles) {
       add({ z: ZOOM, x: t.x, y: t.y }, statSync(`${out}/${ZOOM}/${t.x}/${t.y}.mlt`).size, jobStats[tiles.indexOf(t)]!.perZoom[ZOOM]!);
     }
-    for (const z of [16, 15]) {
+    for (const z of LOWER_ZOOMS) {
       for (const xd of readdirSync(`${work}/pieces/${z}`)) for (const yd of readdirSync(`${work}/pieces/${z}/${xd}`)) {
         const d = `${work}/pieces/${z}/${xd}/${yd}`;
         const splats: Splat[] = [];
@@ -287,13 +306,13 @@ async function orchestrate(argv: string[]): Promise<void> {
     const bounds: [number, number, number, number] = [tileLongitude(o, 0), tileLatitude(o, maxY - minY + 1), tileLongitude(o, maxX - minX + 1), tileLatitude(o, 0)];
     const stats = { inputs: specs, workers, points: scatterStats.reduce((n, s) => n + s.kept, 0), tiles: manifestTiles.length, maxzoomTiles: top.length, perZoom, tileBytes: manifestTiles.reduce((n, t) => n + t.bytes, 0) };
     const manifest = {
-      name: `${name}: tile-aligned build, aggregated z16,15, maxzoom z${ZOOM}`,
+      name: `${name}: tile-aligned build, aggregated z${LOWER_ZOOMS.join(",")}, maxzoom z${ZOOM}`,
       attribution: process.env.DORAYAKI_ATTRIBUTION ?? "点群: 静岡県 VIRTUAL SHIZUOKA (CC BY) を加工して作成", // `DORAYAKI_ATTRIBUTION` for other sources
       verticalDatum: "orthometric height (標高), metres, as in the source LAS",
       centre: [origin.lng, origin.lat], maxzoom: ZOOM, tiles: manifestTiles, bounds, stats,
     };
     writeFileSync(`${out}/manifest.json`, JSON.stringify(manifest, null, 2) + "\n");
-    writeFileSync(`${out}/tilejson.json`, JSON.stringify({ tilejson: "3.0.0", name: manifest.name, attribution: manifest.attribution, tiles: ["{z}/{x}/{y}.mlt"], minzoom: 15, maxzoom: ZOOM, bounds, center: [origin.lng, origin.lat, ZOOM] }, null, 2) + "\n");
+    writeFileSync(`${out}/tilejson.json`, JSON.stringify({ tilejson: "3.0.0", name: manifest.name, attribution: manifest.attribution, tiles: ["{z}/{x}/{y}.mlt"], minzoom: MIN_ZOOM, maxzoom: ZOOM, bounds, center: [origin.lng, origin.lat, ZOOM] }, null, 2) + "\n");
     const gzipTiles = process.env.DORAYAKI_TILE_COMPRESSION === "gzip";
     const tileFile = (t: TileAddress): string => `${out}/${t.z}/${t.x}/${t.y}.mlt`;
     const archiveBytes = writePmtilesFile(`demo/tiles/dorayaki-${name}.pmtiles`, archiveTiles.map((t) => ({

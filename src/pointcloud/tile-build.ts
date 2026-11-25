@@ -19,6 +19,8 @@ import { VoxelAccumulator } from "./voxel-accumulator.js";
 /** Cells along a tile's edge at every zoom (BASE_CELLS of progressive.ts). */
 const CELLS = 512;
 const TILE_ZOOM = 17;
+/** Merge steps tried in order when a piece must fit a target (thickness x s, color tolerance x sqrt(s)). */
+const MERGE_STEPS = [1, 2, 4, 8, 16, 32, 64] as const;
 
 export interface TileBuildConfig {
   /** Zooms to build, each at most 17 (default 17, 16, 15). */
@@ -28,11 +30,18 @@ export interface TileBuildConfig {
   /**
    * Coarser zooms (E023; every default is 1, which builds as before): `cellScale` multiplies the voxel edge of every zoom below z17 (2: cells of 2 m at z16
    * and 4 m at z15 instead of 1 and 2 m; a power of two that leaves whole merge groups in the tile), `thicknessScale` and `colorScale` multiply the merge
-   * thickness and color tolerance for each zoom below z17 (like `sparseScale`).
+   * thickness and color tolerance of every zoom below z17 by the same factor (not compounding per zoom: x4 per zoom left z15 with 2 % of its tile bytes, E024).
    */
   cellScale?: number;
   thicknessScale?: number;
   colorScale?: number;
+  /**
+   * Size as the criterion (E024): splats a whole tile of a zoom below z17 may hold, by zoom (the same number for every zoom: `targetSplats: 50000`, or `{ 16: 45000, 15: 50000 }`).
+   * The z17 tile's piece of a zoom may hold its area's share (the target divided by 4 for each zoom step down from z17, so the pieces of a tile add up to at most the target); a piece that
+   * is over its share is merged harder, in steps (merge thickness x s, color tolerance x sqrt(s), s = 1, 2, 4, ... 64: the first that fits), so dense places are merged more than sparse
+   * ones. The step taken is reported in `mergeScale`. Without it the fixed `thicknessScale` / `colorScale` apply.
+   */
+  targetSplats?: number | Readonly<Record<number, number>>;
   /** Class slots per voxel (0 = the points carry no class); the class is carried by `adaptive.opacityOf`. */
   classSlots?: number;
 }
@@ -51,6 +60,8 @@ export interface TilePiece {
   points: number;
   /** Voxels occupied before merging. */
   voxels: number;
+  /** With `targetSplats`: the merge step (s) that was needed; 1 when none was, absent without a target. */
+  mergeScale?: number;
 }
 
 /** The splats of one z17 tile and its contributions to lower zooms, one piece per zoom, in the order of `config.zooms`. */
@@ -82,17 +93,32 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
     const acc = accs[i]!;
     const d = TILE_ZOOM - z;
     const sparse = (config.adaptive.sparseSupport ?? 0) * (config.adaptive.sparseScale ?? 1) ** d;
-    const result = acc.voxels === 0
-      ? { gaussians: [] as Gaussian[], perLevel: new Array<number>(maxLevel + 1).fill(0) }
-      : adaptiveGaussians(acc, {
-        ...config.adaptive, sparseSupport: sparse,
-        ...(config.thicknessScale !== undefined ? { thickness: config.adaptive.thickness * config.thicknessScale ** d } : {}),
-        ...(config.colorScale !== undefined ? { colorTolerance: config.adaptive.colorTolerance * config.colorScale ** d } : {}),
-      });
+    const options = (extra: Partial<AdaptiveOptions> = {}): AdaptiveOptions => ({
+      ...config.adaptive, sparseSupport: sparse,
+      ...(config.thicknessScale !== undefined ? { thickness: config.adaptive.thickness * (d > 0 ? config.thicknessScale : 1) } : {}),
+      ...(config.colorScale !== undefined ? { colorTolerance: config.adaptive.colorTolerance * (d > 0 ? config.colorScale : 1) } : {}),
+      ...extra,
+    });
+    let mergeScale: number | undefined;
+    let result: { gaussians: Gaussian[]; perLevel: number[] } = { gaussians: [], perLevel: new Array<number>(maxLevel + 1).fill(0) };
+    if (acc.voxels > 0) {
+      const tileTarget = typeof config.targetSplats === "number" ? config.targetSplats : config.targetSplats?.[z];
+      if (d > 0 && tileTarget !== undefined) {
+        const share = Math.max(1, Math.floor(tileTarget / 4 ** d));
+        const base = options();
+        for (const s of MERGE_STEPS) {
+          mergeScale = s;
+          result = adaptiveGaussians(acc, { ...base, thickness: base.thickness * s, colorTolerance: Math.min(1, base.colorTolerance * Math.sqrt(s)) });
+          if (result.gaussians.length <= share) break;
+        }
+      } else {
+        result = adaptiveGaussians(acc, options());
+      }
+    }
     const target: TileAddress = { z, x: tile.x >> d, y: tile.y >> d };
     const ox = tile.x - (target.x << d), oy = tile.y - (target.y << d);
     const scale = 2 ** d;
     const splats = result.gaussians.map((g) => splatOfGaussian(g, (ox + g.position[0] / width) / scale, (oy - g.position[1] / width) / scale));
-    return { tile: target, splats, perLevel: result.perLevel, points: acc.points, voxels: acc.voxels };
+    return { tile: target, splats, perLevel: result.perLevel, points: acc.points, voxels: acc.voxels, ...(mergeScale !== undefined ? { mergeScale } : {}) };
   });
 }
