@@ -209,6 +209,11 @@ the work directory of the 32-sheet build peaked at about 6.4 GB. Result, recipe 
 In the local demo (`?fixture=sasebo-32`) the area is continuous at zoom 14.6 (no dark hole between the groups); that view loads **12 z15 tiles, 5.45 million splats, 65 MB** (the eight-sheet archive: 30 MB), so the low-zoom
 tile size (see above) now matters for a viewer: not changed in this build. Not looked at: the near views of the filled area, other browsers, the hosted archive.
 
+**Hosted 2026-11-25**: `dorayaki-sasebo.pmtiles` on stars was replaced by the 32-sheet archive (1,234,118,714 B, SHA-256 `961254299d13f9e0872eeb063ec497f0183b5fc4ae10ed9cc576460bf0a43577`; the eight-sheet one,
+`ed7f8d01...`, is kept locally as `demo/tiles/dorayaki-sasebo.pmtiles`). Procedure as before: state of the target and of the temporary name checked first, scp to `.dorayaki-sasebo.pmtiles.new.1034` (5 min 53 s), size and SHA-256 on the host,
+`rm`, 8 s, `mv -n` (the user said in chat to replace it). Checked afterwards: the TileJSON (bounds 129.7018 to 129.7595, 33.1330 to 33.1835, zoom 15 to 17, with `?v=20261125a`) and four tiles of z15 to z17, all identical to the local
+files. The site's pin is now `?v=20261125a`. The stars host: 1.3 TB free, 7.6 GB of RAM; no memory or time-to-first-picture measurement of Martin with a 1.2 GB archive was made.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
