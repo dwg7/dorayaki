@@ -214,6 +214,41 @@ tile size (see above) now matters for a viewer: not changed in this build. Not l
 `rm`, 8 s, `mv -n` (the user said in chat to replace it). Checked afterwards: the TileJSON (bounds 129.7018 to 129.7595, 33.1330 to 33.1835, zoom 15 to 17, with `?v=20261125a`) and four tiles of z15 to z17, all identical to the local
 files. The site's pin is now `?v=20261125a`. The stars host: 1.3 TB free, 7.6 GB of RAM; no memory or time-to-first-picture measurement of Martin with a 1.2 GB archive was made.
 
+## Smaller low zooms, z14 and z13, and a view budget (E024, measured 2026-11-25; not hosted yet)
+
+hfu's direction: a z15 or z16 tile about a quarter of its size; add z14 and z13 (the area will grow); a view budget of 40 MB and 4 million splats; loss of detail at the low zooms is accepted;
+"size is the criterion, not the look", and the merge may adapt by zoom (the fractal dimension of the cloud changes with scale).
+
+What changed:
+
+- `build:tiled` builds any lower zooms (`DORAYAKI_LOWER_ZOOMS=16,15,14,13`; default 16,15).
+- **Size target** (`DORAYAKI_ZOOM_TARGET_SPLATS=16:100000,15:160000,14:160000,13:160000`, `src/pointcloud/tile-build.ts`): each z17 tile job may give a lower-zoom tile its area's share of the target;
+  a piece over its share is merged harder in steps (thickness x s, color tolerance x sqrt(s), s = 1, 2, 4, ... 64; the first that fits). Dense places are merged more than sparse ones, and a tile never exceeds the target.
+  The fixed scales `DORAYAKI_ZOOM_THICKNESS_SCALE` / `_COLOR_SCALE` now act once below z17 instead of compounding per zoom (x4 per zoom had left z15 with 2 % of its bytes).
+- **Viewer** (`?mixed=1`, `selectBudgetedTiles` in `demo/src/mixed-selection.ts`, 6 tests): the coarsest tiles that touch the view first (the whole view is covered), then the most deserving tile
+  (nearest, by the effective-zoom rule of E015) is replaced by its children while the bytes stay within `?budget=` MB (default 40) and the splats within `?splats=` (default 4,000,000). Sizes of tiles loaded before are used,
+  else the mean of the loaded tiles of that zoom, else 1.5 MB at z17 and 0.8 MB below. The older cap of 24 tiles is `?mixed=2`.
+
+Eight sheets (cell scale 2 below z17), against the hosted eight-sheet archive: z16 mean 0.55 MB, max 1.06 MB (24 % and 14 %); z15 mean 0.62, max 1.45 (22 %, 16 %); z14 mean 0.29, z13 0.20.
+Other variants on the same eight sheets (fixed scales): cell 2 only z15 28 %, z16 42 %; cell 2 + thickness x4 + color x2 (flat) 21 %, 23 % (`f4`); a target of 50,000 splats per tile held the cap but left the means at 6 % and 11 %.
+
+**32 sheets** (`sasebo-32q`, 452 s, the same recipe as the hosted one at z17): **PMTiles 713,970,031 B** (SHA-256 `472c72129209c3f9ceee960cb008b5fe46ae76148ebfb78794d7305fb90933b8`; the hosted 32-sheet one is 1,234,118,714 B).
+
+| zoom | tiles | mean | max | hosted 32 sheets (mean / max) |
+| ---: | ---: | ---: | ---: | ---: |
+| 13 | 6 | 0.30 MB | 0.98 MB | - |
+| 14 | 14 | 0.54 MB | 1.62 MB | - |
+| 15 | 32 | 0.90 MB | 1.73 MB | 5.48 / 15.92 MB |
+| 16 | 105 | 0.61 MB | 1.06 MB | 4.25 / 15.88 MB |
+| 17 | 381 | 1.61 MB | 6.68 MB | the same |
+
+In the local demo: at zoom 16.3, pitch 62 the screen is filled to the far edge of the data with 30 tiles (z17 14, z16 18, z15 3 loaded), 29 MB, 2.4 million splats; at zoom 13.8, pitch 50 the whole 32-sheet area
+is drawn from 10 tiles, 6.0 MB (the hosted archive at zoom 15.2: 12 tiles, 63 MB). The near views (z17) are unchanged. Not done: hosting this archive, a drag over the area, other browsers, the z17 tile size (now the largest part of the archive and of a near view).
+
+**Hosted 2026-11-25 (second replacement of the day)**: `dorayaki-sasebo.pmtiles` on stars is now this E024 archive (713,970,031 B, SHA-256 `472c72129209c3f9ceee960cb008b5fe46ae76148ebfb78794d7305fb90933b8`, zoom 13 to 17;
+the previous 32-sheet one, `961254299d13...`, is kept locally as `demo/tiles/dorayaki-sasebo-32.pmtiles`). Same procedure (state checked, scp to `.dorayaki-sasebo.pmtiles.new.15653`, size and SHA-256 on the host, rm, 8 s, `mv -n`; the user said to replace it).
+Checked afterwards: the TileJSON with `?v=20261125b` (minzoom 13) and one tile of each zoom 13 to 17, identical to the local files. The site pins `?v=20261125b` and carries the covering budget of `?mixed=1`.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable

@@ -63,3 +63,81 @@ export function selectMixedTiles(candidates: readonly TileAddress[], bounds: Lng
   };
   return leaves.sort((a, b) => centre(a) - centre(b)).slice(0, options.limit);
 }
+
+export interface BudgetOptions {
+  /** Most bytes the chosen tiles may add up to (known sizes where a tile was loaded before, else `priorBytes`). */
+  maxBytes: number;
+  /** Most splats (bytes / `bytesPerSplat`). */
+  maxSplats: number;
+  /** Bytes per splat of the tile format (Surfel Block v6: 12; v5: 16). Default 12. */
+  bytesPerSplat?: number;
+  /** The size of a tile when it is known (it was loaded before). */
+  knownBytes?: (t: TileAddress) => number | undefined;
+  /** A guess for a tile whose size is not known, by zoom. */
+  priorBytes: (zoom: number) => number;
+  /** Never go finer than this zoom (a coarser stage first). */
+  maxZoom?: number;
+}
+
+/**
+ * Detail by distance under a budget, covering the whole view (E024): start from the coarsest tiles that touch the view, so no
+ * part of the screen is left empty, then replace a tile by its finer children where the camera deserves it (the same rule as
+ * `selectMixedTiles`: the tile's nearest point is seen at a map zoom of at least the next zoom), the most deserving (nearest) first, as long
+ * as the bytes and splats stay within the budget. A refinement that does not fit is skipped, and smaller ones are still tried. The
+ * result is a partition (no tile covers another), nearest to the view centre first. If even the coarsest cover is over budget it is
+ * returned as it is: coverage comes before the budget.
+ */
+export function selectBudgetedTiles(candidates: readonly TileAddress[], bounds: LngLatBoundsArray, view: View, options: BudgetOptions): TileAddress[] {
+  const camera = cameraModel(view);
+  const exists = new Set(candidates.map(key));
+  const zooms = [...new Set(candidates.map((t) => t.z))].sort((a, b) => a - b);
+  if (zooms.length === 0) return [];
+  const finest = Math.min(zooms[zooms.length - 1]!, options.maxZoom ?? Infinity);
+  const bytesPerSplat = options.bytesPerSplat ?? 12;
+  const costOf = (t: TileAddress): number => options.knownBytes?.(t) ?? options.priorBytes(t.z);
+  const limit = Math.min(options.maxBytes, options.maxSplats * bytesPerSplat);
+
+  /** The finer tiles that would replace `t`, when it may be refined at all (a finer zoom exists, within `finest`, and every one of its children exists). */
+  const childrenOf = (t: TileAddress): TileAddress[] | undefined => {
+    const next = zooms.find((z) => z > t.z);
+    if (next === undefined || next > finest) return undefined;
+    const k = 2 ** (next - t.z);
+    const all: TileAddress[] = [];
+    for (let dx = 0; dx < k; dx++) for (let dy = 0; dy < k; dy++) all.push({ z: next, x: t.x * k + dx, y: t.y * k + dy });
+    if (!all.every((c) => exists.has(key(c)))) return undefined;
+    return all.filter((c) => intersects(c, bounds));
+  };
+
+  const leaves = new Map<string, TileAddress>();
+  let used = 0;
+  const open: Array<{ tile: TileAddress; eff: number }> = [];
+  const add = (t: TileAddress): void => {
+    leaves.set(key(t), t);
+    used += costOf(t);
+    const next = zooms.find((z) => z > t.z);
+    if (next === undefined || next > finest) return;
+    const eff = tileEffectiveZoom(t, camera, view.centreZ);
+    if (eff >= next) open.push({ tile: t, eff });
+  };
+  for (const t of candidates) if (t.z === zooms[0] && intersects(t, bounds)) add(t);
+
+  while (open.length > 0) {
+    let best = 0;
+    for (let i = 1; i < open.length; i++) if (open[i]!.eff > open[best]!.eff) best = i;
+    const { tile } = open.splice(best, 1)[0]!;
+    const children = childrenOf(tile);
+    if (!children) continue;
+    const delta = children.reduce((n, c) => n + costOf(c), 0) - costOf(tile);
+    if (used + delta > limit) continue; // does not fit; a smaller refinement elsewhere may
+    leaves.delete(key(tile));
+    used -= costOf(tile);
+    for (const c of children) add(c);
+  }
+
+  const [mx, my] = [camera.mx, camera.my];
+  const centre = (t: TileAddress): number => {
+    const [X, Y] = mercator(tileLongitude(t, 0.5), tileLatitude(t, 0.5));
+    return (X - mx) ** 2 + (Y - my) ** 2;
+  };
+  return [...leaves.values()].sort((a, b) => centre(a) - centre(b));
+}

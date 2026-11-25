@@ -21,7 +21,7 @@ import { vegetationFlags } from "./vegetation.js";
 import { classStyle } from "./class-palette.js";
 import { decodeClassPlane, readClassPlane, VEGETATION_CLASSES, CLASS_DERIVED_CANOPY, CLASS_UNCLASSIFIED, type ClassPlane } from "../../src/class-plane.js";
 import { extractClassPlanes } from "../../src/mlt-frame.js";
-import { selectMixedTiles } from "./mixed-selection.js";
+import { selectBudgetedTiles, selectMixedTiles } from "./mixed-selection.js";
 import type { View } from "./camera.js";
 import type { LngLatBoundsArray } from "./tile-view.js";
 
@@ -75,6 +75,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "kawazu-mix-sp12": "tiles/kawazu-mix-sp12/tilejson.json",
         "kawazu-mix-sp24": "tiles/kawazu-mix-sp24/tilejson.json",
         sasebo: "tiles/sasebo/tilejson.json",
+        t4q: "tiles/t4q/tilejson.json",
         "sr-cur": "tiles/sr-cur/tilejson.json",
         "sr-t1c1": "tiles/sr-t1c1/tilejson.json",
         "sr-l2": "tiles/sr-l2/tilejson.json",
@@ -84,8 +85,8 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "lz-thick": "tiles/lz-thick/tilejson.json",
         "lz-sparse": "tiles/lz-sparse/tilejson.json",
         "lz-all": "tiles/lz-all/tilejson.json",
+        "sasebo-32q": "tiles/sasebo-32q/tilejson.json",
         "sasebo-32": "tiles/sasebo-32/tilejson.json",
-        "sasebo-23": "tiles/sasebo-23/tilejson.json",
         "sasebo-3513": "tiles/sasebo-3513/tilejson.json",
       };
 type ExternalTileset = string;
@@ -111,8 +112,9 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
   ...Object.fromEntries(["sasebo-3513", "sr-cur", "sr-t1c1", "sr-l2", "sr-t05c1", "sr-l1", "lz-cell2", "lz-thick", "lz-sparse", "lz-all"].map((n) => [n, { terrain: "1", extent: "1.3" }])), // E023 recipe candidates (one sheet)
+  "sasebo-32q": { terrain: "1", extent: "1.3", mixed: "1" },
   "sasebo-32": { terrain: "1", extent: "1.3", mixed: "1" },
-  "sasebo-23": { terrain: "1", extent: "1.3", mixed: "1" },
+  t4q: { terrain: "1", extent: "1.3", mixed: "1" },
   sasebo: { terrain: "1", extent: "1.3", mixed: "1" }, // as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance: the nine-tile limit covered only part of a tilted view (`?mixed=0` switches it off)
 };
 /** A query flag: the URL's value, else the tileset's default. */
@@ -226,12 +228,22 @@ const classesNeeded = (): boolean => hideCodes().length > 0 || colorEl.value ===
 /** The vegetation guess (vegetation.ts): `?vegh=` metres above the local ground, `?vegcell=` cell metres, `?vegshape=0` ignores the shape. */
 const vegNumber = (name: string, fallback: number): number => { const v = Number(flag(name, tileset)); return v > 0 ? v : fallback; };
 const vegOptions = { minHeight: vegNumber("vegh", 2), cellMetres: vegNumber("vegcell", 4), roundOnly: flag("vegshape", tileset) !== "0" };
+/** Sizes of the tiles loaded so far (bytes), by `z/x/y`: the budget of `?mixed=1` uses them instead of a guess. */
+const tileSizes = new Map<string, number>();
+const sizeKey = (t: TileAddress): string => `${t.z}/${t.x}/${t.y}`;
+/** A guess for a tile not loaded yet: the mean of the loaded tiles of its zoom, else a default (finest zoom larger, from E024's builds). */
+function guessTileBytes(zoom: number): number {
+  let n = 0, sum = 0;
+  for (const [k, v] of tileSizes) if (k.startsWith(`${zoom}/`)) { n++; sum += v; }
+  return n > 0 ? sum / n : zoom >= 17 ? 1.5e6 : 0.8e6;
+}
 async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   const t0 = performance.now();
   // Tiles listed from TileJSON bounds may not exist (204/404); those come back as null.
   const [bytes] = await fetchTilesBytes([urlOf(tile)], undefined, { allowMissing: external !== undefined });
   timings.fetchMs += performance.now() - t0;
   if (!bytes) return null;
+  tileSizes.set(sizeKey(tile), bytes.byteLength);
   const t1 = performance.now();
   if (flag("gpu", tileset) !== "legacy") {
     const packed = packSurfelTile(bytes); // no Splat objects: the records go to the GPU as they are
@@ -325,7 +337,11 @@ map.on("load", () => {
   const lod = Number(flag("lod", tileset));
   const dz = Number(flag("dz", tileset));
   // `?mixed=1`: tiles of several zooms at once, by distance from the camera (documents/demo-and-site.md, E015).
-  const mixed = flag("mixed", tileset) === "1";
+  // `1`: under a budget that always covers the view (E024; `?budget=` megabytes, default 40, and `?splats=` default 4000000); `2`: the older cap of 24 tiles.
+  const mixedMode = flag("mixed", tileset);
+  const mixed = mixedMode === "1" || mixedMode === "2";
+  const budgetMB = Number(flag("budget", tileset)) > 0 ? Number(flag("budget", tileset)) : 40;
+  const budgetSplats = Number(flag("splats", tileset)) > 0 ? Number(flag("splats", tileset)) : 4_000_000;
   // With terrain on, MapLibre's terrain at low zoom is coarser than the ground and lies above it in places, covering
   // the splats; raise them by a zoom-dependent amount (terrain-lift.ts). `?dz=` raises everything by dz metres (debug).
   const zoomLift = (): number => (terrain > 0 ? terrainLift(map.getZoom()) : 0);
@@ -469,7 +485,9 @@ map.on("load", () => {
   let summary = "loading…";
   const streamer = new TileStreamer<LoadedTile>({
     candidates: tiles,
-    ...(mixed ? { select: (_z: number, b: LngLatBoundsArray, maxZoom?: number) => selectMixedTiles(tiles, b, currentView(), { limit: 24, ...(maxZoom !== undefined ? { maxZoom } : {}) }) } : {}),
+    ...(mixed ? { select: (_z: number, b: LngLatBoundsArray, maxZoom?: number) => mixedMode === "2"
+      ? selectMixedTiles(tiles, b, currentView(), { limit: 24, ...(maxZoom !== undefined ? { maxZoom } : {}) })
+      : selectBudgetedTiles(tiles, b, currentView(), { maxBytes: budgetMB * 1e6, maxSplats: budgetSplats, knownBytes: (t) => tileSizes.get(sizeKey(t)), priorBytes: guessTileBytes, ...(maxZoom !== undefined ? { maxZoom } : {}) }) } : {}),
     staged: flag("staged", tileset) !== "0", // show the next coarser zoom while the first set loads (`?staged=0` switches it off)
     load: loadTile,
     onProgress: ({ zoom, wanted, done }) => {

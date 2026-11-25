@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { View } from "../demo/src/camera.js";
-import { selectMixedTiles } from "../demo/src/mixed-selection.js";
+import { selectBudgetedTiles, selectMixedTiles } from "../demo/src/mixed-selection.js";
 import { tileLatitude, tileLongitude, type TileAddress } from "../src/tile-geometry.js";
 
 /** A pyramid over four z15 tiles near Kawazu: z15 (4), z16 (16), z17 (64), all present. */
@@ -80,4 +80,65 @@ test("visibleBounds: a top-down view sees about the screen's ground area; a tilt
   const tilted = visibleBounds(view({ zoom: 17, pitch: 75, bearing: 0 }));
   assert.ok(tilted[3] - lat > lat - tilted[1], "more ground to the north (ahead) than to the south");
   assert.ok(tilted[3] > top[3]);
+});
+
+// ---- selectBudgetedTiles (E024)
+const MB = 1e6;
+const prior = (z: number): number => (z >= 17 ? 1.5 * MB : 0.7 * MB);
+const budget = (maxBytes: number, over: object = {}) => ({ maxBytes, maxSplats: 1e9, priorBytes: prior, ...over });
+const cost = (tiles: TileAddress[]): number => tiles.reduce((n, t) => n + prior(t.z), 0);
+const intersectsBounds = (t: TileAddress): boolean => !(tileLongitude(t, 1) <= bounds[0] || tileLongitude(t, 0) >= bounds[2] || tileLatitude(t, 0) <= bounds[1] || tileLatitude(t, 1) >= bounds[3]);
+
+test("budget: with room for everything it chooses what selectMixedTiles chooses", () => {
+  const v = view({ zoom: 16.8, pitch: 80 });
+  const plain = selectMixedTiles(all, bounds, v, { limit: 1000 }).map(key).sort();
+  const b = selectBudgetedTiles(all, bounds, v, budget(1e12)).map(key).sort();
+  assert.deepEqual(b, plain);
+});
+
+test("budget: a tiny budget still covers the whole view with the coarsest tiles", () => {
+  const t = selectBudgetedTiles(all, bounds, view({}), budget(1));
+  const coarse = all.filter((x) => x.z === 15 && intersectsBounds(x)).map(key).sort();
+  assert.deepEqual(t.map(key).sort(), coarse);
+});
+
+test("budget: every coarse tile in view is covered by itself or by tiles under it, nothing overlaps, and the bytes stay within the budget", () => {
+  const v = view({ zoom: 16.8, pitch: 80 });
+  for (const limit of [3 * MB, 6 * MB, 12 * MB, 25 * MB]) {
+    const t = selectBudgetedTiles(all, bounds, v, budget(limit));
+    assert.ok(noOverlap(t));
+    for (const c of all.filter((x) => x.z === 15 && intersectsBounds(x))) {
+      assert.ok(t.some((x) => key(x) === key(c) || isAncestor(c, x)), `${key(c)} uncovered at ${limit}`);
+    }
+    const coarsest = cost(all.filter((x) => x.z === 15 && intersectsBounds(x)));
+    assert.ok(cost(t) <= Math.max(limit, coarsest), `${cost(t)} > ${limit}`);
+  }
+});
+
+test("budget: the refinements go to the nearest tiles first (a tilted view looking north)", () => {
+  const v = view({ zoom: 16.8, pitch: 80, bearing: 0 });
+  const t = selectBudgetedTiles(all, bounds, v, budget(8 * MB));
+  const zs = new Set(t.map((x) => x.z));
+  assert.ok(zs.size >= 2, `zooms ${[...zs].join(",")}`);
+  const southmost = t.reduce((a, b) => (centreOf(a)[1] < centreOf(b)[1] ? a : b));
+  const northmost = t.reduce((a, b) => (centreOf(a)[1] > centreOf(b)[1] ? a : b));
+  assert.ok(southmost.z >= northmost.z);
+});
+
+test("budget: a tile known to be huge is not refined into bigger ones, and known sizes replace the guess", () => {
+  const v = view({});
+  const huge = new Set(all.filter((x) => x.z === 16).map(key));
+  const t = selectBudgetedTiles(all, bounds, v, budget(20 * MB, { knownBytes: (x: TileAddress) => (huge.has(key(x)) ? 50 * MB : undefined) }));
+  assert.ok(t.every((x) => x.z <= 15), "the z16 children are too big for the budget, so nothing is refined");
+});
+
+test("budget: maxZoom, a missing child and the splat limit are respected, and no candidates gives none", () => {
+  const v = view({});
+  assert.ok(selectBudgetedTiles(all, bounds, v, budget(1e12, { maxZoom: 16 })).every((x) => x.z <= 16));
+  const missing = key({ z: 17, x: 116122, y: 52010 });
+  const t = selectBudgetedTiles(all.filter((x) => key(x) !== missing), bounds, v, budget(1e12));
+  assert.ok(noOverlap(t) && !t.some((x) => key(x) === missing) && t.some((x) => x.z === 16));
+  const few = selectBudgetedTiles(all, bounds, v, { maxBytes: 1e12, maxSplats: 1, bytesPerSplat: 12, priorBytes: prior });
+  assert.ok(few.every((x) => x.z === 15));
+  assert.deepEqual(selectBudgetedTiles([], bounds, v, budget(1)), []);
 });

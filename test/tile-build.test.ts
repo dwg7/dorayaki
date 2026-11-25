@@ -88,3 +88,27 @@ test("thicknessScale and colorScale only act below z17", () => {
   assert.equal(strong[0]!.splats.length, base[0]!.splats.length);
   assert.ok(strong[1]!.splats.length <= base[1]!.splats.length && strong[2]!.splats.length <= base[2]!.splats.length);
 });
+
+test("targetSplats: a piece over its share is merged harder, z17 is untouched, and the pieces of a tile add up to at most the target", () => {
+  const plain = buildTilePieces(scene(7), TILE, CONFIG);
+  const target = 400;
+  const fitted = buildTilePieces(scene(7), TILE, { ...CONFIG, targetSplats: target });
+  assert.equal(fitted[0]!.splats.length, plain[0]!.splats.length);
+  assert.equal(fitted[0]!.mergeScale, undefined);
+  for (const [i, d] of [[1, 1], [2, 2]] as const) {
+    const share = Math.floor(target / 4 ** d);
+    assert.ok(fitted[i]!.splats.length <= Math.max(share, plain[i]!.splats.length ? 0 : share) || fitted[i]!.mergeScale === 64, `z${17 - d}: ${fitted[i]!.splats.length} > ${share} at step ${fitted[i]!.mergeScale}`);
+    assert.ok(fitted[i]!.splats.length <= plain[i]!.splats.length);
+    assert.ok(fitted[i]!.mergeScale! >= 1);
+  }
+  // A target the piece already meets changes nothing and takes step 1.
+  const roomy = buildTilePieces(scene(7), TILE, { ...CONFIG, targetSplats: 10_000_000 });
+  assert.deepEqual(roomy[1]!.splats, plain[1]!.splats);
+  assert.equal(roomy[1]!.mergeScale, 1);
+});
+
+test("targetSplats can be given by zoom", () => {
+  const p = buildTilePieces(scene(8), TILE, { ...CONFIG, targetSplats: { 16: 10_000_000, 15: 200 } });
+  assert.equal(p[1]!.mergeScale, 1);
+  assert.ok(p[2]!.mergeScale! >= 1);
+});
