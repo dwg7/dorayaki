@@ -245,6 +245,10 @@ Other variants on the same eight sheets (fixed scales): cell 2 only z15 28 %, z1
 In the local demo: at zoom 16.3, pitch 62 the screen is filled to the far edge of the data with 30 tiles (z17 14, z16 18, z15 3 loaded), 29 MB, 2.4 million splats; at zoom 13.8, pitch 50 the whole 32-sheet area
 is drawn from 10 tiles, 6.0 MB (the hosted archive at zoom 15.2: 12 tiles, 63 MB). The near views (z17) are unchanged. Not done: hosting this archive, a drag over the area, other browsers, the z17 tile size (now the largest part of the archive and of a near view).
 
+**Hosted 2026-11-25 (second replacement of the day)**: `dorayaki-sasebo.pmtiles` on stars is now this E024 archive (713,970,031 B, SHA-256 `472c72129209c3f9ceee960cb008b5fe46ae76148ebfb78794d7305fb90933b8`, zoom 13 to 17;
+the previous 32-sheet one, `961254299d13...`, is kept locally as `demo/tiles/dorayaki-sasebo-32.pmtiles`). Same procedure (state checked, scp to `.dorayaki-sasebo.pmtiles.new.15653`, size and SHA-256 on the host, rm, 8 s, `mv -n`; the user said to replace it).
+Checked afterwards: the TileJSON with `?v=20261125b` (minzoom 13) and one tile of each zoom 13 to 17, identical to the local files. The site pins `?v=20261125b` and carries the covering budget of `?mixed=1`.
+
 ## What follows (estimates, not measured on a build)
 
 - **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
