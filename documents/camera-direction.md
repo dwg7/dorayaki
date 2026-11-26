@@ -24,17 +24,20 @@ human says what they want to see, the computer does the camerawork.
 ## The proposal
 
 A *director* that turns intent into camerawork on MapLibre GL JS, in two forms that
-share one shot representation:
+share one shot representation. The forms are not equal in priority: **the
+agent-operated form comes first** (decided by Fujimura, 2026-11-26); the in-browser
+control is a later host for the same director, not the starting point.
 
-1. **A MapLibre control inside dorayaki.** A `DirectorControl` (working name) next
+1. **An agent-operated map.** The shot script is the contract by which an external
+   agent (an LLM agent such as the ones already working in dwg7) operates the map
+   on the user's behalf: the agent reads the scene, writes shots, and the map
+   executes them.
+2. **A MapLibre control inside dorayaki.** A `DirectorControl` (working name) next
    to the existing controls: the user types or picks an intent ("show me Sasebo bay
    from the sea, then move in on the shipyard"), the control compiles it to a shot
-   script, previews it, and plays it by driving the map's camera.
-2. **An agent-operated map.** The same shot script is the contract by which an
-   external agent (an LLM agent such as the ones already working in dwg7) operates
-   the map on the user's behalf: the agent reads the scene, writes shots, and the
-   map executes them. The control is the in-browser host of the director; the agent
-   interface is the out-of-browser host. One shot model, two hosts.
+   script, previews it, and plays it by driving the map's camera. The control is
+   the in-browser host of the director; the agent interface is the out-of-browser
+   host. One shot model, two hosts.
 
 The deliverable of the director is not a video file. It is a *live* camera
 performance on the real renderer, over the real tiles, which the user can interrupt
@@ -139,7 +142,7 @@ same in all three.**
 - The constraints differ (a drone has battery, wind and regulation; a virtual
   camera has tile streaming and render load) but the intent layer — subject,
   primitive, path, look-at, duration — is shared. One vocabulary, three hosts:
-  browser control, agent, aircraft.
+  agent, browser control, aircraft.
 
 ## Prior art in the group
 
@@ -189,10 +192,10 @@ collisions, data range). Two differences from this note:
 1. A player only: hand-written shot JSON for the six primitives, per-frame camera
    driver, on the existing Sasebo demo. No language input yet.
 2. Storyboard stills from a shot script (cheap: seek the player, capture frames).
-3. A `DirectorControl` shell with typed intent compiled by a small, inspectable
-   rule set before any LLM is involved.
-4. Only then: LLM compilation of free-text intent, and the agent-facing interface
-   (the same shot JSON in and out).
+3. The agent-facing interface (the same shot JSON in and out), with LLM
+   compilation of free-text intent: the priority form, per the proposal above.
+4. Later, if it earns its place: a `DirectorControl` shell with typed intent
+   compiled by a small, inspectable rule set.
 
 Each step is independently reviewable, and none of them changes the tile format,
 the surfel layer, or MapLibre.
