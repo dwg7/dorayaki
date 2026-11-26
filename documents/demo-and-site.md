@@ -48,7 +48,7 @@ All optional; the camera is in the fragment, the rest in the query.
 | `?color=class`, the "color" select | draw by class in a vivid palette, with a legend (E021); needs a class plane to be meaningful |
 | `?shade=<0..1>` | strength of the shading: 1 (default) is the fixed two-sided Lambert light, 0 draws the colors as stored (no shading, as 3D Gaussian splats do) |
 | `?mixed=1` | draw tiles of several zooms at once, chosen by distance from the camera (`mixed-selection.ts`; E015). `1`: under a budget that always covers the view with the coarsest tiles, then refines the nearest first (E024; `?budget=` megabytes, default 40, `?splats=` default 4000000; sizes of loaded tiles, else a guess by zoom); `2`: the older cap of the 24 nearest tiles, instead of the nearest nine tiles of one zoom (the default for `sasebo`; `?mixed=0` switches it off) |
-| `?shots=<name or path>` | play a shot script once the first tiles are drawn (`shot-player.ts`; a bare name is `shots/<name>.json` next to the page, e.g. `?shots=sasebo`); any pointer, wheel, touch or key input stops it; progress in the console. Not on the Pages site (the shots are not part of its build) |
+| `?shots=<name or path>` | play a shot script once the first tiles are drawn (`shot-player.ts`; a bare name is `shots/<name>.json` next to the page, e.g. `?shots=sasebo`; the site build copies `demo/shots/` to `docs/shots/`). Without it, a tileset with a tour (`TOURS` in main.ts: `sasebo`) shows the control with a Play tour button and does not start by itself. The control (`shot-control.ts`, top right) shows playing / finished / stopped, the time and a progress bar, with Stop or Replay; any other pointer, wheel, touch or key input on the map stops the tour |
 | `?staged=0` | switch off the staged first display: the next coarser zoom is shown while the first set of tiles loads (E014) |
 | `?gpu=legacy` | draw from float instance data (56 bytes per splat) instead of the packed 16-byte records, to compare the two (E013) |
 | `?dz=<metres>` | raise every tile, to test high-elevation behaviour |
@@ -81,6 +81,7 @@ Kept separate as AGENTS.md requires.
 | `pan-zoom-keeper.ts` | keep the zoom across a pan drag over terrain (workaround; `?keepzoom=0` switches it off) |
 | `mixed-selection.ts` | tiles of several zooms by distance (`?mixed=1`) |
 | `shot-player.ts` | shot scripts played as a camera (`?shots=`), step 1 of documents/camera-direction.md |
+| `shot-control.ts` | the tour's status control: playing / finished / stopped, progress, Play tour / Stop / Replay |
 | `splat-instances.ts` | per-splat instance data (float attributes; `?gpu=legacy`, and the reference for the packed shader) |
 | `gpu-surfels.ts` | shaders (float attributes and packed 16-byte records), buffer upload, instanced draw |
 | `surfel-layer.ts` | MapLibre `CustomLayerInterface` lifecycle; `setTiles` swaps the tile set |

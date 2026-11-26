@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import { distanceForZoom, zoomForDistance } from "../demo/src/camera.js";
 import {
-  buildTimeline, cameraOfMapView, ease, mapViewOf, parseShotScript, playShots, sampleTimeline,
+  buildTimeline, cameraOfMapView, describePlayback, ease, mapViewOf, parseShotScript, playShots, sampleTimeline,
   type CameraState, type MapView, type PlayerMap, type Shot,
 } from "../demo/src/shot-player.js";
 
@@ -129,7 +129,7 @@ test("the Sasebo example (demo/shots/sasebo.json) parses and plays: five shots, 
 
 /** A map that records jumpTo, with a container whose listeners the test can fire, and a frame clock the test advances. */
 function fakeMap() {
-  const listeners = new Map<string, () => void>();
+  const listeners = new Map<string, (event: { target: unknown }) => void>();
   const view = { lng: 129.72, lat: 33.179, zoom: 16, pitch: 60, bearing: 0 };
   const jumps: MapView[] = [];
   const map: PlayerMap = {
@@ -169,7 +169,7 @@ test("playShots: manual input stops at once and leaves the camera where it is", 
   f.step(0);
   f.step(2000);
   const before = f.jumps.length;
-  f.listeners.get("pointerdown")!();
+  f.listeners.get("pointerdown")!({ target: "map" });
   f.step(2100);
   assert.deepEqual(ends, ["user"]);
   assert.equal(f.jumps.length, before, "no frame after the input");
@@ -225,4 +225,33 @@ test("playShots with terrain: the map's clamping is switched off while playing, 
   f.step(1500);
   assert.deepEqual(ends, ["done"]);
   assert.equal(clamped, true);
+});
+
+test("playShots: onFrame reports the time played; input the control ignores does not stop it", () => {
+  const f = fakeMap();
+  const ends: string[] = [];
+  const frames: Array<[number, number]> = [];
+  playShots(f.map, parseShotScript({ shots: [{ type: "hold", duration_s: 2, look_at: { lng: 129.72, lat: 33.18 }, camera: {} }] }), {
+    frames: f.frames, onEnd: (r) => ends.push(r), onFrame: (t, d) => frames.push([t, d]), ignoreInput: (e) => e.target === "control",
+  });
+  f.step(0);
+  f.listeners.get("pointerdown")!({ target: "control" });
+  f.step(1000);
+  assert.deepEqual(ends, []);
+  f.step(2500);
+  assert.deepEqual(frames, [[0, 2], [1, 2], [2, 2]]);
+  assert.deepEqual(ends, ["done"]);
+});
+
+test("describePlayback: the status line, the button and the progress for each state", () => {
+  const playing = describePlayback({ kind: "playing", index: 1, count: 5, type: "crane", time: 12.7, duration: 38 });
+  assert.equal(playing.text, "▶ Playing 2/5 · crane · 12 / 38 s");
+  assert.equal(playing.button, "Stop");
+  assert.ok(near(playing.progress, 12.7 / 38));
+  assert.deepEqual(describePlayback({ kind: "done", duration: 38 }), { text: "■ Finished (38 s)", button: "Replay", progress: 1 });
+  assert.equal(describePlayback({ kind: "user", time: 20, duration: 38 }).text, "⏸ Stopped by your input at 20 / 38 s");
+  assert.equal(describePlayback({ kind: "stopped", time: 5, duration: 38 }).button, "Replay");
+  assert.equal(describePlayback({ kind: "loading" }).button, undefined);
+  assert.deepEqual(describePlayback({ kind: "ready", count: 5, duration: 38 }), { text: "Camera tour: 5 shots, 38 s", button: "Play tour", progress: 0 });
+  assert.equal(describePlayback({ kind: "error", message: "x" }).button, undefined);
 });

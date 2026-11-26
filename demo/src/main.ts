@@ -15,7 +15,8 @@ import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
 import { keepCameraClearance } from "./camera-clearance.js";
-import { parseShotScript, playShots } from "./shot-player.js";
+import { parseShotScript, playShots, scriptDuration } from "./shot-player.js";
+import { isShotControlEvent, ShotControl } from "./shot-control.js";
 import { buildSliders } from "./controls.js";
 import { changedParams } from "./tune-params.js";
 import { vegetationFlags } from "./vegetation.js";
@@ -118,6 +119,8 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   t4q: { terrain: "1", extent: "1.3", mixed: "1" },
   sasebo: { terrain: "1", extent: "1.3", mixed: "1" }, // as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance: the nine-tile limit covered only part of a tilted view (`?mixed=0` switches it off)
 };
+/** Camera tours offered (shot scripts in demo/shots/, copied to the site's shots/): the control shows a Play button for these tilesets. */
+const TOURS: Readonly<Record<string, string>> = { sasebo: "sasebo", "sasebo-32q": "sasebo" };
 /** A query flag: the URL's value, else the tileset's default. */
 const flag = (name: string, tileset: string): string | null =>
   new URLSearchParams(location.search).get(name) ?? TILESET_DEFAULTS[tileset]?.[name] ?? null;
@@ -517,20 +520,45 @@ map.on("load", () => {
   // `?shots=<name or path>`: play a shot script (shot-player.ts, documents/camera-direction.md step 1) once the first
   // tiles are drawn. A bare name is `shots/<name>.json` next to this page. Any pointer, wheel, touch or key input stops
   // it and leaves the camera with the user. Progress goes to the console, one line per shot.
-  const shotsParam = new URLSearchParams(location.search).get("shots");
+  // Without `?shots=`, a tileset that has a tour (TOURS) gets the control with a Play button and does not start by itself.
+  const shotsParam = new URLSearchParams(location.search).get("shots") ?? TOURS[tileset];
+  const autoplay = new URLSearchParams(location.search).has("shots");
   if (shotsParam) {
     const url = /^[\w-]+$/.test(shotsParam) ? `shots/${shotsParam}.json` : shotsParam;
+    // A small control shows the state (playing / finished / stopped by input) and offers Stop or Replay (shot-control.ts).
+    const control = new ShotControl();
+    map.addControl(control, "top-right");
     map.once("idle", () => {
       void fetch(url).then(async (r) => {
         if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
         const script = parseShotScript(await r.json());
         for (const w of script.warnings) console.warn(`shots: ${w}`);
-        console.info(`shots: playing ${script.shots.length} shot(s) from ${url}`);
-        playShots(map, script, {
-          onShot: (i, shot) => console.info(`shots: ${i + 1}/${script.shots.length} ${shot.type} (${shot.duration_s} s)`),
-          onEnd: (reason) => console.info(`shots: ${reason === "done" ? "finished" : reason === "user" ? "stopped by user input" : "stopped"}`),
-        });
-      }).catch((e: unknown) => console.error(`shots: ${e instanceof Error ? e.message : String(e)}`));
+        let stop: (() => void) | undefined;
+        let index = 0, time = 0, duration = 0;
+        const play = (): void => {
+          console.info(`shots: playing ${script.shots.length} shot(s) from ${url}`);
+          stop = playShots(map, script, {
+            ignoreInput: isShotControlEvent,
+            onShot: (i, shot) => { index = i; console.info(`shots: ${i + 1}/${script.shots.length} ${shot.type} (${shot.duration_s} s)`); },
+            onFrame: (t, d) => {
+              time = t; duration = d;
+              control.show({ kind: "playing", index, count: script.shots.length, type: script.shots[index]!.type, time: t, duration: d });
+            },
+            onEnd: (reason) => {
+              stop = undefined;
+              console.info(`shots: ${reason === "done" ? "finished" : reason === "user" ? "stopped by user input" : "stopped"}`);
+              control.show(reason === "done" ? { kind: "done", duration } : { kind: reason, time, duration });
+            },
+          });
+        };
+        control.onButton = () => (stop ? stop() : play());
+        if (autoplay) play();
+        else control.show({ kind: "ready", count: script.shots.length, duration: scriptDuration(script) });
+      }).catch((e: unknown) => {
+        const message = e instanceof Error ? e.message : String(e);
+        console.error(`shots: ${message}`);
+        control.show({ kind: "error", message });
+      });
     });
   }
   // A lost WebGL context (the browser reclaims the GPU's memory) is restored by MapLibre for its own layers but not for

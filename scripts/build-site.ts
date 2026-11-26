@@ -8,6 +8,7 @@
  *                                 and all CSS inlined
  *   docs/maplibre-gl-worker.mjs   MapLibre's Web Worker (cannot be inlined)
  *   docs/tiles/<tileset>/z/x/y.mlt  synthetic demo tiles
+ *   docs/shots/<name>.json        shot scripts, copied from demo/shots/ (?shots=<name>; shot-player.ts)
  *   docs/.nojekyll                serve files as-is
  * docs/ is wiped and rewritten; it holds only the site.
  *
@@ -25,7 +26,7 @@
  * DORAYAKI_KAWAZU_TILEJSON likewise for Kawazu and DORAYAKI_SASEBO_TILEJSON for Sasebo (Open Nagasaki, CC BY 4.0); without
  * it the site omits Numazu and hides its link.
  */
-import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { build } from "esbuild";
@@ -99,6 +100,11 @@ for (const [pattern, replacement] of swaps) {
   html = html.replace(pattern, () => replacement);
 }
 if (/(src|href)="\//.test(html)) throw new Error("site index.html still has a root-absolute path");
+// 4. Shot scripts (pure JSON data), so that ?shots=<name> and the tour button work on Pages as in the dev demo.
+mkdirSync(join(OUT, "shots"), { recursive: true });
+const shotFiles = readdirSync("demo/shots").filter((f) => f.endsWith(".json"));
+for (const f of shotFiles) copyFileSync(join("demo/shots", f), join(OUT, "shots", f));
+
 writeFileSync(join(OUT, "index.html"), html);
 writeFileSync(join(OUT, ".nojekyll"), "");
-console.log(`wrote ${OUT}/index.html (${html.length} chars, JS and CSS inline), ${OUT}/${WORKER}, ${tiles} tiles, ${OUT}/.nojekyll`);
+console.log(`wrote ${OUT}/index.html (${html.length} chars, JS and CSS inline), ${OUT}/${WORKER}, ${tiles} tiles, ${shotFiles.length} shot script(s), ${OUT}/.nojekyll`);

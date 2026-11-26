@@ -303,7 +303,7 @@ export interface PlayerMap {
   getTerrain?(): unknown;
   getCenterClampedToGround?(): boolean;
   setCenterClampedToGround?(clamped: boolean): void;
-  getContainer(): { addEventListener(type: string, listener: () => void, options?: { capture?: boolean }): void; removeEventListener(type: string, listener: () => void, options?: { capture?: boolean }): void };
+  getContainer(): { addEventListener(type: string, listener: (event: { target: unknown }) => void, options?: { capture?: boolean }): void; removeEventListener(type: string, listener: (event: { target: unknown }) => void, options?: { capture?: boolean }): void };
 }
 
 export interface PlayOptions {
@@ -311,6 +311,10 @@ export interface PlayOptions {
   onShot?: (index: number, shot: Shot) => void;
   /** Called once when playing ends: "done", "user" (manual input) or "stopped" (the returned stop()). */
   onEnd?: (reason: "done" | "user" | "stopped") => void;
+  /** Called every frame with the seconds played and the script's length. */
+  onFrame?: (time: number, duration: number) => void;
+  /** Input that does not take the camera back (the player's own control sits inside the map's container). */
+  ignoreInput?: (event: { target: unknown }) => boolean;
   /** The frame clock (default: the browser's requestAnimationFrame); tests pass their own. */
   frames?: FrameClock;
 }
@@ -350,7 +354,7 @@ export function playShots(map: PlayerMap, script: ShotScript, options: PlayOptio
     if (ownsHeight) map.setCenterClampedToGround!(wasClamped);
     options.onEnd?.(reason);
   };
-  const onUser = (): void => end("user");
+  const onUser = (event: { target: unknown }): void => { if (!options.ignoreInput?.(event)) end("user"); };
   for (const type of INTERRUPTS) container.addEventListener(type, onUser, { capture: true });
   const tick = (now: number): void => {
     if (ended) return;
@@ -358,10 +362,40 @@ export function playShots(map: PlayerMap, script: ShotScript, options: PlayOptio
     const time = (now - startedAt) / 1000;
     const { camera, index } = sampleTimeline(timeline, time);
     if (index !== shown && index >= 0) { shown = index; options.onShot?.(index, script.shots[index]!); }
+    options.onFrame?.(Math.min(time, timeline.duration), timeline.duration);
     map.jumpTo(mapViewOf(camera, map.getCanvas().clientHeight, map.getMaxPitch()));
     if (time >= timeline.duration) { end("done"); return; }
     frame = frames.request(tick);
   };
   frame = frames.request(tick);
   return () => end("stopped");
+}
+
+// ---------------------------------------------------------------------------------------------------------------- status
+
+/** What the playback is doing, for the demo's status control (shot-control.ts). */
+export type PlaybackState =
+  | { kind: "loading" }
+  | { kind: "ready"; count: number; duration: number }
+  | { kind: "error"; message: string }
+  | { kind: "playing"; index: number; count: number; type: Shot["type"]; time: number; duration: number }
+  | { kind: "done"; duration: number }
+  | { kind: "user" | "stopped"; time: number; duration: number };
+
+const seconds = (s: number): string => `${Math.floor(s)}`;
+
+/** The length of a script in seconds (the sum of its shots). */
+export const scriptDuration = (script: ShotScript): number => script.shots.reduce((n, s) => n + s.duration_s, 0);
+
+/** The status line, the button's label (none while loading or after an error) and the progress in [0, 1]. */
+export function describePlayback(state: PlaybackState): { text: string; button?: "Play tour" | "Stop" | "Replay"; progress: number } {
+  switch (state.kind) {
+    case "loading": return { text: "Shots: loading…", progress: 0 };
+    case "ready": return { text: `Camera tour: ${state.count} shots, ${seconds(state.duration)} s`, button: "Play tour", progress: 0 };
+    case "error": return { text: `Shots: ${state.message}`, progress: 0 };
+    case "playing": return { text: `▶ Playing ${state.index + 1}/${state.count} · ${state.type} · ${seconds(state.time)} / ${seconds(state.duration)} s`, button: "Stop", progress: state.time / state.duration };
+    case "done": return { text: `■ Finished (${seconds(state.duration)} s)`, button: "Replay", progress: 1 };
+    case "user": return { text: `⏸ Stopped by your input at ${seconds(state.time)} / ${seconds(state.duration)} s`, button: "Replay", progress: state.time / state.duration };
+    case "stopped": return { text: `■ Stopped at ${seconds(state.time)} / ${seconds(state.duration)} s`, button: "Replay", progress: state.time / state.duration };
+  }
 }

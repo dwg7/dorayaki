@@ -870,3 +870,11 @@ smooth height by up to 56 m, which is how far the camera had been lifted and dro
 ran at 22 frames in 50 s while the pane was not in front, so no smoothness figure is claimed; the look is for hfu to judge.) Not changed: the zoom-dependent lift of
 the splats (`terrain-lift.ts`), which also moves the splats against the terrain while a shot zooms; to be looked at if a heave remains.
 
+Second follow-up (2026-11-26): hfu asked to see when playback ends, and how a tour starts on GitHub Pages. Within the present architecture (no seek, no
+rewind): a small control (`shot-control.ts`, top right) shows "Playing 2/5 · crane · 12 / 38 s" with a progress bar and a Stop button, then "Finished" or
+"Stopped by your input" / "Stopped" with Replay (the script again from its first shot; the timeline is pure, so a scrubber would be possible later, but none is built). Its own
+clicks are not taken as manual input (`ignoreInput`). On Pages: `npm run site` now copies `demo/shots/*.json` to `docs/shots/`, so `?shots=sasebo` works there, and
+a tileset listed in `TOURS` (`sasebo`) shows the control with a Play tour button without starting by itself. Checked in the local demo (Play tour, Finished, Replay, Stop → "Stopped at 1 / 38 s")
+and on the built site served from a local copy of `docs/` under `/dorayaki/` (`?fixture=sasebo` with the stars archive: "Camera tour: 5 shots, 38 s"). In a pane that is not in front the
+frames are throttled, so the time on the control jumps (4 s to 12 s in 3 s of wall time); playback follows the wall clock and still ends on time.
+
