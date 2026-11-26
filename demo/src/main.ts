@@ -15,6 +15,7 @@ import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
 import { keepCameraClearance } from "./camera-clearance.js";
+import { parseShotScript, playShots } from "./shot-player.js";
 import { buildSliders } from "./controls.js";
 import { changedParams } from "./tune-params.js";
 import { vegetationFlags } from "./vegetation.js";
@@ -513,6 +514,25 @@ map.on("load", () => {
   map.on("moveend", refresh);
   if (terrain > 0) map.on("zoom", () => layer.setZOffset(dz + zoomLift()));
   refresh();
+  // `?shots=<name or path>`: play a shot script (shot-player.ts, documents/camera-direction.md step 1) once the first
+  // tiles are drawn. A bare name is `shots/<name>.json` next to this page. Any pointer, wheel, touch or key input stops
+  // it and leaves the camera with the user. Progress goes to the console, one line per shot.
+  const shotsParam = new URLSearchParams(location.search).get("shots");
+  if (shotsParam) {
+    const url = /^[\w-]+$/.test(shotsParam) ? `shots/${shotsParam}.json` : shotsParam;
+    map.once("idle", () => {
+      void fetch(url).then(async (r) => {
+        if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+        const script = parseShotScript(await r.json());
+        for (const w of script.warnings) console.warn(`shots: ${w}`);
+        console.info(`shots: playing ${script.shots.length} shot(s) from ${url}`);
+        playShots(map, script, {
+          onShot: (i, shot) => console.info(`shots: ${i + 1}/${script.shots.length} ${shot.type} (${shot.duration_s} s)`),
+          onEnd: (reason) => console.info(`shots: ${reason === "done" ? "finished" : reason === "user" ? "stopped by user input" : "stopped"}`),
+        });
+      }).catch((e: unknown) => console.error(`shots: ${e instanceof Error ? e.message : String(e)}`));
+    });
+  }
   // A lost WebGL context (the browser reclaims the GPU's memory) is restored by MapLibre for its own layers but not for
   // this custom layer, and the tiles' GPU buffers are gone with the context: add a new layer and fetch the tiles again.
   map.on("webglcontextrestored", () => {

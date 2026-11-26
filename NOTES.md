@@ -835,3 +835,30 @@ the archive went from 1.23 GB to 0.71 GB (z17 is now 86 % of it). The viewer's `
 filled the screen with 29 MB, and a view of the whole area at zoom 13.8 took 6.0 MB (63 MB before at zoom 15.2). Compounding merge scales per zoom were too strong (z15 at 2 %); a flat scale or the target is used instead.
 Details: documents/sasebo-expansion.md.
 
+## 2026-11-26: shot player, step 1 of the camera direction note
+
+`demo/src/shot-player.ts` plays a hand-written shot script (`?shots=sasebo` is `demo/shots/sasebo.json`, the worked example of
+documents/camera-direction.md, moved from documents/). Played in the local demo (`?fixture=sasebo-32q&terrain=1&extent=1.3&mixed=1&shots=sasebo`,
+Browser pane shown): the five shots (hold, crane, traverse, orbit, dolly) ran through in 38 s and ended at zoom 18.1; a wheel input during the traverse stopped it at once
+and the wheel's own zoom then applied. Tiles followed the camera (sampled every 3 s: z15 at the crane, z16 in the orbit, z17 at the end of the dolly).
+
+How the camera is approximated (centre/zoom/pitch/bearing with one `jumpTo` per frame; no FreeCameraOptions): the map centre is the look-at point and the camera stands
+`distance` metres from it (`distanceForZoom` / `zoomForDistance`, added to camera.ts from the relation cameraModel already used). `alt_m` is the height above the look-at
+point (distance x cos pitch), so with terrain it is the height above the ground at the subject, not above the ground under the camera. `radius_m` is the horizontal stand-off,
+`range_m` the straight distance. A quantity a shot does not give is kept from the camera as it is. Consequences in the example:
+
+- crane (shot 2): the example gives only the altitudes; the stand-off and bearing are the hold's (about 600 m, -30 degrees), so it starts at pitch 84 and ends at 39. The look-at point
+  moves from the town to the bay at its start: a cut.
+- traverse (shot 3): the look-at point travels; the camera's distance is interpolated on a log scale and pulled back by up to half again in the middle (`TRAVERSE_PULL_BACK`, a player constant, not script data).
+- orbit (shot 4): `alt_m` 400 and `radius_m` 800 fix the camera, which then looks down at 63.4 degrees; the script's `pitch` 55 cannot also hold and is not used (a console warning). It starts
+  with a cut into that radius and height, from the bearing the camera has, and sweeps 360 degrees clockwise (`sweep_deg`, default 360).
+- dolly (shot 5): pitch and bearing stay; the distance goes to `range_m` on a log scale.
+
+camera-clearance.ts runs on every `move`, so after each `jumpTo` it may lower the pitch where the camera would come within 15 m of the ground under it; the next frame sets the
+script's pitch again. They do not fight in a visible way in this script (the lowest camera is 60 m above the subject, and the crane's first frames kept pitch 84); a low shot over a slope would
+show the clearance winning frame by frame. Not done: `track`, the scene index, storyboard stills, the agent bridge; `?shots=` on the Pages site (the shots directory is not part of the single-file build).
+
+A bug found while checking it: `selectBudgetedTiles` (E024) kept a coarse tile whole when one of its children was missing, as `selectMixedTiles` does. The z13 and z14 tiles are much larger than the
+data, so a close view near the data's edge stayed one z13 tile (the end of the dolly showed 1 tile, 15,823 splats, at zoom 18.1). It now refines into the children that exist (9 z17 tiles there).
+The hosted site has the bug until it is rebuilt.
+
