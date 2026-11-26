@@ -89,6 +89,13 @@ const budget = (maxBytes: number, over: object = {}) => ({ maxBytes, maxSplats: 
 const cost = (tiles: TileAddress[]): number => tiles.reduce((n, t) => n + prior(t.z), 0);
 const intersectsBounds = (t: TileAddress): boolean => !(tileLongitude(t, 1) <= bounds[0] || tileLongitude(t, 0) >= bounds[2] || tileLatitude(t, 0) <= bounds[1] || tileLatitude(t, 1) >= bounds[3]);
 
+test("budget: a coarse tile with only some children (the data's edge) is still refined to the children that exist", () => {
+  // Only the north-west z16 child of each z15 tile exists, with all of its z17 tiles.
+  const edge = all.filter((x) => x.z === 15 || (x.z === 16 && x.x % 2 === 0 && x.y % 2 === 0) || (x.z === 17 && Math.floor(x.x / 2) % 2 === 0 && Math.floor(x.y / 2) % 2 === 0));
+  const t = selectBudgetedTiles(edge, bounds, view({}), budget(1e12));
+  assert.ok(t.length > 0 && t.every((x) => x.z === 17), t.map(key).join(" "));
+});
+
 test("budget: with room for everything it chooses what selectMixedTiles chooses", () => {
   const v = view({ zoom: 16.8, pitch: 80 });
   const plain = selectMixedTiles(all, bounds, v, { limit: 1000 }).map(key).sort();
@@ -135,9 +142,12 @@ test("budget: a tile known to be huge is not refined into bigger ones, and known
 test("budget: maxZoom, a missing child and the splat limit are respected, and no candidates gives none", () => {
   const v = view({});
   assert.ok(selectBudgetedTiles(all, bounds, v, budget(1e12, { maxZoom: 16 })).every((x) => x.z <= 16));
+  // A missing child (no points there) is left out; its siblings still replace the parent.
   const missing = key({ z: 17, x: 116122, y: 52010 });
   const t = selectBudgetedTiles(all.filter((x) => key(x) !== missing), bounds, v, budget(1e12));
-  assert.ok(noOverlap(t) && !t.some((x) => key(x) === missing) && t.some((x) => x.z === 16));
+  assert.ok(noOverlap(t) && !t.some((x) => key(x) === missing));
+  assert.ok(t.some((x) => x.z === 17 && x.x === 116123 && x.y === 52010), "a sibling of the missing tile is drawn");
+  assert.ok(!t.some((x) => x.z === 16 && x.x === 58061 && x.y === 26005), "its parent is not kept");
   const few = selectBudgetedTiles(all, bounds, v, { maxBytes: 1e12, maxSplats: 1, bytesPerSplat: 12, priorBytes: prior });
   assert.ok(few.every((x) => x.z === 15));
   assert.deepEqual(selectBudgetedTiles([], bounds, v, budget(1)), []);
