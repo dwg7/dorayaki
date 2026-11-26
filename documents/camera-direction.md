@@ -10,7 +10,7 @@ decisions only after a real problem shows itself.
 Dorayaki puts real 3D geometry on a map, and the moment the map is 3D the camera
 becomes the hard part. A 2D map asks for three degrees of freedom (pan x, pan y,
 zoom), which a drag and a wheel cover almost exactly. A 3D view adds pitch, bearing,
-camera height and a look-at point that is no longer the map centre. A 2D pointing
+camera height and a look-at point that is no longer the map center. A 2D pointing
 device cannot express that, and the failure modes are familiar to anyone who has
 flown the demo by hand: the subject leaves the frame, the camera clips into a
 building, the user ends up looking at the underside of the terrain, or simply gets
