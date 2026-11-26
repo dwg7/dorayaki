@@ -1,4 +1,4 @@
-# Decisions and work, 2026-11-21 to 2026-11-23
+# Decisions and work, 2026-11-21 to 2026-11-27
 
 Status: a log of what was done and decided in this stretch (the Sasebo expansion and the demo's look and view behavior), with the reason for each decision and what
 is still open. Facts and numbers live in the documents linked from each item; this page is the index. Dorayaki is an experiment, not a standard.
@@ -19,6 +19,13 @@ is still open. Facts and numbers live in the documents linked from each item; th
 | D10 | The demo's TileJSON guard is **4,096** tiles, counted before listing. | Eight sheets list 164 tiles (the guard was 64); a country-sized bound used to overflow the stack in `tiles.push(...)`. | [size-and-scale.md](size-and-scale.md) |
 | D11 | Compare data size with 3D Tiles by **bytes per point and per area**, marking what is measured and what is arithmetic. Result: 1.5 to 3 x smaller than `.pnts` at 10 points/m2 (Sasebo), 45 to 85 x at 440 points/m2 (Kawazu). | The advantage is not a better codec: Dorayaki stores splats (occupied cells), 3D Tiles stores points. It is paid for with the individual points and with precision. | [size-vs-3d-tiles.md](size-vs-3d-tiles.md) |
 | D12 | **`?mixed=1` is the default for `sasebo`** (`?mixed=0` switches it off); other tilesets are unchanged. | The nine-tile limit covered only part of a tilted view at 6 km2. Same view: 9 z16 tiles, 2.60 M splats, 31 MB, against 20 tiles of z17 and z16, 3.68 M splats, 44 MB, filling the view. | [sasebo-expansion.md](sasebo-expansion.md), [demo-and-site.md](demo-and-site.md) |
+| D13 | Build a wider area with the **hosted recipe first**, then make it finer (2026-11-24). | The stricter recipes keep more detail at 1.45 times the bytes; whether the build scales mattered more first. | [sasebo-expansion.md](sasebo-expansion.md) (E023) |
+| D14 | A z15 or z16 tile at **about a quarter** of its size; **z14 and z13** added; **size, not the look, is the criterion**, and the merge may adapt by zoom and place (2026-11-25). | Low-zoom tiles were 4 to 16 MB, and the area will grow. Detail lost at the low zooms is accepted. | E024, [sasebo-expansion.md](sasebo-expansion.md) |
+| D15 | A **view budget of 40 MB and 4 million splats** that **covers the whole screen** (`?mixed=1`), to be tightened later if needed. | The cap of 24 nearest tiles left the far part of a tilted view empty. | E024, [demo-and-site.md](demo-and-site.md) |
+| D16 | The **32-sheet archive** (about 17 km2, z13 to z17, 714 MB) replaces the hosted one; nine gap sheets were added before hosting (2026-11-25). | One replacement instead of two; the hole between the two groups showed. | [sasebo-expansion.md](sasebo-expansion.md) |
+| D17 | Camera direction: the **agent-operated shot script** comes first; step 1 is a player of hand-written shot JSON, without FreeCameraOptions (2026-11-26). | Fujimura's decision in documents/camera-direction.md; the centre/zoom/pitch/bearing approximation was tried first. | [camera-direction.md](camera-direction.md), NOTES.md |
+| D18 | While a tour plays, the player sets the **look-at height itself** (map clamping off); a **status control** with Stop and Replay; on Pages a **Play tour** button and `?shots=` (2026-11-26). | The camera rode the terrain; the end of a tour was not visible; Pages had no way to start one. | NOTES.md (2026-11-26), [demo-and-site.md](demo-and-site.md) |
+| D19 | Inputs and build work go to an **external disk**; the **whole of Open Nagasaki** is downloaded, one file at a time with pauses, `01JE` around central Sasebo first (2026-11-27). | 32 sheets filled the internal disk once; the next step is the prefecture. | [sasebo-expansion.md](sasebo-expansion.md) (last section) |
 
 ## A bug found on the way (fixed)
 
@@ -35,14 +42,18 @@ Found by comparing the tile list the layer held (`packed: 0` on the empty ones) 
 - Each change on its own branch and PR; never push to a branch whose PR is merged.
 - The site is rebuilt with all three TileJSON variables (`DORAYAKI_NUMAZU_TILEJSON`, `DORAYAKI_KAWAZU_TILEJSON`, `DORAYAKI_SASEBO_TILEJSON`); without them Numazu, Kawazu or Sasebo drop out.
 
-## Open
+## Open (as of 2026-11-27)
 
-- **Sasebo-specific tuning** (not started): the merge recipe was tuned on Kawazu (121 to 440 points/m2); at 10 points/m2 flat surfaces (car parks, roofs) become large discs.
-  The z17 voxel (0.5 m) holds 1.5 points; 1 m voxels hold 3.5. Candidates: another recipe at z17, or accepting z16 as the working zoom.
-- **Tile budget in splats or bytes** instead of a tile count for `?mixed=1` (z17 tile about 0.1 M splats, z16 about 0.3 M): proposed, not decided; the cap is still 24 tiles.
+- **z17 at about 10 points/m2**: the hosted recipe is smooth but flat on roofs and bare ground; a stricter one keeps detail at 1.45 times the bytes (E023). z17 is now 86 % of the
+  archive, so it is also the size question.
+- **The budget**: 40 MB / 4 million splats per view (D15) may be tightened; not measured on weaker GPUs or slow networks.
+- **The prefecture**: the download has started (D19). Not decided: removing converted zips as the build goes, or more disk (the prefecture is about 1.1 TB of zips, the disk 447 GB);
+  how a prefecture-sized archive is listed in the viewer (the TileJSON tile list is capped at 4,096); whether stars serves a multi-GB archive well.
+- **Camera direction**: storyboard stills (step 2) and the agent bridge (step 3); a tour can outrun the tiles; the zoom-dependent splat lift may still heave during zooming shots.
 - Real-drag behavior of the zoom ease and of `?mixed=1`; other browsers and GPUs; seams checked in a few views only.
-- Extending toward Shokanzan and a wide area (about 110 km2): needs an external disk (shards about 17 GB; the machine has 8 GB of RAM and 14 to 19 GB free) and more downloads
-  (the sheets' paths are not exposed by the download site). See [sasebo-expansion.md](sasebo-expansion.md).
 - Not measured against 3D Tiles: Draco or meshopt, a real 3D Tiles tool's output, level-of-detail overhead, rendering cost.
-- The national-survey slides (English, 2026-11-25) were written for about 1.5 km2; the area is now 6 km2. Images are to be swapped after the tuning.
 - Next-step candidates to always offer: the three visual ideas (splat look, vivid color, false-color by class).
+
+- The national-survey slides (2026-11-25) were written for about 1.5 km2; the hosted area is now about 17 km2. This session has not told the slides session.
+
+Closed since 2026-11-23: the tile budget in bytes and splats (D15, done); the external disk and the paths of the sheets (D19: the download page's own list).

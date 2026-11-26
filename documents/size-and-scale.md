@@ -1,7 +1,9 @@
 # Size and scale: what a tile and a prefecture cost
 
-Status: arithmetic from measurements. The Kawazu figures are measured; the
-prefecture figures are extrapolations from one mountain-road mesh and say so.
+Status: arithmetic from measurements. The Kawazu and Sasebo figures are measured; the
+prefecture figures are extrapolations and say so. The first sections (2026-11-14 to 17) extrapolate from Kawazu,
+a mountain road with mobile mapping; the section "Measured at Sasebo" (2026-11-27) adds an airborne-only area and
+the size of the Open Nagasaki data itself.
 
 ## What bounds a tile
 
@@ -101,6 +103,17 @@ version 5; for the prefecture, extrapolated from this one valley, that is about 
 to fetch, 3.2 s to decode and 2.1 s to upload on an Apple M1; it was not repeated for
 the factor-10 build.
 
+## Measured at Sasebo (airborne only, about 10 points/m2; 2026-11-25 to 27)
+
+- 32 Open Nagasaki sheets (about 17 km2, about half sea; 201 million points): 1,234,118,714 B with z15 to z17 (73 MB/km2), and
+  713,970,031 B with z13 to z17 and lower zooms capped per tile (E024; **42 MB/km2**, of which z17 is 86 %).
+- Extrapolated from these 32 sheets to Nagasaki Prefecture (about 4,130 km2 of land, all of it in the same airborne data), with the E024 caps:
+  about **0.17 TB** at 42 MB per km2 of sheet, and about **0.35 TB** if the sea, about half of the 32 sheets and nearly free, is counted out. The sheets are
+  a town, its hills and a bay; mountains and other towns are not known to cost the same.
+- The input it would come from (the download page's sheet list, 2026-11-27): 7,824 sheets, about 1.6 TB of LAS, about 1.1 TB as zips.
+- Against Kawazu's 77 B/m2 (version 6, mobile mapping and airborne): the airborne-only density gives fewer splats per area at z17, and the caps
+  make the lower zooms small; the prefecture figure from Kawazu above (about 0.6 TB) is an upper estimate for airborne data.
+
 ## Browser memory, and tiles of 10 MB
 
 PMTiles reads one tile with one range request, so 10 MB tiles are not
@@ -122,7 +135,7 @@ fast network. What limits the browser is memory and CPU, not the network:
   `?gpu=legacy`. Not measured: the GPU's own memory use (the sizes are the buffers'
   byte lengths).
 - The demo used to fetch and upload every tile of a tileset when the page opened.
-  It now loads only the tiles in view (the nearest nine of the selected zoom,
-  documents/demo-and-site.md); a prefecture-sized archive additionally needs a
+  It now loads only the tiles in view (the nearest nine of the selected zoom, or with `?mixed=1` tiles of several
+  zooms covering the view within a byte and splat budget, documents/demo-and-site.md); a prefecture-sized archive additionally needs a
   tile list that is not enumerated from the TileJSON bounds (the demo caps that
   list at 4,096 tiles; it was 64 until Sasebo's 6 km2 listed 164).

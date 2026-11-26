@@ -878,3 +878,12 @@ a tileset listed in `TOURS` (`sasebo`) shows the control with a Play tour button
 and on the built site served from a local copy of `docs/` under `/dorayaki/` (`?fixture=sasebo` with the stars archive: "Camera tour: 5 shots, 38 s"). In a pane that is not in front the
 frames are throttled, so the time on the control jumps (4 s to 12 s in 3 s of wall time); playback follows the wall clock and still ends on time.
 
+## 2026-11-27: the whole of Open Nagasaki, on an external disk
+
+The build machine got a 480 GB USB disk (one APFS volume after hfu erased it; it had a 537 MB HFS+ partition and a Linux partition). `data/nagasaki`, `data/virtual-shizuoka` and
+`data/tiled-work` were copied to it, checked with a second rsync pass (no differences), and replaced by links, so the repository's paths still work (they do not while the disk is
+detached; it came off once during the night). The download page's sheet list, saved by hand from the browser, gives 7,824 sheets and about 1.6 TB of LAS. A script outside the
+repository downloads them one at a time with 60 s pauses, `01JE` around central Sasebo first (documents/sasebo-expansion.md, last section). In its first ten minutes 9 files, no failures,
+sizes equal to the copies fetched earlier. The 32 sheets held as LAS are downloaded again as zips; their LAS copies are to be removed once each zip is checked against them.
+Documents reviewed on the same day: README, AGENTS, EXPERIMENTS (E022 step 4, E023, E024), and the stale status lines of the documents.
+

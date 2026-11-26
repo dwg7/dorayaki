@@ -1532,3 +1532,55 @@ counted by distance from the edge (1 m bins) relative to the level 8 to 14 m awa
 0.876 of the far density (the other bins within 0.94 to 1.02: a dip of about 12 % exactly at the seam, where a mesh-cut voxel is fitted from the points of one side only); the overlap index is 0.109 in the strip against 0.095 far.
 Tiled archive: 0.990 and 0.983 in those bins (all bins 0.96 to 1.03), overlap 0.103 against 0.096. The seam that the mesh-by-mesh build leaves in the splat density is gone in the tiled build.
 What this does not measure: the lateral jog itself (up to 1.8 m between neighbouring meshes, E022), only its signature in the density; a feature crossing a boundary (a building edge) compared directly is still not done.
+
+### E022 step 4: the streaming archive writer, and the build at Sasebo scale (2026-11-23 to 25)
+`src/pmtiles-file.ts` writes the PMTiles archive from the tile files one at a time (byte-identical to the in-memory writer, 6 tests), and `build:tiled` uses it.
+Used at Sasebo (Open Nagasaki airborne laser, about 10 points/m2): 2 sheets 47 s, 8 sheets 104 s, 23 sheets 340 s, 32 sheets (201 million points) about 8 to 10 minutes, 3 workers,
+one process at most about 1.2 GB. The first 32-sheet build ran out of disk: the z16/z15 pieces were JSON text (4.7 GB at 23 sheets); they are gzipped float64 now (the tiles of a
+two-sheet build byte-identical), about a third of the size. Details: documents/sasebo-expansion.md.
+
+## E023: the merge recipe at 10 points/m2, and smaller lower zooms (2026-11-24)
+
+### Question
+The merge recipe was tuned on Kawazu (121 to 440 points/m2). Does a stricter one pay at Sasebo's 10 points/m2? And can the z15/z16 tiles be made smaller?
+
+### Method
+One sheet (`01JE3513`, 5.4 million points) built with `build:tiled` in five recipes and four lower-zoom variants; `measure:quality` against the unmerged build; the demo.
+
+### Measurements
+- Recipes (z17 splats, PMTiles): unmerged 4.88 M, 91.0 MB; hosted (levels 3, thickness 0.2, color 0.2) 1.75 M, 43.1 MB; thickness 0.05 / color 0.1 2.88 M, 62.4 MB (and three between).
+- `measure:quality` did not separate the recipes (mean absolute difference 8.0 to 9.4, 13.9 to 14.7 and 21.1 to 22.6 in three views, order inconsistent).
+- Lower zooms (new `DORAYAKI_ZOOM_CELL_SCALE`, `_THICKNESS_SCALE`, `_COLOR_SCALE`): a cell twice as large below z17 gave z15 26 % and z16 41 % of the tile bytes; stronger merging alone 57 % / 69 %;
+  the sparse rule 73 % / 85 %; all three 20 % / 35 %.
+
+### Observations
+- In the demo the hosted recipe is smooth but flat (roofs, bare ground and cars melt into patches); thickness 0.05 keeps detail at 1.45 times the bytes. The software renderer does not see the difference.
+- Only a coarser cell removes cells; merging joins them, so it cannot reach a quarter.
+
+### Decision
+Keep the hosted recipe at z17 (hfu: build wide first, then make it finer). Shrink the lower zooms: carried on in E024.
+
+## E024: lower zooms at about a quarter, z14 and z13, and a view budget that covers the screen (2026-11-25)
+
+### Question
+hfu: a z15 or z16 tile should be about a quarter of its size, with z14 and z13 added for wider areas; a wide or tilted view must load the whole screen within 40 MB and 4 million splats.
+"Size is the criterion, not the look."
+
+### Method
+`DORAYAKI_LOWER_ZOOMS=16,15,14,13` and a size target per lower-zoom tile (`DORAYAKI_ZOOM_TARGET_SPLATS`: a piece over its area's share is merged harder in steps,
+thickness x s and color x sqrt(s), s = 1 to 64); compounding scales per zoom were tried first. In the viewer, `selectBudgetedTiles` (`?mixed=1`): the coarsest tiles that touch the view,
+then the nearest refined first while the budget holds. Eight sheets, then 32.
+
+### Measurements
+- Eight sheets, cell scale 2 and targets 16:100000, 15:160000, 14:160000, 13:160000: z16 mean 0.55 MB, max 1.06 MB (24 %, 14 % of the hosted); z15 0.62 / 1.45 MB (22 %, 16 %).
+  Compounding thickness x4 per zoom left z15 at 2 %; a target of 50,000 splats per tile held its cap but left the means at 6 % and 11 %.
+- 32 sheets: PMTiles 1,234,118,714 B -> 713,970,031 B; z15 mean 5.48 -> 0.90 MB, z16 4.25 -> 0.61 MB; z14 0.54 MB, z13 0.30 MB.
+- Viewer: a tilted view at zoom 16.3 filled to the far edge with 29 MB; the whole area at zoom 13.8 took 6.0 MB (63 MB before at zoom 15.2).
+
+### Observations
+- The cap acts as a maximum, so a target set at the wanted mean undershoots it; caps near a quarter of the old maximum gave means near a quarter.
+- A bug found on 2026-11-26: `selectBudgetedTiles` kept a coarse tile whole when a child was missing, so near the data's edge the large z13/z14 tiles never refined. It now refines
+  into the children that exist (in a pyramid built from the finest tiles a missing child has no points).
+
+### Decision
+Hosted on stars on 2026-11-25 (`?v=20261125b`); `?mixed=1` with the budget is Sasebo's default. z17 (86 % of the archive) is unchanged.

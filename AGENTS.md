@@ -221,6 +221,7 @@ npm run build:tiled -- <name> <zone> <file.las[@filters][,file2.las ...]> [--wor
 npm run measure:seam -- <tileset dir> [...]   # E022 step 3: splat density and overlap along the interior mesh edges of the Kawazu grid (does a mesh seam show)
 npm run measure:encoding -- <tileset dir> <zoom>   # E016: entropy per field, gzip/brotli of the block as stored and rearranged
 npm run measure:precision -- <tileset dir> <zoom>  # E016: which precision reductions are visually free (software renderer)
+npm run measure:class -- <zoom> <tileset dir> [...]  # E020: class mix and purity of tilesets built with DORAYAKI_CLASS_ALPHA=1, and what storing a class per splat costs
 DORAYAKI_CLASS_PLANE=1 npm run build:tileset -- ...   # also write a class plane (E021); merge:tilesets joins the planes
 DORAYAKI_BLOCK_VERSION=6 npm run build:tileset -- ...   # write version 6 blocks (12-byte records); default is version 5
 npm run measure:quality -- <tileset dir> <ref zoom> <cand zoom|mixed> [<cand dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]  # E012: software-render both from fixed cameras, print holes/color/depth differences, optional PNGs
@@ -235,7 +236,7 @@ DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  
 Current repository structure:
 
 ```text
-src/surfel-block.ts          Surfel Block encoder/decoder (v5: 16-byte quantized splats as byte planes; reads v4)
+src/surfel-block.ts          Surfel Block encoder/decoder (v5: 16-byte quantized splats as byte planes; v6: 12-byte records, used by the hosted Kawazu and Sasebo archives; reads v4)
 src/splat.ts                 splat geometry: rotations, disc <-> splat conversions
 src/mlt-frame.ts             experimental MLT frame wrapper (tags 0xD0 surfel block, 0xD1 class plane)
 src/class-plane.ts           class plane: one class code per splat beside the block (documents/class-plane.md)
@@ -259,7 +260,8 @@ src/pointcloud/adaptive.ts   E005: merge coplanar, same-color voxel Gaussians in
 src/pointcloud/pyramid.ts    tile pyramid from a point cloud: aggregated zooms + maxzoom levels
 src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
 src/geodesy/tile-frame.ts    TileFramer: plane point -> z17 tile and tile-local metres (E022, documents/tile-aligned-build.md)
-src/pointcloud/tile-build.ts buildTilePieces: points of one z17 tile (tile frame) -> z17, z16, z15 splats on the tile's own grid (E022 step 2)
+src/pointcloud/tile-build.ts buildTilePieces: points of one z17 tile (tile frame) -> z17 splats and pieces of the lower zooms (default z16, z15; any down to z13) on the tile's own grid (E022 step 2); coarser cells, merge scales and a size target per lower-zoom tile (E023, E024)
+src/pointcloud/class-slots.ts class slots of the builder for the class plane (E021)
 scripts/build-numazu-demo.ts builds the numazu tileset from data/ (not committed)
 src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
@@ -270,7 +272,7 @@ NOTES.md                     observed experimental findings (chronological)
 EXPERIMENTS.md               experiments E001, E002, ...: question, measurements, decision
 docs/                        built GitHub Pages site only (npm run site; do not edit by hand)
 scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline), worker, synthetic tiles
-documents/surfel-block-format.md  byte layout and quantization of the Surfel Block (v4)
+documents/surfel-block-format.md  byte layout and quantization of the Surfel Block (versions 5 and 6)
 documents/mlt-frame.md            experimental MLT frame envelope
 documents/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
 documents/large-point-clouds.md   streaming build, Virtual Shizuoka data, Kawazu
@@ -278,10 +280,21 @@ documents/adaptive-merging.md     E005 merging and E006 gap coverage
 documents/size-and-scale.md       tile and prefecture size arithmetic, browser memory
 documents/kawazu-demo.md          the Kawazu tileset: recipe, size, hosting plan
 documents/decisions-2026-11.md    decisions and work of 2026-11-21 to 23 (Sasebo expansion, look, view), with reasons and open items
+documents/class-plane.md          the class plane beside the block (E021)
+documents/dark-basemap.md         the dark basemap the point-cloud tilesets use
+documents/demo-and-site.md        running the demo, URL flags, demo modules, the Pages site
+documents/numazu-demo.md          the Numazu tileset: rebuild, profiles, hosting
+documents/sasebo-expansion.md     the Sasebo (Open Nagasaki) tileset: data, builds, recipes (E023, E024), hosting
+documents/tile-aligned-build.md   the tile-aligned parallel build (E022)
+documents/size-vs-3d-tiles.md     data size against 3D Tiles point tiles
+documents/camera-direction.md     idea note: language-driven camerawork; step 1 (the shot player) is implemented
 scripts/measure-numazu.ts    density and size measurements on the Numazu data
 scripts/measure-omission.ts  E002 omission measurements
 scripts/measure-pnts.ts      bytes per point of a LAS file as 3D Tiles point tiles would carry it (documents/size-vs-3d-tiles.md)
 scripts/measure-codec.ts     codec timing in Node
+scripts/measure-class.ts     E020 class mix, purity and storage cost per splat
+scripts/measure-encoding.ts  E016 entropy per field, gzip/brotli of the block
+scripts/measure-precision.ts E016 which precision reductions are visually free
 scripts/measure-coarse.ts    E003 coarse Gaussian measurements
 scripts/measure-stream.ts    streaming voxelisation of a LAS file (chunked read)
 scripts/build-tileset.ts     streaming tileset builder for a LAS file of any size (one level per tile)
