@@ -862,3 +862,11 @@ A bug found while checking it: `selectBudgetedTiles` (E024) kept a coarse tile w
 data, so a close view near the data's edge stayed one z13 tile (the end of the dolly showed 1 tile, 15,823 splats, at zoom 18.1). It now refines into the children that exist (9 z17 tiles there).
 The hosted site has the bug until it is rebuilt.
 
+Follow-up the same day: hfu saw the camera "wobble in height as if it followed the terrain". With terrain, MapLibre keeps the map centre (the look-at point) on the ground
+under it at every frame (`centerClampedToGround`), and the camera stands relative to that point, so a travelling look-at point carried every bump of the ground into the camera.
+The player now switches that clamping off while it plays (and restores it at the end) and gives `jumpTo` an `elevation`: the ground at the first and the last look-at point of
+each shot, interpolated with the shot's easing. In a run of the Sasebo script the ground under the look-at point ranged from 0 to 61 m and differed from the player's
+smooth height by up to 56 m, which is how far the camera had been lifted and dropped before. (A frame-by-frame measure of the camera's height was attempted but the page
+ran at 22 frames in 50 s while the pane was not in front, so no smoothness figure is claimed; the look is for hfu to judge.) Not changed: the zoom-dependent lift of
+the splats (`terrain-lift.ts`), which also moves the splats against the terrain while a shot zooms; to be looked at if a heave remains.
+

@@ -13,6 +13,11 @@
  *   look-at point on the ground, so this is the height above the ground at the subject, not above the ground under
  *   the camera (camera-clearance.ts watches that one).
  * - `radius_m` is the horizontal stand-off (distance x sin pitch); `range_m` is the straight distance to the look-at point.
+ * - With terrain, MapLibre keeps the look-at point on the ground under it every frame (`centerClampedToGround`), so a
+ *   look-at point that travels over hills and the harbour lifted and dropped the whole camera with every bump (hfu,
+ *   2026-11-26: "it wobbles in height as if it followed the terrain"). While playing, the player sets the look-at
+ *   point's height itself: the ground at the start and at the end of each shot, interpolated with the shot's easing
+ *   in between, and gives it to `jumpTo` as `elevation`; the map's own clamping is switched off and restored at the end.
  * - A shot that does not give a quantity keeps the one the camera already has (the end of the previous shot, or the
  *   map's view when playing starts). A shot whose look-at point differs from where the camera is pointed starts with a
  *   cut, except `traverse`, which travels.
@@ -31,6 +36,8 @@ export interface CameraState {
   pitch: number;
   /** Degrees clockwise from north. */
   bearing: number;
+  /** Height of the look-at point above sea level, metres, when the player sets it (terrain on); absent: the map's own. */
+  elevation?: number;
 }
 
 export type Easing = "linear" | "easeIn" | "easeOut" | "easeInOut";
@@ -169,8 +176,16 @@ export interface TimelineSegment {
 }
 export interface Timeline { segments: TimelineSegment[]; duration: number; start: CameraState; end: CameraState }
 
-/** The shots as one timeline, starting from `start` (the map's camera when playing begins), for a canvas `heightPx` tall. */
-export function buildTimeline(shots: readonly Shot[], start: CameraState, heightPx: number): Timeline {
+/** Ground height at a point (metres above sea level), when known. */
+export type GroundAt = (lng: number, lat: number) => number | null | undefined;
+
+/**
+ * The shots as one timeline, starting from `start` (the map's camera when playing begins), for a canvas `heightPx` tall.
+ * With `groundAt`, every frame carries the look-at point's height: the ground at the shot's first and last look-at point,
+ * interpolated with the shot's easing (a shot whose look-at point stays has one height), so the camera does not ride the
+ * terrain between them. Where the ground is not known, the height carries over from the frame before.
+ */
+export function buildTimeline(shots: readonly Shot[], start: CameraState, heightPx: number, groundAt?: GroundAt): Timeline {
   const segments: TimelineSegment[] = [];
   let prev = start;
   let t = 0;
@@ -222,6 +237,14 @@ export function buildTimeline(shots: readonly Shot[], start: CameraState, height
         break;
       }
     }
+    if (groundAt) {
+      const flat = at;
+      const a = flat(0), b = flat(1);
+      const sameAsBefore = a.lng === prev.lng && a.lat === prev.lat;
+      const e0 = (sameAsBefore ? prev.elevation : undefined) ?? groundAt(a.lng, a.lat) ?? prev.elevation ?? 0;
+      const e1 = a.lng === b.lng && a.lat === b.lat ? e0 : groundAt(b.lng, b.lat) ?? e0;
+      at = (u) => ({ ...flat(u), elevation: lerp(e0, e1, e(u)) });
+    }
     segments.push({ shot, start: t, duration: shot.duration_s, at });
     t += shot.duration_s;
     prev = at(1);
@@ -243,31 +266,43 @@ export function sampleTimeline(timeline: Timeline, time: number): { camera: Came
 }
 
 /** The MapLibre view for a camera on a canvas `heightPx` tall; pitch is kept within [0, maxPitch]. */
-export function mapViewOf(camera: CameraState, heightPx: number, maxPitch = 85): { center: [number, number]; zoom: number; pitch: number; bearing: number } {
+export function mapViewOf(camera: CameraState, heightPx: number, maxPitch = 85): MapView {
   return {
     center: [camera.lng, camera.lat],
     zoom: zoomForDistance(camera.distance, heightPx, camera.lat),
     pitch: Math.min(maxPitch, Math.max(0, camera.pitch)),
     bearing: camera.bearing,
+    ...(camera.elevation !== undefined ? { elevation: camera.elevation } : {}),
   };
 }
+/** The options `jumpTo` gets; `elevation` (the look-at point's height) only when the player sets it. */
+export interface MapView { center: [number, number]; zoom: number; pitch: number; bearing: number; elevation?: number }
 
 /** The camera of a MapLibre view (the inverse of `mapViewOf`, for the starting point). */
-export function cameraOfMapView(view: { lng: number; lat: number; zoom: number; pitch: number; bearing: number }, heightPx: number): CameraState {
-  return { lng: view.lng, lat: view.lat, distance: distanceForZoom(view.zoom, heightPx, view.lat), pitch: view.pitch, bearing: view.bearing };
+export function cameraOfMapView(view: { lng: number; lat: number; zoom: number; pitch: number; bearing: number; elevation?: number }, heightPx: number): CameraState {
+  return {
+    lng: view.lng, lat: view.lat, distance: distanceForZoom(view.zoom, heightPx, view.lat), pitch: view.pitch, bearing: view.bearing,
+    ...(view.elevation !== undefined ? { elevation: view.elevation } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------------------------------------------- driver
 
 /** What the driver needs of a MapLibre map. */
 export interface PlayerMap {
-  jumpTo(options: { center: [number, number]; zoom: number; pitch: number; bearing: number }): unknown;
+  jumpTo(options: MapView): unknown;
   getCenter(): { lng: number; lat: number };
   getZoom(): number;
   getPitch(): number;
   getBearing(): number;
   getMaxPitch(): number;
   getCanvas(): { clientHeight: number };
+  /** With terrain (MapLibre): the look-at point's height, the ground at a point, and the switch that keeps the look-at point on the ground. */
+  getCenterElevation?(): number;
+  queryTerrainElevation?(lngLat: { lng: number; lat: number }): number | null | undefined;
+  getTerrain?(): unknown;
+  getCenterClampedToGround?(): boolean;
+  setCenterClampedToGround?(clamped: boolean): void;
   getContainer(): { addEventListener(type: string, listener: () => void, options?: { capture?: boolean }): void; removeEventListener(type: string, listener: () => void, options?: { capture?: boolean }): void };
 }
 
@@ -297,7 +332,13 @@ const INTERRUPTS = ["pointerdown", "wheel", "touchstart", "keydown"] as const;
 export function playShots(map: PlayerMap, script: ShotScript, options: PlayOptions = {}): () => void {
   const c = map.getCenter();
   const heightPx = map.getCanvas().clientHeight;
-  const timeline = buildTimeline(script.shots, cameraOfMapView({ lng: c.lng, lat: c.lat, zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() }, heightPx), heightPx);
+  // With terrain the player sets the look-at point's height itself (see the file comment) and switches the map's clamping off meanwhile.
+  const ownsHeight = !!map.getTerrain?.() && !!map.queryTerrainElevation && !!map.setCenterClampedToGround && !!map.getCenterElevation;
+  const wasClamped = map.getCenterClampedToGround?.() ?? true;
+  const groundAt: GroundAt | undefined = ownsHeight ? (lng, lat) => map.queryTerrainElevation!({ lng, lat }) : undefined;
+  const view = { lng: c.lng, lat: c.lat, zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing(), ...(ownsHeight ? { elevation: map.getCenterElevation!() } : {}) };
+  const timeline = buildTimeline(script.shots, cameraOfMapView(view, heightPx), heightPx, groundAt);
+  if (ownsHeight) map.setCenterClampedToGround!(false);
   const container = map.getContainer();
   const frames = options.frames ?? browserFrames;
   let frame = 0, startedAt: number | undefined, shown = -1, ended = false;
@@ -306,6 +347,7 @@ export function playShots(map: PlayerMap, script: ShotScript, options: PlayOptio
     ended = true;
     frames.cancel(frame);
     for (const type of INTERRUPTS) container.removeEventListener(type, onUser, { capture: true });
+    if (ownsHeight) map.setCenterClampedToGround!(wasClamped);
     options.onEnd?.(reason);
   };
   const onUser = (): void => end("user");

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { distanceForZoom, zoomForDistance } from "../demo/src/camera.js";
 import {
   buildTimeline, cameraOfMapView, ease, mapViewOf, parseShotScript, playShots, sampleTimeline,
-  type CameraState, type PlayerMap, type Shot,
+  type CameraState, type MapView, type PlayerMap, type Shot,
 } from "../demo/src/shot-player.js";
 
 const H = 600;
@@ -131,7 +131,7 @@ test("the Sasebo example (demo/shots/sasebo.json) parses and plays: five shots, 
 function fakeMap() {
   const listeners = new Map<string, () => void>();
   const view = { lng: 129.72, lat: 33.179, zoom: 16, pitch: 60, bearing: 0 };
-  const jumps: Array<{ center: [number, number]; zoom: number; pitch: number; bearing: number }> = [];
+  const jumps: MapView[] = [];
   const map: PlayerMap = {
     jumpTo: (o) => { jumps.push(o); view.lng = o.center[0]; view.lat = o.center[1]; view.zoom = o.zoom; view.pitch = o.pitch; view.bearing = o.bearing; },
     getCenter: () => ({ lng: view.lng, lat: view.lat }), getZoom: () => view.zoom, getPitch: () => view.pitch, getBearing: () => view.bearing,
@@ -184,4 +184,45 @@ test("playShots: the returned function stops it", () => {
   stop();
   stop();
   assert.deepEqual(ends, ["stopped"]);
+});
+
+test("look-at height: with the ground known, it runs smoothly from the ground at A to the ground at B, not over the bumps between", () => {
+  const A = { lng: 129.705, lat: 33.17 }, B = { lng: 129.7198, lat: 33.179 };
+  // Bumpy ground: 0 at A, 40 m at B, a 200 m hill half way.
+  const groundAt = (lng: number): number => (lng <= A.lng + 1e-9 ? 0 : lng >= B.lng - 1e-9 ? 40 : 200);
+  const tl = buildTimeline(shots([
+    { type: "hold", duration_s: 2, look_at: A, camera: { range_m: 800 } },
+    { type: "traverse", duration_s: 10, easing: "linear", to_look_at: B, camera: { range_m: 800 } },
+    { type: "orbit", duration_s: 4, look_at: B, camera: { alt_m: 300, radius_m: 500 } },
+  ]), { ...start, elevation: 0 }, H, groundAt);
+  assert.equal(sampleTimeline(tl, 1).camera.elevation, 0);
+  assert.ok(near(sampleTimeline(tl, 7).camera.elevation!, 20), "half way: half the difference, not the hill");
+  assert.ok(near(sampleTimeline(tl, 12).camera.elevation!, 40));
+  assert.ok(near(sampleTimeline(tl, 14).camera.elevation!, 40), "the orbit keeps B's height");
+  assert.equal(mapViewOf(sampleTimeline(tl, 7).camera, H).elevation, sampleTimeline(tl, 7).camera.elevation);
+  // Without groundAt there is no elevation, and the map keeps its own.
+  assert.equal(buildTimeline(shots([{ type: "hold", duration_s: 1, look_at: A, camera: {} }]), start, H).end.elevation, undefined);
+});
+
+test("look-at height: an unknown ground carries the height over; a cut takes the ground at the new look-at point", () => {
+  const tl = buildTimeline(shots([
+    { type: "hold", duration_s: 1, look_at: { lng: 1, lat: 2 }, camera: {} },
+    { type: "crane", duration_s: 1, look_at: { lng: 3, lat: 4 }, from: { alt_m: 60 }, to: { alt_m: 900 } },
+  ]), { ...start, elevation: 12 }, H, (lng) => (lng === 3 ? 7 : null));
+  assert.equal(sampleTimeline(tl, 0.5).camera.elevation, 12);
+  assert.equal(sampleTimeline(tl, 1.5).camera.elevation, 7);
+});
+
+test("playShots with terrain: the map's clamping is switched off while playing, restored at the end, and jumpTo gets the elevation", () => {
+  const f = fakeMap();
+  let clamped = true;
+  const map = { ...f.map, getTerrain: () => ({}), getCenterElevation: () => 5, queryTerrainElevation: () => 30, getCenterClampedToGround: () => clamped, setCenterClampedToGround: (v: boolean) => { clamped = v; } };
+  const ends: string[] = [];
+  playShots(map, parseShotScript({ shots: [{ type: "dolly", duration_s: 1, look_at: { lng: 129.72, lat: 33.18 }, to: { range_m: 300 } }] }), { frames: f.frames, onEnd: (r) => ends.push(r) });
+  assert.equal(clamped, false);
+  f.step(0);
+  assert.equal(f.jumps[0]!.elevation, 30);
+  f.step(1500);
+  assert.deepEqual(ends, ["done"]);
+  assert.equal(clamped, true);
 });
