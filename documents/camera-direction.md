@@ -199,3 +199,7 @@ collisions, data range). Two differences from this note:
 
 Each step is independently reviewable, and none of them changes the tile format,
 the surfel layer, or MapLibre.
+
+Step 1 is implemented as `demo/src/shot-player.ts` (2026-11-26), playing the worked example
+`demo/shots/sasebo.json` with `?shots=sasebo` on the demo (five of the six primitives; `track` is not
+played). What it assumes and where it differs from the example: NOTES.md, 2026-11-26.

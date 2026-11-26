@@ -83,7 +83,7 @@ export interface BudgetOptions {
  * Detail by distance under a budget, covering the whole view (E024): start from the coarsest tiles that touch the view, so no
  * part of the screen is left empty, then replace a tile by its finer children where the camera deserves it (the same rule as
  * `selectMixedTiles`: the tile's nearest point is seen at a map zoom of at least the next zoom), the most deserving (nearest) first, as long
- * as the bytes and splats stay within the budget. A refinement that does not fit is skipped, and smaller ones are still tried. The
+ * as the bytes and splats stay within the budget (children that do not exist are left out). A refinement that does not fit is skipped, and smaller ones are still tried. The
  * result is a partition (no tile covers another), nearest to the view centre first. If even the coarsest cover is over budget it is
  * returned as it is: coverage comes before the budget.
  */
@@ -97,15 +97,22 @@ export function selectBudgetedTiles(candidates: readonly TileAddress[], bounds: 
   const costOf = (t: TileAddress): number => options.knownBytes?.(t) ?? options.priorBytes(t.z);
   const limit = Math.min(options.maxBytes, options.maxSplats * bytesPerSplat);
 
-  /** The finer tiles that would replace `t`, when it may be refined at all (a finer zoom exists, within `finest`, and every one of its children exists). */
+  /**
+   * The finer tiles that would replace `t` (those that exist and touch the view), when it may be refined at all. A child
+   * that does not exist is left out: in a pyramid whose lower zooms are built from the finest tiles (build:tiled), a missing
+   * child means no points there. (`selectMixedTiles` keeps the parent instead; with z13 and z14 tiles much larger than the
+   * data, that rule never refined a view near the data's edge: E024 bug found on 2026-11-26.)
+   */
   const childrenOf = (t: TileAddress): TileAddress[] | undefined => {
     const next = zooms.find((z) => z > t.z);
     if (next === undefined || next > finest) return undefined;
     const k = 2 ** (next - t.z);
-    const all: TileAddress[] = [];
-    for (let dx = 0; dx < k; dx++) for (let dy = 0; dy < k; dy++) all.push({ z: next, x: t.x * k + dx, y: t.y * k + dy });
-    if (!all.every((c) => exists.has(key(c)))) return undefined;
-    return all.filter((c) => intersects(c, bounds));
+    const present: TileAddress[] = [];
+    for (let dx = 0; dx < k; dx++) for (let dy = 0; dy < k; dy++) {
+      const c = { z: next, x: t.x * k + dx, y: t.y * k + dy };
+      if (exists.has(key(c)) && intersects(c, bounds)) present.push(c);
+    }
+    return present.length > 0 ? present : undefined;
   };
 
   const leaves = new Map<string, TileAddress>();

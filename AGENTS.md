@@ -298,7 +298,10 @@ demo/src/camera.ts           map view camera model, effective zoom, visible grou
 demo/src/pan-zoom-keeper.ts  keep the zoom across a pan drag over terrain (workaround for the camera sinking onto slopes)
 demo/src/camera-clearance.ts keep the camera a minimum height above the ground under it by lowering the pitch (`?clearance=`, default 15 m with terrain)
 demo/src/controls.ts         the panel's look sliders (DOM); demo/src/tune-params.ts: the changed flags as a query string (no DOM)
-demo/src/mixed-selection.ts  tiles of several zooms by distance from the camera (?mixed=1)
+demo/src/mixed-selection.ts  tiles of several zooms by distance from the camera (?mixed=1; E024: under a byte/splat budget, covering the view)
+demo/src/shot-player.ts      camera direction step 1: plays a shot script (?shots=<name> = demo/shots/<name>.json; documents/camera-direction.md)
+demo/src/shot-control.ts     the tour's status control (Play tour / Stop / Replay, progress)
+demo/shots/                  shot scripts (pure JSON data; copied to docs/shots/ by npm run site): sasebo.json is the worked example of documents/camera-direction.md
 scripts/measure-adaptive.ts  E005 splat counts for a grid of merge limits
 scripts/merge-tilesets.ts    merge tilesets built apart (one per mesh) into one
 ```

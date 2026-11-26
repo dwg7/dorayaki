@@ -49,6 +49,23 @@ export interface CameraModel {
   pxPerUnit: number;
 }
 
+/**
+ * Metres from the camera to the point it looks at (the map centre) for a MapLibre zoom, a canvas `heightPx` CSS pixels
+ * tall, at latitude `lat`: the centre is drawn at 512 * 2^zoom pixels per Mercator unit, and the camera sits where the
+ * vertical field of view spans the canvas height. The same relation cameraModel uses; `zoomForDistance` inverts it.
+ */
+export function distanceForZoom(zoom: number, heightPx: number, lat: number): number {
+  const K = EARTH_CIRCUMFERENCE_METRES * Math.cos((lat * Math.PI) / 180);
+  const ppm = (512 * 2 ** zoom) / K; // pixels per metre at the view centre
+  return heightPx / 2 / Math.tan(FOV / 2) / ppm;
+}
+
+/** The MapLibre zoom that puts the camera `distance` metres from the point it looks at (the inverse of `distanceForZoom`). */
+export function zoomForDistance(distance: number, heightPx: number, lat: number): number {
+  const K = EARTH_CIRCUMFERENCE_METRES * Math.cos((lat * Math.PI) / 180);
+  return Math.log2((heightPx / 2 / Math.tan(FOV / 2) / distance) * K / 512);
+}
+
 export function cameraModel(view: View): CameraModel {
   const K = EARTH_CIRCUMFERENCE_METRES * Math.cos((view.lat * Math.PI) / 180);
   const [mx, my] = mercator(view.lng, view.lat);
@@ -58,8 +75,7 @@ export function cameraModel(view: View): CameraModel {
   const right: V3 = [Math.cos(th), -Math.sin(th), 0];
   const up: V3 = [right[1] * f[2] - right[2] * f[1], right[2] * f[0] - right[0] * f[2], right[0] * f[1] - right[1] * f[0]];
   const tanHalf = Math.tan(FOV / 2);
-  const ppm = (512 * 2 ** view.zoom) / K; // pixels per metre at the view centre
-  const distance = view.height / 2 / tanHalf / ppm;
+  const distance = distanceForZoom(view.zoom, view.height, view.lat);
   const position: V3 = [-f[0] * distance, -f[1] * distance, view.centreZ - f[2] * distance];
   return { K, mx, my, f, right, up, position, pxPerUnit: view.height / 2 / tanHalf };
 }
