@@ -208,115 +208,59 @@ npm run build       # tsc src/ into dist/
 npm run demo:tile   # write demo tiles (demo/tiles/{bridge,overhang,boundary,toy-gs}/18/x/y.mlt)
 npm run demo:build  # demo:tile + esbuild bundle of demo/src/main.ts
 npm run demo        # demo:tile + bundle + serve http://127.0.0.1:8000/demo/
-npm run demo:numazu # build demo/tiles/numazu/ and dorayaki-numazu.pmtiles from data/ (download: README); DORAYAKI_NUMAZU_PROFILE=medium|fine for the others (default: coarse)
 npm run site        # rebuild the GitHub Pages site in docs/ (commit the output)
-npm run measure:numazu -- <copc_all_bytes> <copc_xyzrgb_bytes>  # density/size table
-npm run measure:omission  # E002: omission strategies on the Numazu data
 npm run measure:codec     # encode/decode timing in Node (bridge, Numazu tiles)
-npm run measure:coarse    # E003: coarser Gaussians, disc vs ellipse
-npm run measure:frame -- <zone> <meshA.las> <meshB.las>   # E022: how far apart two neighbouring meshes place the same ground point (grid convergence)
-npm run prototype:tile-scatter -- <file.las> <zone> [maxpoints]   # E022: scatter one LAS file into z17 tile frames, accuracy, one tile accumulated and merged
-npm run compare:tile-build -- <file.las> <zone> [x y]   # E022 step 2: tile-local build (buildTilePieces) against the present build on one z17 tile
-npm run build:tiled -- <name> <zone> <file.las[@filters][,file2.las ...]> [--workers N] [--centre lng,lat] [--keep]   # E022 step 3: tile-aligned build (scatter to shards, one job per z17 tile, gather, PMTiles); same DORAYAKI_* recipe variables as build:tileset, DORAYAKI_ADAPTIVE_LEVELS required, DORAYAKI_ZOOM_CELL_SCALE/_THICKNESS_SCALE/_COLOR_SCALE coarsen the lower zooms (E023), DORAYAKI_LOWER_ZOOMS=16,15,14,13 adds z14/z13 and DORAYAKI_ZOOM_TARGET_SPLATS=16:100000,15:160000 caps a lower-zoom tile (E024); work in data/tiled-work/<name>
-npm run measure:seam -- <tileset dir> [...]   # E022 step 3: splat density and overlap along the interior mesh edges of the Kawazu grid (does a mesh seam show)
-npm run measure:encoding -- <tileset dir> <zoom>   # E016: entropy per field, gzip/brotli of the block as stored and rearranged
-npm run measure:precision -- <tileset dir> <zoom>  # E016: which precision reductions are visually free (software renderer)
-npm run measure:class -- <zoom> <tileset dir> [...]  # E020: class mix and purity of tilesets built with DORAYAKI_CLASS_ALPHA=1, and what storing a class per splat costs
-DORAYAKI_CLASS_PLANE=1 npm run build:tileset -- ...   # also write a class plane (E021); merge:tilesets joins the planes
-DORAYAKI_BLOCK_VERSION=6 npm run build:tileset -- ...   # write version 6 blocks (12-byte records); default is version 5
 npm run measure:quality -- <tileset dir> <ref zoom> <cand zoom|mixed> [<cand dir>] [--views lng,lat,zoom,bearing,pitch;...] [--out dir]  # E012: software-render both from fixed cameras, print holes/color/depth differences, optional PNGs
-npm run measure:pnts -- <file.las> [cell m]  # bytes per point as 3D Tiles point tiles (.pnts, quantized, gzip, brotli) would carry a LAS file: documents/size-vs-3d-tiles.md
-npm run measure:stream -- <file.las> <zone> [zoom ...]  # streaming voxel counts, time, memory (any LAS size)
-npm run build:tileset -- <file.las[@c2+1][@first][,file2.las]> <zone> <name> <maxzoom> [aggregated zoom ...]  # streaming tileset + pmtiles into demo/tiles/ (any LAS size, several files, class/return filters); DORAYAKI_ADAPTIVE_LEVELS/REFINE/THICKNESS/COLOR/SPARSE enable E005/E008 merging; DORAYAKI_TILE_COMPRESSION=gzip gzips PMTiles tiles (default raw; Martin 1.14 cannot read gzip MLT tiles); DORAYAKI_ATTRIBUTION sets the TileJSON/PMTiles attribution (default: Shizuoka text)
-npm run merge:tilesets -- <name> <dir name> [<dir name> ...]  # merge tilesets of demo/tiles/<dir>/ (tiles with one address are concatenated)
-npm run measure:adaptive -- <file.las> <zone> <base cell metres> <levels>  # E005: splat counts for a grid of merge limits
-DORAYAKI_NUMAZU_TILEJSON=https://stars.optgeo.org/dorayaki-numazu npm run site  # list Numazu on the site (DORAYAKI_KAWAZU_TILEJSON likewise for Kawazu)
+npm run build:tiled -- <name> <zone> <file.las[@filters][,file2.las ...]> [--workers N] [--centre lng,lat] [--keep]   # the builder (E022): scatter to shards, one job per z17 tile, gather, PMTiles; DORAYAKI_ADAPTIVE_LEVELS (required), _REFINE, _THICKNESS, _COLOR, _SPARSE; DORAYAKI_ZOOM_CELL_SCALE/_THICKNESS_SCALE/_COLOR_SCALE coarsen the lower zooms (E023); DORAYAKI_LOWER_ZOOMS=16,15,14,13 and DORAYAKI_ZOOM_TARGET_SPLATS=16:100000,15:160000 (E024); DORAYAKI_CLASS_PLANE=1 writes a class plane (E021); DORAYAKI_TILE_COMPRESSION=gzip (default raw; Martin 1.14 cannot read gzip MLT tiles); DORAYAKI_ATTRIBUTION; work in data/tiled-work/<name>
+npm run produce:opennagasaki -- <name> <count | codes file>   # unzip Open Nagasaki sheets and run build:tiled with the E024 recipe (documents/datasets.md); ON_DIR, LAS_DIR, WORKERS, CENTRE, REMOVE_LAS
+DORAYAKI_NUMAZU_TILEJSON=... DORAYAKI_KAWAZU_TILEJSON=... DORAYAKI_SASEBO_TILEJSON=... npm run site  # list the hosted tilesets on the site (URLs with ?v=: documents/datasets.md)
 ```
+
+Removed on 2026-11-27 (compaction; in Git at the tag `pre-compaction-2026-11-27`): `build:tileset`, `merge:tilesets`,
+`demo:numazu`, the finished `measure:*` and prototype scripts, `DORAYAKI_BLOCK_VERSION`, Surfel Block versions 4 and 5.
 
 Current repository structure:
 
 ```text
-src/surfel-block.ts          Surfel Block encoder/decoder (v5: 16-byte quantized splats as byte planes; v6: 12-byte records, used by the hosted Kawazu and Sasebo archives; reads v4)
+src/surfel-block.ts          Surfel Block encoder/decoder, version 6 only (12-byte bit-packed records; documents/format.md)
 src/splat.ts                 splat geometry: rotations, disc <-> splat conversions
 src/mlt-frame.ts             experimental MLT frame wrapper (tags 0xD0 surfel block, 0xD1 class plane)
-src/class-plane.ts           class plane: one class code per splat beside the block (documents/class-plane.md)
+src/class-plane.ts           class plane: one class code per splat beside the block
 src/tile-geometry.ts         tile address -> lng/lat and tile width in metres
-src/tiling.ts                centre-ownership split of a tile block into tiles
-src/progressive.ts           nested refinement order for maxzoom tiles (v3 level table)
-src/pmtiles.ts               minimal PMTiles v3 writer (leaf directories when the root exceeds 16 KiB; archive built in memory); pmtilesHead: the part before the tile data
-src/pmtiles-file.ts          streaming PMTiles writer (Node): the same archive written from tile files one at a time (E022 step 4; used by build:tiled)
-src/fixtures/plane.ts        deterministic plane fixture generator
-src/fixtures/bridge.ts       deterministic bridge fixture generator
-src/fixtures/overhang.ts     deterministic overhang fixture generator
-src/fixtures/sampling.ts     per-patch sampling rule shared by fixtures
-src/fixtures/boundary.ts     deterministic boundary fixture (2 x 2 tiles)
-src/fixtures/toy-gaussians.ts  deterministic toy 3DGS PLY (stand-in for real data)
+src/tiling.ts                centre-ownership split of a tile block into tiles (fixtures)
+src/pmtiles.ts               minimal PMTiles v3 writer in memory (leaf directories when the root exceeds 16 KiB); pmtilesHead
+src/pmtiles-file.ts          streaming PMTiles writer (Node): the archive written from tile files one at a time (used by build:tiled)
+src/fixtures/                deterministic fixtures: plane, bridge, overhang, boundary (2 x 2 tiles), toy-gaussians (toy 3DGS PLY); sampling.ts shared
 src/gaussian/ply.ts          minimal binary little-endian PLY reader/writer
 src/gaussian/to-surfels.ts   3DGS Gaussian -> splat mapping and tile placement
-src/pointcloud/las.ts        minimal LAS reader (formats 0-3, no LAZ)
-src/pointcloud/voxel-gaussians.ts  one Gaussian per voxel from a point cloud (in memory)
+src/pointcloud/las.ts        minimal LAS reader (formats 0-3, no LAZ); las-spec.ts: `file.las@c2@first` input specs
+src/pointcloud/voxel-gaussians.ts  one Gaussian per voxel: moments, eigen decomposition; the in-memory fit is the tests' reference
 src/pointcloud/voxel-accumulator.ts  the same fit, streaming: memory grows with voxels, not points
 src/pointcloud/adaptive.ts   E005: merge coplanar, same-color voxel Gaussians into larger splats
-src/pointcloud/pyramid.ts    tile pyramid from a point cloud: aggregated zooms + maxzoom levels
-src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
-src/geodesy/tile-frame.ts    TileFramer: plane point -> z17 tile and tile-local metres (E022, documents/tile-aligned-build.md)
-src/pointcloud/tile-build.ts buildTilePieces: points of one z17 tile (tile frame) -> z17 splats and pieces of the lower zooms (default z16, z15; any down to z13) on the tile's own grid (E022 step 2); coarser cells, merge scales and a size target per lower-zoom tile (E023, E024)
+src/pointcloud/tile-build.ts buildTilePieces: points of one z17 tile -> z17 splats and pieces of the lower zooms (to z13; E022 to E024)
+src/pointcloud/tile-shard.ts shard records (16 bytes) of the tiled build
 src/pointcloud/class-slots.ts class slots of the builder for the class plane (E021)
-scripts/build-numazu-demo.ts builds the numazu tileset from data/ (not committed)
+src/geodesy/jprcs.ts         JGD2011 plane rectangular -> latitude/longitude
+src/geodesy/tile-frame.ts    TileFramer: plane point -> z17 tile and tile-local metres (E022)
 src/index.ts                 package entry point
 test/*.test.ts               node:test test suites
-scripts/generate-demo-tile.ts  writes one demo tile per tileset
-demo/index.html              demo page (MapLibre GL JS via import map)
-demo/src/                    demo modules: load, TileJSON, decode, tile selection, placement, splat instances, GPU, layer
-NOTES.md                     observed experimental findings (chronological)
-EXPERIMENTS.md               experiments E001, E002, ...: question, measurements, decision
-docs/                        built GitHub Pages site only (npm run site; do not edit by hand)
-scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline), worker, synthetic tiles
-documents/surfel-block-format.md  byte layout and quantization of the Surfel Block (versions 5 and 6)
-documents/mlt-frame.md            experimental MLT frame envelope
-documents/progressive-maxzoom.md  maxzoom and progressive order: design, v3 status, findings
-documents/large-point-clouds.md   streaming build, Virtual Shizuoka data, Kawazu
-documents/adaptive-merging.md     E005 merging and E006 gap coverage
-documents/size-and-scale.md       tile and prefecture size arithmetic, browser memory
-documents/kawazu-demo.md          the Kawazu tileset: recipe, size, hosting plan
-documents/decisions-2026-11.md    decisions and work of 2026-11-21 to 23 (Sasebo expansion, look, view), with reasons and open items
-documents/class-plane.md          the class plane beside the block (E021)
-documents/dark-basemap.md         the dark basemap the point-cloud tilesets use
-documents/demo-and-site.md        running the demo, URL flags, demo modules, the Pages site
-documents/numazu-demo.md          the Numazu tileset: rebuild, profiles, hosting
-documents/sasebo-expansion.md     the Sasebo (Open Nagasaki) tileset: data, builds, recipes (E023, E024), hosting
-documents/tile-aligned-build.md   the tile-aligned parallel build (E022)
-documents/size-vs-3d-tiles.md     data size against 3D Tiles point tiles
-documents/camera-direction.md     idea note: language-driven camerawork; step 1 (the shot player) is implemented
-scripts/measure-numazu.ts    density and size measurements on the Numazu data
-scripts/measure-omission.ts  E002 omission measurements
-scripts/measure-pnts.ts      bytes per point of a LAS file as 3D Tiles point tiles would carry it (documents/size-vs-3d-tiles.md)
+scripts/generate-demo-tile.ts  writes one demo tile per synthetic tileset
+scripts/build-tiled.ts       the builder: scatter, tile jobs, gather, archive
+scripts/produce-opennagasaki.sh  Open Nagasaki sheets -> build:tiled, with a run report
+scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline), worker, synthetic tiles, shots
 scripts/measure-codec.ts     codec timing in Node
-scripts/measure-class.ts     E020 class mix, purity and storage cost per splat
-scripts/measure-encoding.ts  E016 entropy per field, gzip/brotli of the block
-scripts/measure-precision.ts E016 which precision reductions are visually free
-scripts/measure-coarse.ts    E003 coarse Gaussian measurements
-scripts/measure-stream.ts    streaming voxelisation of a LAS file (chunked read)
-scripts/build-tileset.ts     streaming tileset builder for a LAS file of any size (one level per tile)
-demo/src/cpu-render.ts       software renderer (Node) for measurement: same camera model as MapLibre, flat color
-demo/src/image-metrics.ts    compare two renderings: holes, extra, color error, depth difference
-scripts/measure-frame.ts     E022 jog between neighbouring meshes
-scripts/prototype-tile-scatter.ts  E022 prototype of a tile-aligned build's first stages (documents/tile-aligned-build.md)
-scripts/compare-tile-build.ts  E022 step 2: the tile-local build against the present one on the same points
-scripts/build-tiled.ts       E022 step 3: tile-aligned parallel build (scatter, tile jobs, gather, archive)
-scripts/measure-seam.ts       E022 step 3: mesh-seam signature in the splat density (Kawazu grid)
-src/pointcloud/tile-shard.ts shard records (16 bytes) of the tiled build; src/pointcloud/las-spec.ts: `file.las@c2@first` input specs
 scripts/measure-quality.ts   E012/E015 quality comparison between tile zooms, tilesets, or the mixed-zoom choice
-demo/src/camera.ts           map view camera model, effective zoom, visible ground bounds
-demo/src/pan-zoom-keeper.ts  keep the zoom across a pan drag over terrain (workaround for the camera sinking onto slopes)
-demo/src/camera-clearance.ts keep the camera a minimum height above the ground under it by lowering the pitch (`?clearance=`, default 15 m with terrain)
-demo/src/controls.ts         the panel's look sliders (DOM); demo/src/tune-params.ts: the changed flags as a query string (no DOM)
-demo/src/mixed-selection.ts  tiles of several zooms by distance from the camera (?mixed=1; E024: under a byte/splat budget, covering the view)
-demo/src/shot-player.ts      camera direction step 1: plays a shot script (?shots=<name> = demo/shots/<name>.json; documents/camera-direction.md)
-demo/src/shot-control.ts     the tour's status control (Play tour / Stop / Replay, progress)
-demo/shots/                  shot scripts (pure JSON data; copied to docs/shots/ by npm run site): sasebo.json is the worked example of documents/camera-direction.md
-scripts/measure-adaptive.ts  E005 splat counts for a grid of merge limits
-scripts/merge-tilesets.ts    merge tilesets built apart (one per mesh) into one
+demo/index.html              demo page (MapLibre GL JS via import map)
+demo/src/                    demo modules: load, TileJSON, decode, tile streaming and selection (mixed-selection.ts: E024 budget), placement, GPU (gpu-surfels.ts decodes v6 records in the vertex shader), layer, camera helpers, look controls, shot player and tour control; cpu-render.ts and image-metrics.ts serve measure:quality (documents/demo.md lists them)
+demo/shots/                  shot scripts (pure JSON data; copied to docs/shots/ by npm run site); sasebo.json is the worked example
+docs/                        built GitHub Pages site only (npm run site; do not edit by hand)
+documents/format.md          Surfel Block version 6, the MLT frame and the class plane
+documents/build.md           how tilesets are built (build:tiled, streaming fit, adaptive merging)
+documents/demo.md            the demo, URL flags, modules, the Pages site, dark basemap, camera direction
+documents/datasets.md        Numazu, Kawazu, Sasebo, Open Nagasaki: recipes, hosting, size and scale, size against 3D Tiles
+documents/decisions.md       decisions with reasons, open items (2026-11-21 onward, the compaction)
+EXPERIMENTS.md               experiments E001, E002, ...: question, measurements, decision
+NOTES.md                     observed experimental findings (chronological)
 ```
 
 Do not invent commands that are not present in package.json.

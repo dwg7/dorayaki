@@ -1,5 +1,5 @@
 /**
- * Shot player, step 1 of documents/camera-direction.md: a hand-written shot script (pure JSON data) played as a camera
+ * Shot player, step 1 of documents/demo.md: a hand-written shot script (pure JSON data) played as a camera
  * on the map, interruptible by any manual input. The pure part (reading the script, turning shots into a timeline,
  * easing, sampling) has no DOM or WebGL and is tested in test/shot-player.test.ts; `playShots` at the end drives a map
  * with requestAnimationFrame and `jumpTo` every frame.

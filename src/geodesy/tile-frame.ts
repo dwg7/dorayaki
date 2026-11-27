@@ -1,5 +1,5 @@
 /**
- * The frame of a map tile for points given in a Japan plane rectangular zone (E022, documents/tile-aligned-build.md).
+ * The frame of a map tile for points given in a Japan plane rectangular zone (E022, documents/build.md).
  *
  * A point of a survey is (easting, northing) in a plane rectangular zone. To build the splats of one tile on a voxel grid that lines up
  * with the tile's edges, the point is expressed in the frame of the tile it falls in: metres east and south of the tile's north-west

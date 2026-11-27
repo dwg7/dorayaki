@@ -9,7 +9,7 @@ export function angleDegrees(a: readonly number[], b: readonly number[]): number
 }
 
 /**
- * Assert that decoded splats match the originals within the quantization of Surfel Block version 6 (documents/surfel-block-format.md):
+ * Assert that decoded splats match the originals within the quantization of Surfel Block version 6 (documents/format.md):
  * x, y half of 1/8192; z half of the block's step (at least 1 mm, wider for blocks taller than 16.4 m; computed from the originals
  * unless given); each scale within 1/12 octave; rotation within 16 degrees (17-bit "smallest three"); color within 3 of 255 (6 bits);
  * opacity exact.

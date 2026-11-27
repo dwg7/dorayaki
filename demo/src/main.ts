@@ -64,7 +64,7 @@ const isExternal = (name: string): name is ExternalTileset => Object.hasOwn(EXTE
  * Per-tileset defaults for the query flags below, overridden by the URL.
  * Kawazu lies 130 to 360 m above sea level, where the camera of a map without
  * terrain is far above the data (NOTES.md), so terrain is on by default; the
- * splat scale 1.3 closes the gaps between neighbours (documents/adaptive-merging.md).
+ * splat scale 1.3 closes the gaps between neighbours (documents/build.md).
  */
 const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   kawazu: { terrain: "1", extent: "1.3" },
@@ -287,7 +287,7 @@ map.on("load", () => {
   });
   const lod = Number(flag("lod", tileset));
   const dz = Number(flag("dz", tileset));
-  // `?mixed=1`: tiles of several zooms at once, by distance from the camera (documents/demo-and-site.md, E015).
+  // `?mixed=1`: tiles of several zooms at once, by distance from the camera (documents/demo.md, E015).
   // `1`: under a budget that always covers the view (E024; `?budget=` megabytes, default 40, and `?splats=` default 4000000); `2`: the older cap of 24 tiles.
   const mixedMode = flag("mixed", tileset);
   const mixed = mixedMode === "1" || mixedMode === "2";
@@ -383,7 +383,7 @@ map.on("load", () => {
   colorEl.addEventListener("change", onClassFeature);
 
   // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
-  // as a whole when it is complete (documents/demo-and-site.md).
+  // as a whole when it is complete (documents/demo.md).
   // The view as the camera model of camera.ts takes it (for `?mixed=1`); the ground height under the view centre comes from the terrain.
   const currentView = (): View => {
     const c = map.getCenter();
@@ -469,7 +469,7 @@ map.on("load", () => {
   map.on("moveend", refresh);
   if (terrain > 0) map.on("zoom", () => layer.setZOffset(dz + zoomLift()));
   refresh();
-  // `?shots=<name or path>`: play a shot script (shot-player.ts, documents/camera-direction.md step 1) once the first
+  // `?shots=<name or path>`: play a shot script (shot-player.ts, documents/demo.md step 1) once the first
   // tiles are drawn. A bare name is `shots/<name>.json` next to this page. Any pointer, wheel, touch or key input stops
   // it and leaves the camera with the user. Progress goes to the console, one line per shot.
   // Without `?shots=`, a tileset that has a tour (TOURS) gets the control with a Play button and does not start by itself.

@@ -2,7 +2,7 @@
  * Surfel Block codec (experimental; version 6 only since the compaction of 2026-11-27: earlier versions are not read).
  *
  * Each record is a quantized anisotropic Gaussian splat of 12 bytes, the kind of primitive 3D Gaussian Splatting
- * uses. See documents/surfel-block-format.md for the byte layout. All multi-byte values are little-endian. This
+ * uses. See documents/format.md for the byte layout. All multi-byte values are little-endian. This
  * module has no dependency on MapLibre, MLT, or any runtime other than ECMAScript typed arrays.
  */
 
@@ -240,7 +240,7 @@ export function readBits(buf: Uint8Array, base: number, off: number, len: number
 /**
  * Encode splats into a Surfel Block. `levels` is the level table (splat count per level, in order; default one level).
  *
- * Quantization (documents/surfel-block-format.md): x, y to 1/8192 of the tile; z to a per-block step of at least 1 mm,
+ * Quantization (documents/format.md): x, y to 1/8192 of the tile; z to a per-block step of at least 1 mm,
  * wide enough for 14 bits, from the block's lowest z; scales to 6 steps per octave from the block's smallest scale (7 bits;
  * larger scales clamp at 21 octaves above it); rotation to 17 bits; color to 6 bits per channel; one opacity for the whole
  * block (splats with different opacities are rejected). Decoding returns values within those tolerances, not the input.
