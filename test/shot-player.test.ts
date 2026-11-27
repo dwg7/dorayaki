@@ -255,3 +255,19 @@ test("describePlayback: the status line, the button and the progress for each st
   assert.deepEqual(describePlayback({ kind: "ready", count: 5, duration: 38 }), { text: "Camera tour: 5 shots, 38 s", button: "Play tour", progress: 0 });
   assert.equal(describePlayback({ kind: "error", message: "x" }).button, undefined);
 });
+
+test("playShots: onAhead reports the views 1.5 and 3 s ahead, about every 500 ms, and none past the end", () => {
+  const f = fakeMap();
+  const calls: Array<{ at: number; zooms: number[] }> = [];
+  let now = 0;
+  playShots(f.map, parseShotScript({ shots: [
+    { type: "hold", duration_s: 2, look_at: { lng: 129.72, lat: 33.18 }, camera: { range_m: 2000 } },
+    { type: "dolly", duration_s: 2, look_at: { lng: 129.72, lat: 33.18 }, to: { range_m: 200 } },
+  ] }), { frames: f.frames, onAhead: (views) => calls.push({ at: now, zooms: views.map((v) => v.zoom) }) });
+  for (now of [0, 200, 600, 1200, 3500]) f.step(now);
+  // 200 ms is too soon after 0; at 3.5 s both views would be past the 4 s script, so there is no call.
+  assert.deepEqual(calls.map((c) => c.at), [0, 600, 1200]);
+  assert.equal(calls[0]!.zooms.length, 2);
+  assert.ok(calls[0]!.zooms[1]! > calls[0]!.zooms[0]!, "3 s ahead the dolly has moved in");
+  assert.equal(calls[2]!.zooms.length, 1, "at 1.2 s only the view 1.5 s ahead is within the script");
+});

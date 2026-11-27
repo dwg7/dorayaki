@@ -313,6 +313,13 @@ export interface PlayOptions {
   onEnd?: (reason: "done" | "user" | "stopped") => void;
   /** Called every frame with the seconds played and the script's length. */
   onFrame?: (time: number, duration: number) => void;
+  /**
+   * Where the camera will be: called about every `aheadEvery` ms (default 500) with the map views `ahead` seconds from now
+   * (default 1.5 and 3, within the script), so tiles can be loaded before the camera gets there.
+   */
+  onAhead?: (views: MapView[]) => void;
+  ahead?: readonly number[];
+  aheadEvery?: number;
   /** Input that does not take the camera back (the player's own control sits inside the map's container). */
   ignoreInput?: (event: { target: unknown }) => boolean;
   /** The frame clock (default: the browser's requestAnimationFrame); tests pass their own. */
@@ -345,7 +352,7 @@ export function playShots(map: PlayerMap, script: ShotScript, options: PlayOptio
   if (ownsHeight) map.setCenterClampedToGround!(false);
   const container = map.getContainer();
   const frames = options.frames ?? browserFrames;
-  let frame = 0, startedAt: number | undefined, shown = -1, ended = false;
+  let frame = 0, startedAt: number | undefined, shown = -1, ended = false, lastAhead = -Infinity;
   const end = (reason: "done" | "user" | "stopped"): void => {
     if (ended) return;
     ended = true;
@@ -363,6 +370,12 @@ export function playShots(map: PlayerMap, script: ShotScript, options: PlayOptio
     const { camera, index } = sampleTimeline(timeline, time);
     if (index !== shown && index >= 0) { shown = index; options.onShot?.(index, script.shots[index]!); }
     options.onFrame?.(Math.min(time, timeline.duration), timeline.duration);
+    if (options.onAhead && now - lastAhead >= (options.aheadEvery ?? 500)) {
+      lastAhead = now;
+      const h = map.getCanvas().clientHeight, maxPitch = map.getMaxPitch();
+      const views = (options.ahead ?? [1.5, 3]).filter((dt) => time + dt < timeline.duration).map((dt) => mapViewOf(sampleTimeline(timeline, time + dt).camera, h, maxPitch));
+      if (views.length > 0) options.onAhead(views);
+    }
     map.jumpTo(mapViewOf(camera, map.getCanvas().clientHeight, map.getMaxPitch()));
     if (time >= timeline.duration) { end("done"); return; }
     frame = frames.request(tick);
