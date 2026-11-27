@@ -7,12 +7,11 @@
  * and fragments outside the unit circle are discarded). A splat with no
  * preferred orientation ("round") is drawn as a camera-facing disc.
  * Two-sided Lambert shading from a fixed light: the sign of a splat's axis
- * carries no meaning. No knowledge of MapLibre or of the wire format; input
- * is decoded Splat objects (see splat-instances.ts).
+ * carries no meaning. No knowledge of MapLibre. Input is a Surfel Block's 12-byte records as they are (PackedBlock in
+ * src/surfel-block.ts), decoded in the vertex shader: the GPU holds 12 bytes per splat.
  */
-import type { Splat } from "../../src/surfel-block.js";
 import { classPaletteArray } from "./class-palette.js";
-import { cameraAxes, splatInstances, type SplatInstances } from "./splat-instances.js";
+import { cameraAxes } from "./splat-instances.js";
 
 /**
  * Color grade of the stored splat colors, before shading (`?vivid=`, E023): brightness, contrast around mid gray, then
@@ -46,67 +45,6 @@ vec3 jitterHash(uint n) {
   return vec3(float(n & 1023u), float((n >> 10u) & 1023u), float(m & 1023u)) / 1023.0;
 }`;
 
-const VERTEX_SHADER = `#version 300 es
-precision highp float;
-uniform mat4 u_matrix;      // local metric frame (metres; east, south, up) -> clip
-uniform float u_tile_width; // metres per tile-local unit
-uniform float u_min_radius; // metres; semi-axis floor when drawing a progressive prefix
-uniform float u_extent;     // factor on every semi-axis (1 = the 2-sigma ellipse); covers gaps between neighbours
-uniform vec3 u_light;       // local metric frame, normalized
-uniform vec3 u_right;       // camera right in the local metric frame, normalized
-uniform vec3 u_up;
-uniform float u_shade;      // 1: the fixed two-sided Lambert shading; 0: the colors as stored (no shading)
-${GRADE_GLSL}
-${JITTER_GLSL}
-uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
-uniform float u_has_class;  // 1: the tile has class codes (a_class)
-uniform float u_class_color; // 1: color by class instead of the stored color
-uniform vec3 u_palette[128]; // color of class code c (class-palette.ts)
-bool hidden(float cls) {
-  uint code = uint(cls + 0.5);
-  return u_has_class > 0.5 && code < 128u && ((u_hide_mask[code >> 5u] >> (code & 31u)) & 1u) == 1u;
-}          // camera up in the local metric frame, normalized
-in vec2 a_corner;           // quad corner in [-1, 1]^2
-in float a_class;           // class code of the splat (u_has_class says whether the tile has them)
-in vec3 a_position;         // x, y tile-local; z metres
-in vec3 a_axis_u;           // semi-axis vector along the major axis, metres
-in vec3 a_axis_v;           // semi-axis vector along the minor axis, metres
-in vec3 a_normal;           // shortest axis
-in float a_round;           // 1: camera-facing disc of radius |a_axis_u|
-in vec4 a_color;
-out vec2 v_corner;
-out vec3 v_color;
-void main() {
-  if (hidden(a_class)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
-  vec3 centre = vec3(a_position.xy * u_tile_width, a_position.z);
-  vec3 u = a_axis_u;
-  vec3 v = a_axis_v;
-  float shade;
-  if (a_round > 0.5) {
-    float r = max(length(a_axis_u) * u_extent, u_min_radius);
-    u = u_right * r;
-    v = u_up * r;
-    shade = mix(1.0, 0.8, u_shade);
-  } else {
-    float lu = max(length(u), 1e-9);
-    float lv = max(length(v), 1e-9);
-    u *= u_extent * max(1.0, u_min_radius / (lu * u_extent));
-    v *= u_extent * max(1.0, u_min_radius / (lv * u_extent));
-    shade = mix(1.0, 0.35 + 0.65 * abs(dot(normalize(a_normal), u_light)), u_shade);
-  }
-  vec3 jh = jitterHash(uint(gl_InstanceID));
-  centre += (u * (jh.x - 0.5) + v * (jh.y - 0.5)) * u_jitter;
-  float jgrow = 1.0 + u_jitter * 0.5 * jh.z;
-  u *= jgrow;
-  v *= jgrow;
-  vec3 p = centre + a_corner.x * u + a_corner.y * v;
-  gl_Position = u_matrix * vec4(p, 1.0);
-  v_corner = a_corner;
-  vec3 base = (u_class_color > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : a_color.rgb;
-  bool byClass = u_class_color > 0.5 && u_has_class > 0.5;
-  v_color = (byClass ? base : grade(base)) * shade;
-}`;
-
 const FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 in vec2 v_corner;
@@ -128,48 +66,11 @@ void main() {
 }`;
 
 /**
- * Vertex shader that decodes packed records. `bytes` 16: the record of versions 4 and 5; 12: the bit-packed record of
- * version 6 (V6_FIELDS in src/surfel-block.ts, `u_scale_base` the block's scaleLog2Min). The decoding mirrors
- * splat-instances.ts for the drawing and the codec for the fields.
+ * Vertex shader that decodes the 12-byte records (RECORD_FIELDS in src/surfel-block.ts; `u_scale_base` the block's
+ * scaleLog2Min). The decoding mirrors splat-instances.ts for the drawing and the codec for the fields. A splat is round
+ * when its largest and smallest scale codes differ by at most 3 (a ratio below 1.5 at 6 steps per octave).
  */
-function packedVertexShader(bytes: 16 | 12): string {
-  const v6 = bytes === 12;
-  const record = v6
-    ? `in uvec3 a_rec;             // the 12-byte record as three little-endian words
-uniform float u_scale_base; // log2 of the metres of scale code 0
-// \`len\` bits (at most 25) at bit \`off\` of the 96-bit record.
-uint bits(uint off, uint len) {
-  uint w = off >> 5u;
-  uint o = off & 31u;
-  uint lo = a_rec[w] >> o;
-  uint hi = (o + len > 32u) ? (a_rec[w + 1u] << (32u - o)) : 0u;
-  return (lo | hi) & ((1u << len) - 1u);
-}`
-    : "in uvec4 a_rec;             // the 16-byte record as four little-endian words";
-  const decode = v6
-    ? `  vec3 pos = vec3(float(bits(0u, 13u)) / 8192.0, float(bits(13u, 13u)) / 8192.0, u_z_origin + float(bits(26u, 14u)) * u_z_step);
-  uint codes[3] = uint[3](bits(40u, 7u), bits(47u, 7u), bits(54u, 7u));
-  float sc[3];
-  for (int i = 0; i < 3; i++) sc[i] = exp2(u_scale_base + float(codes[i]) / 6.0);
-  uint qb = bits(61u, 17u);
-  const uint QBITS = 5u;
-  const uint QMASK = 31u;
-  const float QHALF = 15.0;
-  vec3 rgb = vec3(float(bits(78u, 6u)), float(bits(84u, 6u)), float(bits(90u, 6u))) / 63.0;`
-    : `  uint w0 = a_rec.x, w1 = a_rec.y, w2 = a_rec.z, w3 = a_rec.w;
-  vec3 pos = vec3(float(w0 & 0xFFFFu) / 65536.0, float(w0 >> 16) / 65536.0, u_z_origin + float(w1 & 0xFFFFu) * u_z_step);
-  uint codes[3] = uint[3](w1 >> 16 & 255u, w1 >> 24, w2 & 255u);
-  float sc[3];
-  for (int i = 0; i < 3; i++) sc[i] = exp2(float(codes[i]) / 10.0 - 16.0);
-  uint qb = (w2 >> 8) & 0xFFFFFFu;
-  const uint QBITS = 7u;
-  const uint QMASK = 127u;
-  const float QHALF = 63.0;
-  vec3 rgb = vec3(float(w3 & 255u), float((w3 >> 8) & 255u), float((w3 >> 16) & 255u)) / 255.0;`;
-  // A splat is round when its largest and smallest scale codes differ by less than a ratio of 1.5:
-  // 10 steps per octave (versions 4, 5): at most 5 codes; 6 steps per octave (version 6): at most 3.
-  const roundDiff = v6 ? "3u" : "5u";
-  return `#version 300 es
+const VERTEX_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
 uniform mat4 u_matrix;
@@ -194,13 +95,30 @@ uniform float u_z_origin;   // metres, of the tile's block
 uniform float u_z_step;     // metres per z code
 in vec2 a_corner;
 in float a_class;           // class code of the splat (u_has_class says whether the tile has them)
-${record}
+in uvec3 a_rec;             // the 12-byte record as three little-endian words
+uniform float u_scale_base; // log2 of the metres of scale code 0
+// \`len\` bits (at most 25) at bit \`off\` of the 96-bit record.
+uint bits(uint off, uint len) {
+  uint w = off >> 5u;
+  uint o = off & 31u;
+  uint lo = a_rec[w] >> o;
+  uint hi = (o + len > 32u) ? (a_rec[w + 1u] << (32u - o)) : 0u;
+  return (lo | hi) & ((1u << len) - 1u);
+}
 out vec2 v_corner;
 out vec3 v_color;
 const float QUAT_RANGE = 0.70710678118654752;
 void main() {
   if (hidden(a_class)) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
-${decode}
+  vec3 pos = vec3(float(bits(0u, 13u)) / 8192.0, float(bits(13u, 13u)) / 8192.0, u_z_origin + float(bits(26u, 14u)) * u_z_step);
+  uint codes[3] = uint[3](bits(40u, 7u), bits(47u, 7u), bits(54u, 7u));
+  float sc[3];
+  for (int i = 0; i < 3; i++) sc[i] = exp2(u_scale_base + float(codes[i]) / 6.0);
+  uint qb = bits(61u, 17u);
+  const uint QBITS = 5u;
+  const uint QMASK = 31u;
+  const float QHALF = 15.0;
+  vec3 rgb = vec3(float(bits(78u, 6u)), float(bits(84u, 6u)), float(bits(90u, 6u))) / 63.0;
   // Rotation: columns of the matrix of the unit quaternion (w, x, y, z).
   int largest = int(qb & 3u);
   float q[4];
@@ -237,7 +155,7 @@ ${decode}
   vec3 centre = vec3(pos.xy * u_tile_width, pos.z);
   vec3 u, v;
   float shade;
-  if (cmax - cmin <= ${roundDiff}) {
+  if (cmax - cmin <= 3u) {
     float r = max(2.0 * sqrt(sa * sb) * u_extent, u_min_radius);
     u = u_right * r;
     v = u_up * r;
@@ -263,7 +181,6 @@ ${decode}
   bool byClass = u_class_color > 0.5 && u_has_class > 0.5;
   v_color = (byClass ? base : grade(base)) * shade;
 }`;
-}
 
 /** Light direction in the local metric frame (east, south, up): from the north-west, above. */
 const PALETTE = classPaletteArray();
@@ -295,11 +212,9 @@ export interface SurfelProgram {
   uClassColor: WebGLUniformLocation;
   uPalette: WebGLUniformLocation;
   uFalloff: WebGLUniformLocation;
-  /** Only in the program that decodes packed records. */
-  uZOrigin?: WebGLUniformLocation;
-  uZStep?: WebGLUniformLocation;
-  /** Only in the program for 12-byte records. */
-  uScaleBase?: WebGLUniformLocation;
+  uZOrigin: WebGLUniformLocation;
+  uZStep: WebGLUniformLocation;
+  uScaleBase: WebGLUniformLocation;
 }
 
 export interface SurfelBuffers {
@@ -310,8 +225,8 @@ export interface SurfelBuffers {
   hasClasses?: boolean;
   /** The buffer of the class attribute (inside `buffers`), when there is one. */
   classBuffer?: WebGLBuffer;
-  /** Set for packed records: the block's z origin and step, metres. */
-  z?: { origin: number; step: number; scaleBase: number };
+  /** The block's z origin and step (metres) and scale base (log2 metres). */
+  z: { origin: number; step: number; scaleBase: number };
 }
 
 function normalize3(x: number, y: number, z: number): [number, number, number] {
@@ -333,15 +248,11 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
 }
 
 // Fixed attribute locations so the VAO does not depend on the program.
-const LOC = { corner: 0, position: 1, axisU: 2, axisV: 3, normal: 4, round: 5, color: 6, record: 1, cls: 7 } as const;
+const LOC = { corner: 0, record: 1, cls: 7 } as const;
 
-/**
- * The drawing program: `"instances"` (float attributes, default), or `16` / `12` for the program that decodes records of
- * that many bytes (packedVertexShader).
- */
-export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances" | 16 | 12 = "instances"): SurfelProgram {
-  const packed = kind !== "instances";
-  const vs = compile(gl, gl.VERTEX_SHADER, packed ? packedVertexShader(kind) : VERTEX_SHADER);
+/** The drawing program (VERTEX_SHADER decodes the records). */
+export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
+  const vs = compile(gl, gl.VERTEX_SHADER, VERTEX_SHADER);
   const fs = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT_SHADER);
   const program = gl.createProgram();
   if (!program) throw new Error("createProgram failed");
@@ -349,16 +260,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
   gl.attachShader(program, fs);
   gl.bindAttribLocation(program, LOC.corner, "a_corner");
   gl.bindAttribLocation(program, LOC.cls, "a_class");
-  if (packed) {
-    gl.bindAttribLocation(program, LOC.record, "a_rec");
-  } else {
-    gl.bindAttribLocation(program, LOC.position, "a_position");
-    gl.bindAttribLocation(program, LOC.axisU, "a_axis_u");
-    gl.bindAttribLocation(program, LOC.axisV, "a_axis_v");
-    gl.bindAttribLocation(program, LOC.normal, "a_normal");
-    gl.bindAttribLocation(program, LOC.round, "a_round");
-    gl.bindAttribLocation(program, LOC.color, "a_color");
-  }
+  gl.bindAttribLocation(program, LOC.record, "a_rec");
   gl.linkProgram(program);
   gl.deleteShader(vs);
   gl.deleteShader(fs);
@@ -388,15 +290,15 @@ export function createSurfelProgram(gl: WebGL2RenderingContext, kind: "instances
     uClassColor: uniform("u_class_color"),
     uPalette: uniform("u_palette"),
     uFalloff: uniform("u_falloff"),
-    ...(packed ? { uZOrigin: uniform("u_z_origin"), uZStep: uniform("u_z_step") } : {}),
-    ...(kind === 12 ? { uScaleBase: uniform("u_scale_base") } : {}),
+    uZOrigin: uniform("u_z_origin"),
+    uZStep: uniform("u_z_step"),
+    uScaleBase: uniform("u_scale_base"),
   };
 }
 
-/** Upload a block's 16-byte records as they are (PackedBlock in src/surfel-block.ts); draw them with a packed program. */
+/** Upload a block's 12-byte records as they are (PackedBlock in src/surfel-block.ts). */
 export function uploadPacked(
-  gl: WebGL2RenderingContext, records: Uint8Array, count: number, zOrigin: number, zStep: number,
-  recordBytes: 16 | 12 = 16, scaleBase = 0, classes?: Uint8Array,
+  gl: WebGL2RenderingContext, records: Uint8Array, count: number, zOrigin: number, zStep: number, scaleBase: number, classes?: Uint8Array,
 ): SurfelBuffers {
   const vao = gl.createVertexArray();
   if (!vao) throw new Error("createVertexArray failed");
@@ -414,48 +316,13 @@ export function uploadPacked(
   gl.bindBuffer(gl.ARRAY_BUFFER, rec);
   gl.bufferData(gl.ARRAY_BUFFER, records, gl.STATIC_DRAW);
   gl.enableVertexAttribArray(LOC.record);
-  gl.vertexAttribIPointer(LOC.record, recordBytes / 4, gl.UNSIGNED_INT, recordBytes, 0);
+  gl.vertexAttribIPointer(LOC.record, 3, gl.UNSIGNED_INT, 12, 0);
   gl.vertexAttribDivisor(LOC.record, 1);
   gl.bindVertexArray(null);
   gl.bindBuffer(gl.ARRAY_BUFFER, null);
   const out: SurfelBuffers = { vao, buffers, count, z: { origin: zOrigin, step: zStep, scaleBase } };
   if (classes) attachClasses(gl, out, classes);
   return out;
-}
-
-export function uploadSplats(gl: WebGL2RenderingContext, splats: readonly Splat[]): SurfelBuffers {
-  return uploadInstances(gl, splatInstances(splats));
-}
-
-/** Upload instance data that was built earlier (so that the decoded Splat objects need not be kept). */
-export function uploadInstances(gl: WebGL2RenderingContext, inst: SplatInstances): SurfelBuffers {
-
-  const vao = gl.createVertexArray();
-  if (!vao) throw new Error("createVertexArray failed");
-  gl.bindVertexArray(vao);
-  const buffers: WebGLBuffer[] = [];
-  const attrib = (
-    loc: number, data: ArrayBufferView, size: number, type: number, normalized: boolean, divisor: number,
-  ): void => {
-    const buffer = gl.createBuffer();
-    if (!buffer) throw new Error("createBuffer failed");
-    buffers.push(buffer);
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
-    gl.enableVertexAttribArray(loc);
-    gl.vertexAttribPointer(loc, size, type, normalized, 0, 0);
-    gl.vertexAttribDivisor(loc, divisor);
-  };
-  attrib(LOC.corner, Float32Array.of(-1, -1, 1, -1, -1, 1, 1, 1), 2, gl.FLOAT, false, 0);
-  attrib(LOC.position, inst.position, 3, gl.FLOAT, false, 1);
-  attrib(LOC.axisU, inst.axisU, 3, gl.FLOAT, false, 1);
-  attrib(LOC.axisV, inst.axisV, 3, gl.FLOAT, false, 1);
-  attrib(LOC.normal, inst.normal, 3, gl.FLOAT, false, 1);
-  attrib(LOC.round, inst.round, 1, gl.FLOAT, false, 1);
-  attrib(LOC.color, inst.color, 4, gl.UNSIGNED_BYTE, true, 1);
-  gl.bindVertexArray(null);
-  gl.bindBuffer(gl.ARRAY_BUFFER, null);
-  return { vao, buffers, count: inst.count };
 }
 
 export interface DrawOptions {
@@ -502,11 +369,9 @@ export function drawSurfels(
   gl.uniform3fv(p.uLight, LIGHT);
   gl.uniform3fv(p.uRight, right);
   gl.uniform3fv(p.uUp, up);
-  if (p.uZOrigin && p.uZStep) {
-    gl.uniform1f(p.uZOrigin, b.z?.origin ?? 0);
-    gl.uniform1f(p.uZStep, b.z?.step ?? 1);
-  }
-  if (p.uScaleBase) gl.uniform1f(p.uScaleBase, b.z?.scaleBase ?? 0);
+  gl.uniform1f(p.uZOrigin, b.z.origin);
+  gl.uniform1f(p.uZStep, b.z.step);
+  gl.uniform1f(p.uScaleBase, b.z.scaleBase);
   const soft = opts.pass === "soft";
   gl.uniform1f(p.uSoft, soft ? 1 : 0);
   gl.uniform1f(p.uShade, opts.shade ?? 1);

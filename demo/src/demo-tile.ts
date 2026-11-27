@@ -75,10 +75,10 @@ export function demoTileSplats(tileset: DemoTileset): TileSurfels<Splat>[] {
 }
 
 /** Bytes of one tile: a synthetic unknown frame, then the surfel frame (with an optional level table). */
-export function encodeDemoTile(splats: readonly Splat[], levels?: readonly number[], version?: 5 | 6, classPlane?: Uint8Array): Uint8Array {
+export function encodeDemoTile(splats: readonly Splat[], levels?: readonly number[], classPlane?: Uint8Array): Uint8Array {
   return concatFrames([
     encodeFrame(DEMO_UNKNOWN_TAG, new TextEncoder().encode("dorayaki demo: unknown frame")),
-    wrapSurfelBlock(encodeSurfelBlock(splats, levels, version === undefined ? {} : { version })),
+    wrapSurfelBlock(encodeSurfelBlock(splats, levels)),
     // The class plane (src/class-plane.ts), already encoded, follows the block as a second frame.
     ...(classPlane ? [wrapClassPlane(classPlane)] : []),
   ]);

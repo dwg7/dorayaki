@@ -28,9 +28,8 @@ may share the same horizontal position at different heights and
 orientations.
 
 A splat is the primitive of 3D Gaussian Splatting: a position, three
-scales, a rotation and a color. Here it is quantized into **16 bytes**
-(Surfel Block version 5) or **12 bytes** (version 6, used by the hosted
-Kawazu and Sasebo archives).
+scales, a rotation and a color. Here it is quantized into **12 bytes**
+(Surfel Block version 6, the only version since 2026-11-27).
 
 ## What has been demonstrated
 
@@ -44,29 +43,29 @@ Kawazu and Sasebo archives).
   archive in its default `coarse` form: **0.12×** the size of the same
   points as COPC. That is a coarse picture (one splat per 12 cm cell), not
   a lossless copy; finer profiles are 0.43× and 0.50× COPC. See
-  [documents/numazu-demo.md](documents/numazu-demo.md) and
+  [documents/datasets.md](documents/datasets.md) and
   [EXPERIMENTS.md](EXPERIMENTS.md).
 - **Real data, large.** The Kawazu loop bridge and the valley below it: 476
   million points (mobile mapping and airborne laser, 1.08 km2, nine survey
   meshes) become an 83 MB PMTiles archive of 6.94 million splats (about 77 bytes
   per square metre), served from stars. The demo loads only the tiles in view.
   Vegetation is kept as coarse blobs; flat, evenly colored ground as large
-  splats. See [documents/kawazu-demo.md](documents/kawazu-demo.md),
-  [documents/large-point-clouds.md](documents/large-point-clouds.md) and
-  [documents/size-and-scale.md](documents/size-and-scale.md).
+  splats. See [documents/datasets.md](documents/datasets.md),
+  [documents/build.md](documents/build.md) and
+  [documents/datasets.md](documents/datasets.md).
 - **A wider area.** Around Sasebo Bay, 32 Open Nagasaki sheets of airborne
   laser points (CC BY 4.0; about 17 km2, 201 million points, about 10 points
   per square metre) become a 714 MB PMTiles archive with zooms 13 to 17,
   built tile by tile in about ten minutes on an 8 GB laptop. Below z17 a tile
   is capped in size (merged harder where the points are dense), so a view of
   the whole area loads 6 MB. See
-  [documents/sasebo-expansion.md](documents/sasebo-expansion.md) and
-  [documents/tile-aligned-build.md](documents/tile-aligned-build.md).
+  [documents/datasets.md](documents/datasets.md) and
+  [documents/build.md](documents/build.md).
 - **Smaller than point tiles.** For the same points, the archives are 1.5 to
   3 times smaller than 3D Tiles point tiles at Sasebo's density and 45 to 85
   times at Kawazu's, because they keep splats (occupied cells), not points;
   the individual points are given up. See
-  [documents/size-vs-3d-tiles.md](documents/size-vs-3d-tiles.md).
+  [documents/datasets.md](documents/datasets.md).
 - **Ordinary delivery.** The Numazu tiles are served from a normal HTTP tile
   endpoint ([TileJSON](https://stars.optgeo.org/dorayaki-numazu), backed by
   PMTiles) and drawn by a MapLibre GL JS custom layer, with pan, zoom,
@@ -82,7 +81,7 @@ Kawazu and Sasebo archives).
    the ordinary tile zoom hierarchy. Large areas are built tile by tile
    (`build:tiled`): the points are scattered to their z17 tiles, each tile is
    built on its own grid, and the lower zooms are gathered from the pieces.
-3. Each tile's splats are packed into a **Surfel Block** (`DSRF`, version 5 or 6; the hosted Kawazu archive is version 6, 12 bytes per splat)
+3. Each tile's splats are packed into a **Surfel Block** (`DSRF`, version 6, 12 bytes per splat)
    and wrapped in an **experimental MapLibre Tile frame**.
 4. The browser fetches `z/x/y`, unwraps the frame, decodes the block, and
    draws instanced ellipses (round splats face the camera). On the larger
@@ -98,7 +97,7 @@ malformed lengths; the renderer only sees decoded splats.
 Please read this before depending on anything here.
 
 - **Not a specification.** The byte layout changes without notice and
-  version numbers rise freely (it is at version 6, opt-in, and 5; breaking changes are
+  version numbers rise freely (it is at version 6; breaking changes are
   stated in the format document).
 - **Not an MLT assignment.** Frame tag `0xD0` is a local, unassigned value
   chosen for the experiment. The upstream MapLibre Tile implementation is
@@ -115,7 +114,7 @@ Please read this before depending on anything here.
 - **Frame time** was 16 to 17 ms (the display rate) at the Kawazu views
   tried on one Apple M1, which says little about weaker GPUs. Browser
   decoding measured about 0.23 µs per splat on a warm 389,000-splat tile
-  (E011, [size-and-scale.md](documents/size-and-scale.md)); a first,
+  (E011, [datasets.md](documents/datasets.md)); a first,
   cold call on a small tile was about 3 µs (NOTES.md).
 - **Mercator only**: no globe. Terrain is needed for data far above sea
   level (the camera is otherwise relative to 0 m): the Kawazu demo turns it
@@ -131,22 +130,11 @@ in [EXPERIMENTS.md](EXPERIMENTS.md).
 
 | document | contents |
 | --- | --- |
-| [documents/surfel-block-format.md](documents/surfel-block-format.md) | byte layout, quantization, coordinate frame |
-| [documents/mlt-frame.md](documents/mlt-frame.md) | the experimental MLT frame envelope |
-| [documents/progressive-maxzoom.md](documents/progressive-maxzoom.md) | maxzoom and nested refinement order |
-| [documents/numazu-demo.md](documents/numazu-demo.md) | rebuilding and hosting the Numazu tiles; profiles |
-| [documents/demo-and-site.md](documents/demo-and-site.md) | running the demo locally, URL flags, demo modules, the Pages site |
-| [documents/large-point-clouds.md](documents/large-point-clouds.md) | streaming build of big LAS files; Virtual Shizuoka data and Kawazu |
-| [documents/adaptive-merging.md](documents/adaptive-merging.md) | merging coplanar splats; covering gaps (`?extent=`) |
-| [documents/size-and-scale.md](documents/size-and-scale.md) | what a tile and a prefecture cost; browser memory |
-| [documents/kawazu-demo.md](documents/kawazu-demo.md) | the Kawazu tileset: recipe, size, hosting |
-| [documents/sasebo-expansion.md](documents/sasebo-expansion.md) | the Sasebo tileset (Open Nagasaki): data, builds, recipes, hosting |
-| [documents/tile-aligned-build.md](documents/tile-aligned-build.md) | building large areas tile by tile, in parallel |
-| [documents/size-vs-3d-tiles.md](documents/size-vs-3d-tiles.md) | data size against 3D Tiles point tiles |
-| [documents/class-plane.md](documents/class-plane.md) | carrying a class code per splat beside the block |
-| [documents/dark-basemap.md](documents/dark-basemap.md) | the dark basemap under the point clouds |
-| [documents/camera-direction.md](documents/camera-direction.md) | idea note on directed camerawork; the shot player (`?shots=`) |
-| [documents/decisions-2026-11.md](documents/decisions-2026-11.md) | decisions of the Sasebo expansion, with reasons |
+| [documents/format.md](documents/format.md) | Surfel Block version 6, the experimental MLT frame, the class plane |
+| [documents/build.md](documents/build.md) | building tilesets tile by tile (`build:tiled`): streaming fit, merging, lower zooms |
+| [documents/demo.md](documents/demo.md) | the demo, URL flags, modules, the Pages site, the dark basemap, camera direction and tours |
+| [documents/datasets.md](documents/datasets.md) | Numazu, Kawazu, Sasebo, Open Nagasaki: recipes, hosting, size and scale, against 3D Tiles |
+| [documents/decisions.md](documents/decisions.md) | decisions with reasons and open items |
 | [AGENTS.md](AGENTS.md) | project goals and working method |
 
 ## Development
@@ -162,11 +150,11 @@ npm run demo        # generate tiles, bundle, serve the demo locally
 ```
 
 `npm run demo` serves on 127.0.0.1:8000; details and the other scripts
-(`demo:numazu`, `site`, `measure:*`) are in
-[documents/demo-and-site.md](documents/demo-and-site.md) and `AGENTS.md`.
+(`site`, `build:tiled`, `produce:opennagasaki`, `measure:*`) are in
+[documents/demo.md](documents/demo.md) and `AGENTS.md`.
 
 Source layout: `src/surfel-block.ts` (codec), `src/mlt-frame.ts` (frame),
-`src/pointcloud/` (point cloud → Gaussians → tile pyramid),
+`src/pointcloud/` (point cloud → Gaussians → tiles, built tile by tile),
 `src/fixtures/` (deterministic synthetic data), `demo/` (browser demo),
 `test/`.
 

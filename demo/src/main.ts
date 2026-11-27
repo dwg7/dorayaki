@@ -3,14 +3,13 @@
  */
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type ExpressionSpecification } from "maplibre-gl";
 
-import { decodeSurfelTileWithLevels, packSurfelTile } from "./decode-tile.js";
+import { packSurfelTile } from "./decode-tile.js";
 import type { PackedBlock } from "../../src/surfel-block.js";
 import { tileLatitude, tileLongitude, tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
 import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
 import { SurfelLayer } from "./surfel-layer.js";
-import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
@@ -52,46 +51,10 @@ if (typeof __DORAYAKI_WORKER_URL__ !== "undefined") {
 const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
   typeof __DORAYAKI_EXTERNAL_TILESETS__ !== "undefined" ? __DORAYAKI_EXTERNAL_TILESETS__ : {
         numazu: "tiles/numazu/tilejson.json",
-        "numazu-medium": "tiles/numazu-medium/tilejson.json",
-        "numazu-fine": "tiles/numazu-fine/tilejson.json",
-        kawazu: "tiles/kawazu/tilejson.json",
-        "kawazu-single": "tiles/kawazu-single/tilejson.json",
-        "kawazu-sc4": "tiles/kawazu-sc4/tilejson.json",
-        "kawazu-v2": "tiles/kawazu-v2/tilejson.json",
-        "kawazu-v6": "tiles/kawazu-v6/tilejson.json",
-        "kawazu-ground": "tiles/kawazu-ground/tilejson.json",
-        "kawazu-plane": "tiles/kawazu-plane/tilejson.json",
-        "kawazu-s4": "tiles/kawazu-s4/tilejson.json",
-        "kawazu-s10": "tiles/kawazu-s10/tilejson.json",
-        "kawazu-s16": "tiles/kawazu-s16/tilejson.json",
-        "kawazu-stars": "https://stars.optgeo.org/dorayaki-kawazu?v=20261122a",
-        "kawazu-50cm": "tiles/kawazu-50cm/tilejson.json",
-        "kawazu-25cm": "tiles/kawazu-25cm/tilejson.json",
-        "kawazu-ad-t20-c20": "tiles/kawazu-ad-t20-c20/tilejson.json",
-        "kawazu-ad-t10-c20": "tiles/kawazu-ad-t10-c20/tilejson.json",
-        "kawazu-lp-c2-50cm": "tiles/kawazu-lp-c2-50cm/tilejson.json",
-        "kawazu-mix-c2-50cm": "tiles/kawazu-mix-c2-50cm/tilejson.json",
-        "kawazu-mix-c2-ad-t20": "tiles/kawazu-mix-c2-ad-t20/tilejson.json",
-        "kawazu-mix-first-50cm": "tiles/kawazu-mix-first-50cm/tilejson.json",
-        "kawazu-lp-sp24": "tiles/kawazu-lp-sp24/tilejson.json",
-        "kawazu-mix-sp12": "tiles/kawazu-mix-sp12/tilejson.json",
-        "kawazu-mix-sp24": "tiles/kawazu-mix-sp24/tilejson.json",
-        sasebo: "tiles/sasebo/tilejson.json",
-        t4q: "tiles/t4q/tilejson.json",
-        "sr-cur": "tiles/sr-cur/tilejson.json",
-        "sr-t1c1": "tiles/sr-t1c1/tilejson.json",
-        "sr-l2": "tiles/sr-l2/tilejson.json",
-        "sr-t05c1": "tiles/sr-t05c1/tilejson.json",
-        "sr-l1": "tiles/sr-l1/tilejson.json",
-        "lz-cell2": "tiles/lz-cell2/tilejson.json",
-        "lz-thick": "tiles/lz-thick/tilejson.json",
-        "lz-sparse": "tiles/lz-sparse/tilejson.json",
-        "lz-all": "tiles/lz-all/tilejson.json",
-        "sasebo-168": "tiles/sasebo-168/tilejson.json",
+        kawazu: "https://stars.optgeo.org/dorayaki-kawazu?v=20261122a",
+        sasebo: "tiles/sasebo-32q/tilejson.json",
         "sasebo-stars": "https://stars.optgeo.org/dorayaki-sasebo?v=20261125b",
-        "sasebo-32q": "tiles/sasebo-32q/tilejson.json",
-        "sasebo-32": "tiles/sasebo-32/tilejson.json",
-        "sasebo-3513": "tiles/sasebo-3513/tilejson.json",
+        "sasebo-168": "tiles/sasebo-168/tilejson.json",
       };
 type ExternalTileset = string;
 type Tileset = DemoTileset | ExternalTileset;
@@ -101,30 +64,15 @@ const isExternal = (name: string): name is ExternalTileset => Object.hasOwn(EXTE
  * Per-tileset defaults for the query flags below, overridden by the URL.
  * Kawazu lies 130 to 360 m above sea level, where the camera of a map without
  * terrain is far above the data (NOTES.md), so terrain is on by default; the
- * splat scale 1.3 closes the gaps between neighbours (documents/adaptive-merging.md).
+ * splat scale 1.3 closes the gaps between neighbours (documents/build.md).
  */
 const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   kawazu: { terrain: "1", extent: "1.3" },
-  "kawazu-single": { terrain: "1", extent: "1.3" },
-  "kawazu-stars": { terrain: "1", extent: "1.3" },
-  "kawazu-sc4": { terrain: "1", extent: "1.3" },
-  "kawazu-v2": { terrain: "1", extent: "1.3" },
-  "kawazu-v6": { terrain: "1", extent: "1.3" },
-  "kawazu-ground": { terrain: "1", extent: "1.3" },
-  "kawazu-plane": { terrain: "1", extent: "1.3" },
-  "kawazu-s4": { terrain: "1", extent: "1.3" },
-  "kawazu-s10": { terrain: "1", extent: "1.3" },
-  "kawazu-s16": { terrain: "1", extent: "1.3" },
-  ...Object.fromEntries(["sasebo-3513", "sr-cur", "sr-t1c1", "sr-l2", "sr-t05c1", "sr-l1", "lz-cell2", "lz-thick", "lz-sparse", "lz-all"].map((n) => [n, { terrain: "1", extent: "1.3" }])), // E023 recipe candidates (one sheet)
-  "sasebo-168": { terrain: "1", extent: "1.3", mixed: "1" },
-  "sasebo-stars": { terrain: "1", extent: "1.3", mixed: "1" },
-  "sasebo-32q": { terrain: "1", extent: "1.3", mixed: "1" },
-  "sasebo-32": { terrain: "1", extent: "1.3", mixed: "1" },
-  t4q: { terrain: "1", extent: "1.3", mixed: "1" },
-  sasebo: { terrain: "1", extent: "1.3", mixed: "1" }, // as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance: the nine-tile limit covered only part of a tilted view (`?mixed=0` switches it off)
+  // Sasebo as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance under a budget (`?mixed=0` switches it off).
+  ...Object.fromEntries(["sasebo", "sasebo-stars", "sasebo-168"].map((n) => [n, { terrain: "1", extent: "1.3", mixed: "1" }])),
 };
 /** Camera tours offered (shot scripts in demo/shots/, copied to the site's shots/): the control shows a Play button for these tilesets. */
-const TOURS: Readonly<Record<string, string>> = { sasebo: "sasebo", "sasebo-32q": "sasebo", "sasebo-168": "sasebo", "sasebo-stars": "sasebo" };
+const TOURS: Readonly<Record<string, string>> = { sasebo: "sasebo", "sasebo-168": "sasebo", "sasebo-stars": "sasebo" };
 /** A query flag: the URL's value, else the tileset's default. */
 const flag = (name: string, tileset: string): string | null =>
   new URLSearchParams(location.search).get(name) ?? TILESET_DEFAULTS[tileset]?.[name] ?? null;
@@ -210,7 +158,7 @@ interface LoadedTile {
   byteLength: number;
   count: number;
   levels: number[];
-  /** Until the layer has taken it: the block's 16-byte records (default), or float instance data (`?gpu=legacy`). */
+  /** Until the layer has taken it: the block's 12-byte records, uploaded as they are. */
   packed: PackedBlock | undefined;
   /** Class codes handed over with the records: the guess of vegetation.ts (64 vegetation, 1 other) for a tile without a class plane. */
   classes: Uint8Array | undefined;
@@ -221,7 +169,6 @@ interface LoadedTile {
   classesRequested?: boolean;
   /** The tile got the guess of vegetation.ts instead of a class plane (made only while a class feature was on). */
   guessed?: boolean;
-  instances: SplatInstances | undefined;
 }
 
 /** Load-time measurements, summed over every tile loaded (E001 in EXPERIMENTS.md). */
@@ -253,7 +200,7 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   if (!bytes) return null;
   tileSizes.set(sizeKey(tile), bytes.byteLength);
   const t1 = performance.now();
-  if (flag("gpu", tileset) !== "legacy") {
+  {
     const packed = packSurfelTile(bytes); // no Splat objects: the records go to the GPU as they are
     timings.decodeMs += performance.now() - t1;
     const [planeBody] = extractClassPlanes(bytes);
@@ -267,12 +214,8 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
     // switching one on later reloads the tiles.
     const guessed = !classPlane && classesNeeded();
     const classes = guessed ? Uint8Array.from(vegetationFlags(packed, tileWidthMetres(tile), vegOptions), (f) => (f ? CLASS_DERIVED_CANOPY : CLASS_UNCLASSIFIED)) : undefined;
-    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, classes, classPlane, guessed, instances: undefined };
+    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, classes, classPlane, guessed };
   }
-  const decoded = decodeSurfelTileWithLevels(bytes);
-  const instances = splatInstances(decoded.splats); // the Splat objects become garbage here
-  timings.decodeMs += performance.now() - t1;
-  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, packed: undefined, classes: undefined, classPlane: undefined, instances };
 }
 
 map.on("load", () => {
@@ -344,7 +287,7 @@ map.on("load", () => {
   });
   const lod = Number(flag("lod", tileset));
   const dz = Number(flag("dz", tileset));
-  // `?mixed=1`: tiles of several zooms at once, by distance from the camera (documents/demo-and-site.md, E015).
+  // `?mixed=1`: tiles of several zooms at once, by distance from the camera (documents/demo.md, E015).
   // `1`: under a budget that always covers the view (E024; `?budget=` megabytes, default 40, and `?splats=` default 4000000); `2`: the older cap of 24 tiles.
   const mixedMode = flag("mixed", tileset);
   const mixed = mixedMode === "1" || mixedMode === "2";
@@ -440,7 +383,7 @@ map.on("load", () => {
   colorEl.addEventListener("change", onClassFeature);
 
   // Only the tiles of the selected zoom that are in view are fetched, decoded and uploaded; the set is swapped
-  // as a whole when it is complete (documents/demo-and-site.md).
+  // as a whole when it is complete (documents/demo.md).
   // The view as the camera model of camera.ts takes it (for `?mixed=1`); the ground height under the view centre comes from the terrain.
   const currentView = (): View => {
     const c = map.getCenter();
@@ -507,10 +450,10 @@ map.on("load", () => {
     onReady: (set, zoom) => {
       deliveries.push({ ms: Math.round(performance.now()), zoom, tiles: set.length, bytes: set.reduce((n, x) => n + x.data.byteLength, 0) });
       loaded = set.map((x) => x.data);
-      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.classes ? { classes: t.classes } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
+      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.classes ? { classes: t.classes } : {}), levels: t.levels })));
       // The layer owns the data now; drop the second copy. Not with `?mixed=1`: there a tile may be handed over again after the
       // layer let it go (progressive sets, the cache), and it must still carry its data.
-      if (!mixed) for (const t of loaded) { t.instances = undefined; t.packed = undefined; t.classes = undefined; }
+      if (!mixed) for (const t of loaded) { t.packed = undefined; t.classes = undefined; }
       const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.count, 0);
       void ensureClasses();
@@ -526,7 +469,7 @@ map.on("load", () => {
   map.on("moveend", refresh);
   if (terrain > 0) map.on("zoom", () => layer.setZOffset(dz + zoomLift()));
   refresh();
-  // `?shots=<name or path>`: play a shot script (shot-player.ts, documents/camera-direction.md step 1) once the first
+  // `?shots=<name or path>`: play a shot script (shot-player.ts, documents/demo.md step 1) once the first
   // tiles are drawn. A bare name is `shots/<name>.json` next to this page. Any pointer, wheel, touch or key input stops
   // it and leaves the camera with the user. Progress goes to the console, one line per shot.
   // Without `?shots=`, a tileset that has a tour (TOURS) gets the control with a Play button and does not start by itself.

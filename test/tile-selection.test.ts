@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { RADIUS_CELL_FACTOR, drawPlan, selectZoom } from "../demo/src/tile-selection.js";
+import { RADIUS_CELL_FACTOR, drawPlan, prefixCount, selectZoom } from "../demo/src/tile-selection.js";
 
 test("selectZoom picks the deepest loaded zoom not deeper than the view", () => {
   const zs = [18, 19, 20, 20];
@@ -24,4 +24,10 @@ test("drawPlan draws a prefix of levels growing with the display zoom", () => {
 
 test("single-level tiles are drawn whole with their stored radii", () => {
   assert.deepEqual(drawPlan({ tile: { z: 18 }, levels: [123], widthMetres: 125 }, 19.5), { count: 123, levelsDrawn: 1, minRadius: 0 });
+});
+
+test("prefixCount sums the first levels, clamped to the table", () => {
+  assert.equal(prefixCount([10, 30, 60], 0), 0);
+  assert.equal(prefixCount([10, 30, 60], 2), 40);
+  assert.equal(prefixCount([10, 30, 60], 99), 100);
 });

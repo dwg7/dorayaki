@@ -96,7 +96,7 @@ coverage?
 
 Surfel Block v3. z18 and z19 aggregated tiles. z20 maxzoom tiles hold the
 finest Gaussians (1.53 cm voxels, z22 detail) in 3 nested refinement levels
-(`documents/progressive-maxzoom.md`). Nothing omitted: z20 = 16,396,888
+(`documents/decisions.md`). Nothing omitted: z20 = 16,396,888
 bytes, 3.16× COPC.
 
 ### Fixture
@@ -470,7 +470,7 @@ both rectangle (0.3 to 0.7, 0.5 to 0.95). The pane was visible.
 - A factor of 1.2 removes about three quarters of the gaps in `close` and
   `close2`; 1.3 and 1.5 remove a little more. 1.22 is the factor at which a
   square lattice of 2-sigma ellipses of an evenly filled cell would just
-  cover the cell's corners (adaptive-merging.md).
+  cover the cell's corners (build.md).
 - In `close3` the rectangle contains foliage and sky, so a floor of real
   gaps remains; the direction is the same.
 - In the screenshot at 1.3 the adaptive road is continuous and its centre
@@ -541,7 +541,7 @@ the adaptive build of MMS + all returns was stopped after 13 minutes.
 - Taking this mesh as a scale for a 7,800 km2 prefecture (it is a forested
   slope, which inflates counts): ground only about 0.75 TB, MMS + ground
   about 1.1 TB, first returns about 2.3 TB, all returns about 4.5 TB
-  (size-and-scale.md).
+  (datasets.md).
 
 ### Not yet shown
 
@@ -646,7 +646,7 @@ canopy is what makes the scene read as a place.
   another density); the value is tied to 121 points/m2 and 49 cm cells.
 - ~~Whether Martin serves gzip-compressed MLT tiles~~: it does not (Martin 1.14.0:
   `Format Mlt and compression Gzip are not yet supported`); the hosted archive has
-  raw tiles (documents/kawazu-demo.md), so the gzip saving is not realised on stars yet.
+  raw tiles (documents/datasets.md), so the gzip saving is not realised on stars yet.
 - A measure of how much the canopy loses against the original points.
 
 ## E009: The Kawazu area widened to 3 x 3 meshes, and a sparse threshold that follows the zoom
@@ -661,7 +661,7 @@ cost at that rate? (hfu: if the size hits a wall, change the algorithm.)
 Nine meshes of 300 m x 400 m, 08OF4050 to 08OF4072 (rows 5 to 7, columns 0 to 2,
 900 m x 1,200 m = 1.08 km2). Airborne LP "Ground" (all returns) for all nine,
 MMS for four (4050, 4060, 4070, 4071); 476,004,940 points in 13 files
-(documents/large-point-clouds.md). Each mesh was built alone with the E008 recipe
+(documents/build.md). Each mesh was built alone with the E008 recipe
 (49 cm cells at z17, three merge levels, thickness 20 cm, color 0.2, sparse
 threshold 24; z15 to z17) and the tilesets were joined by `npm run merge:tilesets`
 (8 GB of RAM do not hold the voxels of nine meshes at once). Peak memory per mesh
@@ -1125,7 +1125,7 @@ No change produced more than 0.23 % holes.
 - Together, position 12 bits (-8), height 2 cm (-2.3), scale 6 steps (-2.2), rotation 5 bits (-6), color 6 bits (-6) save about
   24 bits (a 96-bit, 12-byte record), if the errors add up like the worst single ones (not measured together).
 - gzip is the only general compressor the browser decodes natively (DecompressionStream), and stars' Martin cannot read gzip
-  MLT tiles (kawazu-demo.md), so the 31 to 34 % of gzip is not available yet.
+  MLT tiles (datasets.md), so the 31 to 34 % of gzip is not available yet.
 - The alpha byte is constant (242) and the renderer ignores it. Class and return data in the LAS files: airborne LP has
   class 1 (unclassified, 90 %) and 2 (ground, 10 %), return numbers 1 to 5; MMS has 2 (ground 14 %), 3, 4, 5 (vegetation 86 %).
 
@@ -1184,7 +1184,7 @@ Combined reductions (software renderer, block 4, worst of three views; mesh 08OF
 11 to 11.6 octaves (smallest 2^-10 m, the builder's floor), so a 7-bit code at 6 steps per octave (21 octaves) from the
 block's smallest scale covers them.
 
-Version 6 (documents/surfel-block-format.md): 96-bit records, x 13, y 13, z 14, three scales 7 bits each, rotation 17,
+Version 6 (documents/format.md): 96-bit records, x 13, y 13, z 14, three scales 7 bits each, rotation 17,
 color 6 bits per channel; alpha moves to the header (one opacity per block); header 40 bytes. Opt-in
 (`{ version: 6 }`, `DORAYAKI_BLOCK_VERSION=6`); reads 4, 5 and 6. The vertex shader decodes the record as uploaded
 (a `uvec3` per instance), so the GPU holds 12 bytes per splat (it held 16, and 56 before E013).
@@ -1364,7 +1364,7 @@ second frame in the tile, or a sidecar archive) and what classes the build can r
 E020 found that a class per splat is cheap if it is a compressed plane beside the records. Where does the plane live, what is in it, and
 does it make a real "hide vegetation" button and a false-color view possible?
 
-### Decisions (documents/class-plane.md)
+### Decisions (documents/format.md)
 - **A second frame in the same tile** (experimental tag 0xD1), not a sidecar archive: one request, the plane cannot get out of step with
   the block, nothing more to host (hfu wants few Kawazu archives on stars), and a reader that does not know it skips it. The cost
   is that every client downloads it (about 1 % of the archive).
@@ -1410,13 +1410,13 @@ plane is built for the whole area and hosted, and the vivid-color idea (correcti
 Nine meshes, version 6, `DORAYAKI_CLASS_PLANE=1` (after the review fixes): 84,036,082 bytes against 83,230,961 without planes (+805,121 bytes, +0.97 %);
 all 46 tiles have one plane with the block's count; the planes are 804,972 bytes (0.93 bits per splat; E020 predicted 0.4 to 1 % of the archive from three
 meshes); the archive reads back byte-identical. Classes of the 6,935,498 splats: 64 (several returns) 78.6 %, ground 8.4 %, unclassified 6.0 %, high
-vegetation 3.7 %, medium 2.9 %, low 0.5 %. Not hosted: see documents/kawazu-demo.md.
+vegetation 3.7 %, medium 2.9 %, low 0.5 %. Not hosted: see documents/datasets.md.
 
 ## E022: a tile-aligned parallel build (study)
 
 ### Question
 Can the build be partitioned by output tile so that it runs in parallel without seams, and what does it cost? (hfu asked for a study of a
-parallel build at tile boundaries.) Design: documents/tile-aligned-build.md.
+parallel build at tile boundaries.) Design: documents/build.md.
 
 ### Method
 Reading the build (`scripts/build-tileset.ts`, `src/pointcloud/pyramid.ts`, `src/gaussian/to-surfels.ts` `placeGaussians`); the cost per mesh from
@@ -1537,7 +1537,7 @@ What this does not measure: the lateral jog itself (up to 1.8 m between neighbou
 `src/pmtiles-file.ts` writes the PMTiles archive from the tile files one at a time (byte-identical to the in-memory writer, 6 tests), and `build:tiled` uses it.
 Used at Sasebo (Open Nagasaki airborne laser, about 10 points/m2): 2 sheets 47 s, 8 sheets 104 s, 23 sheets 340 s, 32 sheets (201 million points) about 8 to 10 minutes, 3 workers,
 one process at most about 1.2 GB. The first 32-sheet build ran out of disk: the z16/z15 pieces were JSON text (4.7 GB at 23 sheets); they are gzipped float64 now (the tiles of a
-two-sheet build byte-identical), about a third of the size. Details: documents/sasebo-expansion.md.
+two-sheet build byte-identical), about a third of the size. Details: documents/datasets.md.
 
 ## E023: the merge recipe at 10 points/m2, and smaller lower zooms (2026-11-24)
 

@@ -1,11 +1,11 @@
 /**
- * The tile-local build (E022 step 2, documents/tile-aligned-build.md): the points of one z17 tile in, the splats of that tile at z17 and
+ * The tile-local build (E022 step 2, documents/build.md): the points of one z17 tile in, the splats of that tile at z17 and
  * the pieces it contributes to z16 and z15 out.
  *
  * Points are given in the tile's own frame: metres east and south of its north-west corner (what `TileFramer.locate` returns), height up.
  * The voxel grid is the tile's: cells of tile width / 512 from the corner, so the cells of z16 and z15 are exactly 2 and 4 times larger
  * and nest, and with up to three merge levels (groups of 8) no merge group crosses the tile's edge. Everything a tile needs is in its own
- * points: no halo, no neighbour. The merge rule is the one of build-tileset.ts (every zoom merged by the same rule; the sparse threshold
+ * points: no halo, no neighbour. The merge rule is the one of the former build:tileset (every zoom merged by the same rule; the sparse threshold
  * multiplied for each zoom below z17).
  *
  * No file, stream or DOM access: the caller feeds the points, and the splats come back as plain objects, so the same function can run in a
@@ -16,7 +16,7 @@ import { tileWidthMetres, type TileAddress } from "../tile-geometry.js";
 import { adaptiveGaussians, type AdaptiveOptions } from "./adaptive.js";
 import { VoxelAccumulator } from "./voxel-accumulator.js";
 
-/** Cells along a tile's edge at every zoom (BASE_CELLS of progressive.ts). */
+/** Cells along a tile's edge at every zoom (BASE_CELLS of demo/src/tile-selection.ts). */
 const CELLS = 512;
 const TILE_ZOOM = 17;
 /** Merge steps tried in order when a piece must fit a target (thickness x s, color tolerance x sqrt(s)). */

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Produce a Dorayaki tileset from downloaded Open Nagasaki zips, repeatably (documents/sasebo-expansion.md, "production").
+# Produce a Dorayaki tileset from downloaded Open Nagasaki zips, repeatably (documents/datasets.md, "production").
 #
 #   npm run produce:opennagasaki -- <name> <count | codes file>
 #
@@ -49,7 +49,7 @@ list=$(IFS=,; echo "${files[*]}")
 
 # 3. Build (E024 recipe).
 free0=$(df -k "$ON_DIR" | tail -1 | awk '{print $4}')
-export DORAYAKI_BLOCK_VERSION=6 DORAYAKI_ATTRIBUTION='点群: 長崎県 オープンナガサキ (CC BY 4.0) を加工して作成'
+export DORAYAKI_ATTRIBUTION='点群: 長崎県 オープンナガサキ (CC BY 4.0) を加工して作成'
 export DORAYAKI_ADAPTIVE_LEVELS=3 DORAYAKI_ADAPTIVE_THICKNESS=0.2 DORAYAKI_ADAPTIVE_COLOR=0.2 DORAYAKI_ADAPTIVE_SPARSE=0
 export DORAYAKI_LOWER_ZOOMS=16,15,14,13 DORAYAKI_ZOOM_CELL_SCALE=2 DORAYAKI_ZOOM_TARGET_SPLATS=16:100000,15:160000,14:160000,13:160000
 # A watcher records the lowest free space on the external disk while the build runs (the work directory's peak).

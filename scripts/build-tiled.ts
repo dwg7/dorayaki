@@ -1,5 +1,5 @@
 /**
- * The tile-aligned parallel build (E022 step 3, documents/tile-aligned-build.md): the Kawazu recipe, one z17 tile per job.
+ * The tile-aligned parallel build (E022 step 3, documents/build.md): the Kawazu recipe, one z17 tile per job.
  *
  *   npm run build:tiled -- <name> <zone> <file.las[@filters][,file2.las...]> [--workers N] [--centre lng,lat] [--keep]
  *
@@ -11,9 +11,9 @@
  *   gather   the pieces joined by position into the lower-zoom tiles;
  *   archive  demo/tiles/<name>/ (tiles, tilejson.json, manifest.json) and demo/tiles/dorayaki-<name>.pmtiles, written from the tile files on disk one at a
  *            time (src/pmtiles-file.ts, E022 step 4): memory does not grow with the size of the archive.
- * A finished scatter file or tile job leaves a marker, so a rerun with the same work directory skips it. The recipe comes from the same
- * environment as build-tileset.ts: DORAYAKI_ADAPTIVE_LEVELS (required), _THICKNESS, _COLOR, _SPARSE, _SPARSE_SCALE, DORAYAKI_ZOOM_CELL_SCALE, _THICKNESS_SCALE, _COLOR_SCALE (E023), DORAYAKI_CLASS_PLANE,
- * DORAYAKI_BLOCK_VERSION, DORAYAKI_TILE_COMPRESSION. The result does not depend on the number of workers (same bytes).
+ * A finished scatter file or tile job leaves a marker, so a rerun with the same work directory skips it. The recipe comes from the
+ * environment: DORAYAKI_ADAPTIVE_LEVELS (required), _THICKNESS, _COLOR, _SPARSE, _SPARSE_SCALE, DORAYAKI_ZOOM_CELL_SCALE, _THICKNESS_SCALE, _COLOR_SCALE (E023), DORAYAKI_CLASS_PLANE,
+ * DORAYAKI_TILE_COMPRESSION. The result does not depend on the number of workers (same bytes).
  * The work directory is removed at the end unless --keep is given.
  */
 import { spawn } from "node:child_process";
@@ -41,7 +41,6 @@ const ZOOM = 17;
 const LOWER_ZOOMS = (process.env.DORAYAKI_LOWER_ZOOMS ?? "16,15").split(",").map(Number).sort((a, b) => b - a);
 if (LOWER_ZOOMS.some((z, i) => !Number.isInteger(z) || z >= 17 || z < 0 || LOWER_ZOOMS.indexOf(z) !== i)) throw new Error(`DORAYAKI_LOWER_ZOOMS must list distinct integers below 17, got ${process.env.DORAYAKI_LOWER_ZOOMS}`);
 const MIN_ZOOM = LOWER_ZOOMS.length > 0 ? LOWER_ZOOMS[LOWER_ZOOMS.length - 1]! : ZOOM;
-const blockVersion = process.env.DORAYAKI_BLOCK_VERSION === "6" ? (6 as const) : undefined;
 const classPlane = process.env.DORAYAKI_CLASS_PLANE === "1";
 
 function parseTargets(spec: string): number | Record<number, number> {
@@ -81,11 +80,11 @@ function recipe(): TileBuildConfig {
 /** Fields of a splat in a piece file (x, y, z, sx, sy, sz, qw, qx, qy, qz, r, g, b, a). */
 const PIECE_FIELDS = 14;
 const gz = (b: Uint8Array) => new Uint8Array(gzipSync(b, { level: 9 }));
-/** The block of a tile's splats and, with class planes, the plane (the class travels in the opacity byte until here, as in build-tileset.ts). */
+/** The block of a tile's splats and, with class planes, the plane (the class travels in the opacity byte until here). */
 function encodeTile(splats: Splat[]): Uint8Array {
-  if (!classPlane) return encodeDemoTile(splats, [splats.length], blockVersion);
+  if (!classPlane) return encodeDemoTile(splats, [splats.length]);
   const plane = encodeClassPlane(Uint8Array.from(splats, (s) => planeSlotToCode(s.a)), gz);
-  return encodeDemoTile(splats.map((s) => ({ ...s, a: 242 })), [splats.length], blockVersion, plane);
+  return encodeDemoTile(splats.map((s) => ({ ...s, a: 242 })), [splats.length], plane);
 }
 
 const [mode, ...rest] = process.argv.slice(2);
@@ -185,7 +184,7 @@ function tileJob([work, x, y]: string[]): void {
       const d = `${work}/pieces/${p.tile.z}/${p.tile.x}/${p.tile.y}`;
       mkdirSync(d, { recursive: true });
       // Every field, full precision (float64: the same numbers JSON would carry), gzip level 1: JSON text of the pieces took 4.7 GB for 23 sheets and
-      // filled the disk at 32 (E023 note in documents/sasebo-expansion.md).
+      // filled the disk at 32 (E023 note in documents/datasets.md).
       const f = new Float64Array(p.splats.length * PIECE_FIELDS);
       p.splats.forEach((s, i) => f.set([s.x, s.y, s.z, s.sx, s.sy, s.sz, s.qw, s.qx, s.qy, s.qz, s.r, s.g, s.b, s.a], i * PIECE_FIELDS));
       writeFileSync(`${d}/${x}_${y}.f64.gz`, gzipSync(new Uint8Array(f.buffer), { level: 1 }));

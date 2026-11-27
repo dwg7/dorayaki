@@ -5,7 +5,7 @@
  * asked for once each, in tile-ID order, and appended to a temporary file next to the output while their lengths are
  * recorded; then the header, directories and metadata are written (they need those lengths), and the tile data is copied
  * behind them in chunks. Memory is the index (a few dozen bytes per tile) plus the largest tile, however big the archive;
- * the disk holds the tile data twice for a moment. E022 step 4 (documents/tile-aligned-build.md).
+ * the disk holds the tile data twice for a moment. E022 step 4 (documents/build.md).
  */
 import { closeSync, openSync, readSync, renameSync, rmSync, writeSync } from "node:fs";
 

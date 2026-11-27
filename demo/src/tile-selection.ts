@@ -2,14 +2,22 @@
  * Tile selection: which loaded tiles to draw at a display zoom, and how
  * much of a progressive (multi-level) tile. No DOM, network or WebGL here.
  *
- * Rule (documents/progressive-maxzoom.md):
+ * Rule (level tables are no longer written by the builders, but blocks may still carry one):
  * - draw the tiles of the deepest loaded zoom z with z <= floor(display
  *   zoom), or of the shallowest loaded zoom when zoomed out further;
  * - for a tile with a level table, draw levels 0..(floor(display zoom) - z),
  *   clamped to its level count, and inflate radii to cover the finest drawn
  *   level's cell (RADIUS_CELL_FACTOR × cell size).
  */
-import { BASE_CELLS, prefixCount } from "../../src/progressive.js";
+/** Cells per tile edge at level 0 of a level table: one per CSS pixel of a 512 px tile. */
+export const BASE_CELLS = 512;
+
+/** Number of surfels to draw for the first `levelsToDraw` levels of a level table. */
+export function prefixCount(levels: readonly number[], levelsToDraw: number): number {
+  let n = 0;
+  for (let k = 0; k < Math.min(levelsToDraw, levels.length); k++) n += levels[k]!;
+  return n;
+}
 
 /** Fraction of a cell's edge used as the minimum disc radius when drawing a prefix. */
 export const RADIUS_CELL_FACTOR = 0.75;

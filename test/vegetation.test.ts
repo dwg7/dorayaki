@@ -26,10 +26,10 @@ function scene(): { splats: Splat[]; ground: number[]; tree: number[]; deck: num
   return { splats, ground, tree, deck };
 }
 
-for (const version of [5, 6] as const) {
-  test(`version ${version}: ground stays, a round crown above it goes, a flat deck stays`, () => {
+{
+  test("ground stays, a round crown above it goes, a flat deck stays", () => {
     const { splats, ground, tree, deck } = scene();
-    const block = packedSurfelBlock(encodeSurfelBlock(splats, [splats.length], { version }));
+    const block = packedSurfelBlock(encodeSurfelBlock(splats, [splats.length]));
     const flags = vegetationFlags(block, W);
     assert.ok(ground.every((i) => flags[i] === 0), "ground");
     assert.ok(tree.every((i) => flags[i] === 1), "tree");

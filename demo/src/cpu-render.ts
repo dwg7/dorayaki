@@ -4,7 +4,7 @@
  * MapLibre). It is a proxy for the browser's custom layer, not a copy of it:
  * flat color (no lighting, no opacity), the same camera model as MapLibre
  * (vertical field of view 36.87 degrees, 512-pixel tiles, bearing, pitch) and
- * the same placement (documents/surfel-block-format.md). Used to compare two
+ * the same placement (documents/format.md). Used to compare two
  * tile sets as seen from fixed cameras (EXPERIMENTS.md E012).
  *
  * World frame: east, north, up in metres, with Mercator scale fixed at the

@@ -27,7 +27,7 @@ const generateOverhangParts = () => generateOverhangPartsAt({ tileWidthMetres: W
  * SHA-256 of encodeSurfelBlock(generateOverhang().map(surfelToSplat)) on a 128 m tile. If this
  * changes, the fixture or the wire format changed; update it deliberately.
  */
-const OVERHANG_SHA256 = "010ff68076350c029fd6eb61a5097ce9f062e94397753c795739de3ea64a1f5e";
+const OVERHANG_SHA256 = "a7dfbc442be6abbdb318ae0e7f707fcbc0c88572046175f3c894b5443526d32c";
 
 const centre = (k: number): number => (k + 0.5) / 16;
 

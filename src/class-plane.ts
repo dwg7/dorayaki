@@ -1,6 +1,6 @@
 /**
  * Class plane (experimental, version 1): one class code per splat, stored beside a Surfel Block in the same tile as a second
- * frame (src/mlt-frame.ts, tag 0xD1). See documents/class-plane.md.
+ * frame (src/mlt-frame.ts, tag 0xD1). See documents/format.md.
  *
  * Body of the frame (little-endian):
  *

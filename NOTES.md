@@ -245,7 +245,7 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
 - At the current 32-byte record, the Gaussians beat COPC (xyz+rgb) only
   down to z20 detail (0.62×). z21 detail is 1.60× and z22 detail 3.16×.
   This is the first measured evidence for a more compact record.
-- Design proposal written up in `documents/progressive-maxzoom.md` (not
+- Design proposal written up in `documents/decisions.md` (not
   implemented).
 
 ## 2026-11-13 — v3: level table and a progressive maxzoom tile (Numazu)
@@ -348,7 +348,7 @@ vegetation 69,259. Not committed; `npm run demo:numazu` rebuilds from
   per-block float64 origin, three log-quantized scales (10 steps per octave),
   a 23-bit "smallest three" rotation, and RGBA. Header 32 bytes (z origin and
   step added). v1–v3 are rejected. Decoding is lossy within documented
-  tolerances (`documents/surfel-block-format.md`).
+  tolerances (`documents/format.md`).
 - Quantization finding: with codes 0..126 and code 63 = 0, the identity and
   all axis-aligned rotations are exact. A first grid of 128 codes could not
   represent 0 and left every identity rotation 0.6° off. Round-to-nearest
@@ -730,7 +730,7 @@ An independent review (ten findings) and a review of the specification changed t
 rejected), a reader inflates at most `count` bytes, the builder refuses `DORAYAKI_CLASS_PLANE=1` without the adaptive merge (it would have written
 code 242 for every splat), the merge refuses to join planes of the wrong length, the demo computes the vegetation guess only while a class
 feature is on, and the legend is cleared. Inflating the planes of 785,133 splats took 305 ms in the browser (the earlier note of 0.1 s per million
-splats was not measured; it was about 0.39 s). Details and the table of findings: documents/class-plane.md "Review".
+splats was not measured; it was about 0.39 s). Details and the table of findings: documents/format.md "Review".
 
 ## 2026-11-17 (evening): the Kawazu archive on stars has class planes
 
@@ -803,9 +803,9 @@ Not checked: frame rate on weaker GPUs, the soft look on the 16-byte (versions 4
 
 2026-11-23: tiles under the camera vanished in a tilted view (Kawazu, `map=17.46/34.789206/138.947743/-30/60`, 2000 x 1230 window): the streamer keeps the 9 tiles nearest to the centre of `map.getBounds()`, and with pitch 60 the bounds run out towards the horizon, so their centre lay about 0.002 degrees (roughly 200 m) north-west of the point the map looks at; the south-east tiles under the camera (116125/52011, 116126/52010-52011, all present in the archive) were the ones cut by the limit of 9. `viewTiles` and `TileStreamer.update` now take the map centre as the point to measure from (main.ts passes `map.getCenter()`; the bounds' centre stays the default and the mixed selection is unchanged). Same view afterwards: 116125/52010 first, then 116125/52011, 116124/52010-52011, and the foreground is filled, at the default window and at 2000 x 1230. Not changed: the limit of 9 itself, so a very low camera or a very wide window can still cut tiles at the edges; `?mixed=1` (24 tiles, by distance from the camera) was not tried on this view.
 
-2026-11-23: first build of one Open Nagasaki sheet (Sasebo, `01JE3513`, 7.34 million points, 9.8 points/m2, all class 1, RGB present): 7.58 million splats over z15 to z17, 91.0 MB (121 B/m2) with the plain recipe, 210 s, 0.7 GB. In the local demo it reads as an aerial photograph in 3D; z16 (1 m voxels, 3.5 points per voxel) looks good, z17 (1.5 points per voxel) shows white gaps at zoom 18.6 unless `?extent=1.8`. The tileset's attribution was hard-coded to the Shizuoka text and is now `DORAYAKI_ATTRIBUTION` when set. Details and the open points in documents/sasebo-expansion.md. Not done: adaptive recipe, a second sheet, terrain.
+2026-11-23: first build of one Open Nagasaki sheet (Sasebo, `01JE3513`, 7.34 million points, 9.8 points/m2, all class 1, RGB present): 7.58 million splats over z15 to z17, 91.0 MB (121 B/m2) with the plain recipe, 210 s, 0.7 GB. In the local demo it reads as an aerial photograph in 3D; z16 (1 m voxels, 3.5 points per voxel) looks good, z17 (1.5 points per voxel) shows white gaps at zoom 18.6 unless `?extent=1.8`. The tileset's attribution was hard-coded to the Shizuoka text and is now `DORAYAKI_ATTRIBUTION` when set. Details and the open points in documents/datasets.md. Not done: adaptive recipe, a second sheet, terrain.
 
-2026-11-23: two Open Nagasaki sheets (Sasebo `01JE3513` + `01JE3531`, 13.8 million points): `build:tileset` in one process died with "heap out of memory" after 13 minutes (the same single sheet takes 210 s); `build:tiled` with 3 workers did both in 47 s (max 0.84 GB per tile job), 6.14 million splats, 73.7 MB, 51 tiles. The tile-aligned build is what makes an area of this size possible on 8 GB. Seam not seen at sheet edge at zoom 18.2 pitch 50 (one view); recipe not tuned for 9 to 10 points/m2. See documents/sasebo-expansion.md.
+2026-11-23: two Open Nagasaki sheets (Sasebo `01JE3513` + `01JE3531`, 13.8 million points): `build:tileset` in one process died with "heap out of memory" after 13 minutes (the same single sheet takes 210 s); `build:tiled` with 3 workers did both in 47 s (max 0.84 GB per tile job), 6.14 million splats, 73.7 MB, 51 tiles. The tile-aligned build is what makes an area of this size possible on 8 GB. Seam not seen at sheet edge at zoom 18.2 pitch 50 (one view); recipe not tuned for 9 to 10 points/m2. See documents/datasets.md.
 
 2026-11-23: Sasebo hosted: `dorayaki-sasebo.pmtiles` (73.7 MB, two Open Nagasaki sheets, tile-aligned build) on stars, TileJSON `https://stars.optgeo.org/dorayaki-sasebo?v=20261123a`; `sasebo` is a fixture of the site build via `DORAYAKI_SASEBO_TILEJSON`, with terrain and splat size 1.3 by default. Checked: the site build served locally loads the tiles from stars; a tile equals the local one. Not checked: the deployed Pages page (after the merge), other browsers and GPUs. Start view of the site is zoom 18.5 near a wooded slope; `#map=16.4/33.1768/129.7215/-30/62` shows the town.
 
@@ -813,11 +813,11 @@ Not checked: frame rate on weaker GPUs, the soft look on the 16-byte (versions 4
 
 2026-11-23: E022 step 4, the streaming PMTiles writer (`src/pmtiles-file.ts`, `writePmtilesFile`): tiles are read once each in tile-ID order into a temporary data file, then the header, directories and metadata are written and the data copied behind them; the archive's header part is shared with `writePmtiles` (`pmtilesHead`). `build:tiled` now reads the tile files from disk for the archive. The two-sheet Sasebo archive is byte-identical to the one built with the in-memory writer (SHA-256 `f49dc400...`, 44.5 s, 0.88 GB peak). 600 synthetic tiles of 2 MB (1.26 GB): peak RSS 85 MB against 827 MB in memory (understated: mostly zero pages). 270 tests pass. The z17 tile jobs and the z16 and z15 pieces were not changed.
 
-2026-11-23: Sasebo widened to eight Open Nagasaki sheets (6 km2, 37.85 million points) with `build:tiled` and the streaming writer: 104 s, 145 tiles, 17.0 million splats, 204.0 MB, at most 1.05 GB per process. The demo refused the TileJSON (164 tiles against a guard of 64, and a country-sized bound overflowed the stack before the guard): the guard is now 4,096 and counts first. Nine-tile limit and `?mixed=1` numbers in documents/sasebo-expansion.md; the count of tiles is a poor budget (z17 tile 0.1 million splats, z16 tile 0.3 million). Not hosted yet; replacing `dorayaki-sasebo.pmtiles` under the same name needs the new site deployed first (the old site would refuse 164 tiles).
+2026-11-23: Sasebo widened to eight Open Nagasaki sheets (6 km2, 37.85 million points) with `build:tiled` and the streaming writer: 104 s, 145 tiles, 17.0 million splats, 204.0 MB, at most 1.05 GB per process. The demo refused the TileJSON (164 tiles against a guard of 64, and a country-sized bound overflowed the stack before the guard): the guard is now 4,096 and counts first. Nine-tile limit and `?mixed=1` numbers in documents/datasets.md; the count of tiles is a poor budget (z17 tile 0.1 million splats, z16 tile 0.3 million). Not hosted yet; replacing `dorayaki-sasebo.pmtiles` under the same name needs the new site deployed first (the old site would refuse 164 tiles).
 
 2026-11-23: the stars archive `dorayaki-sasebo.pmtiles` is now the eight-sheet one (203,951,931 B, 6 km2, SHA-256 `ed7f8d01...`); the TileJSON pin of the site is `?v=20261123b`. The old pin `?v=20261123a` serves the new file once Cloudflare's 4-hour copies expire (the deployed site lists up to 4,096 tiles, so it copes). Not checked: the deployed page after the merge.
 
-2026-11-23: size against 3D Tiles point clouds (documents/size-vs-3d-tiles.md, `npm run measure:pnts`): the published Open Nagasaki 3D Tiles (Smart Maps, `.pnts`) carry 15.0 bytes per point (measured on six files' headers); on Sasebo airborne points gzip/brotli bring that to 11.3 to 12.6 and 16-bit positions to about 8 (Kawazu airborne: 7.8 to 9.3). Dorayaki is 2.8 times smaller than `.pnts` at Sasebo (204 MB for 37.85 M points; 1.5 times smaller than 16-bit + brotli) and 85 times at Kawazu (83.9 MB for 476 M points; 44 to 47 times). The advantage follows density, because splats, not points, are stored; the price is the individual points. Draco and a real 3D Tiles tool were not run.
+2026-11-23: size against 3D Tiles point clouds (documents/datasets.md, `npm run measure:pnts`): the published Open Nagasaki 3D Tiles (Smart Maps, `.pnts`) carry 15.0 bytes per point (measured on six files' headers); on Sasebo airborne points gzip/brotli bring that to 11.3 to 12.6 and 16-bit positions to about 8 (Kawazu airborne: 7.8 to 9.3). Dorayaki is 2.8 times smaller than `.pnts` at Sasebo (204 MB for 37.85 M points; 1.5 times smaller than 16-bit + brotli) and 85 times at Kawazu (83.9 MB for 476 M points; 44 to 47 times). The advantage follows density, because splats, not points, are stored; the price is the individual points. Draco and a real 3D Tiles tool were not run.
 
 ## 2026-11-23: `?mixed=1` drew the far tiles empty (Sasebo)
 
@@ -833,12 +833,12 @@ draws 20 tiles, 3.68 million splats, 44 MB, and the far half is filled (nine z16
 A per-tile size target (merge harder where the piece is over its share) brought the low-zoom tiles of the 32 Sasebo sheets from 4 to 5 MB on average and 16 MB at most to 0.6 to 0.9 MB and 1.7 MB at most, with z14 and z13 added;
 the archive went from 1.23 GB to 0.71 GB (z17 is now 86 % of it). The viewer's `?mixed=1` now covers the view with the coarsest tiles and refines the nearest within 40 MB / 4 million splats; a tilted view at zoom 16.3
 filled the screen with 29 MB, and a view of the whole area at zoom 13.8 took 6.0 MB (63 MB before at zoom 15.2). Compounding merge scales per zoom were too strong (z15 at 2 %); a flat scale or the target is used instead.
-Details: documents/sasebo-expansion.md.
+Details: documents/datasets.md.
 
 ## 2026-11-26: shot player, step 1 of the camera direction note
 
 `demo/src/shot-player.ts` plays a hand-written shot script (`?shots=sasebo` is `demo/shots/sasebo.json`, the worked example of
-documents/camera-direction.md, moved from documents/). Played in the local demo (`?fixture=sasebo-32q&terrain=1&extent=1.3&mixed=1&shots=sasebo`,
+documents/demo.md, moved from documents/). Played in the local demo (`?fixture=sasebo-32q&terrain=1&extent=1.3&mixed=1&shots=sasebo`,
 Browser pane shown): the five shots (hold, crane, traverse, orbit, dolly) ran through in 38 s and ended at zoom 18.1; a wheel input during the traverse stopped it at once
 and the wheel's own zoom then applied. Tiles followed the camera (sampled every 3 s: z15 at the crane, z16 in the orbit, z17 at the end of the dolly).
 
@@ -898,6 +898,6 @@ measuring with the pane in front (frame rate), smaller z17 tiles (the remaining 
 The build machine got a 480 GB USB disk (one APFS volume after hfu erased it; it had a 537 MB HFS+ partition and a Linux partition). `data/nagasaki`, `data/virtual-shizuoka` and
 `data/tiled-work` were copied to it, checked with a second rsync pass (no differences), and replaced by links, so the repository's paths still work (they do not while the disk is
 detached; it came off once during the night). The download page's sheet list, saved by hand from the browser, gives 7,824 sheets and about 1.6 TB of zips (its sizes are the zips'; the LAS is about 1.45 times larger). A script outside the
-repository downloads them one at a time with 60 s pauses, `01JE` around central Sasebo first (documents/sasebo-expansion.md, last section). In its first ten minutes 9 files, no failures,
+repository downloads them one at a time with 60 s pauses, `01JE` around central Sasebo first (documents/datasets.md, last section). In its first ten minutes 9 files, no failures,
 sizes equal to the copies fetched earlier. The 32 sheets held as LAS are downloaded again as zips; their LAS copies are to be removed once each zip is checked against them.
 Documents reviewed on the same day: README, AGENTS, EXPERIMENTS (E022 step 4, E023, E024), and the stale status lines of the documents.
