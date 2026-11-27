@@ -893,3 +893,11 @@ After: the same tour from stars had **34 deliveries during the 38 s**, the drawn
 largest 18.5 s (part of the tiles were in Cloudflare's cache from the first run, so the medians are not comparable; the slow ones are tiles loaded for the first time). Not done:
 measuring with the pane in front (frame rate), smaller z17 tiles (the remaining wait is transfer of tiles of up to 6.7 MB, 8.5 MB in the 168-sheet build).
 
+## 2026-11-27: the whole of Open Nagasaki, on an external disk
+
+The build machine got a 480 GB USB disk (one APFS volume after hfu erased it; it had a 537 MB HFS+ partition and a Linux partition). `data/nagasaki`, `data/virtual-shizuoka` and
+`data/tiled-work` were copied to it, checked with a second rsync pass (no differences), and replaced by links, so the repository's paths still work (they do not while the disk is
+detached; it came off once during the night). The download page's sheet list, saved by hand from the browser, gives 7,824 sheets and about 1.6 TB of zips (its sizes are the zips'; the LAS is about 1.45 times larger). A script outside the
+repository downloads them one at a time with 60 s pauses, `01JE` around central Sasebo first (documents/sasebo-expansion.md, last section). In its first ten minutes 9 files, no failures,
+sizes equal to the copies fetched earlier. The 32 sheets held as LAS are downloaded again as zips; their LAS copies are to be removed once each zip is checked against them.
+Documents reviewed on the same day: README, AGENTS, EXPERIMENTS (E022 step 4, E023, E024), and the stale status lines of the documents.

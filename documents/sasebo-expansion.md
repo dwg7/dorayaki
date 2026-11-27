@@ -1,6 +1,9 @@
 # Sasebo Bay: areal expansion with the Open Nagasaki point cloud
 
-Status: investigation of one file and a first build of it (2026-11-23), looked at in the local demo. The wide area has not been built.
+Status (2026-11-27): **built and hosted.** stars serves `dorayaki-sasebo.pmtiles`, 32 sheets (about 17 km2, 201 million points), zooms 13 to 17, 713,970,031 B
+(SHA-256 `472c72129209...`), with the size-capped lower zooms of E024; the site pins `?v=20261125b`, and `?mixed=1` (a view budget that covers the screen) is Sasebo's default.
+The download of the whole of Open Nagasaki has started (see the last section). The page is a chronological record: the sections below were written as each step was done, and
+"not hosted yet" in a heading means not at the time of that step.
 
 ## Goal
 
@@ -249,30 +252,36 @@ is drawn from 10 tiles, 6.0 MB (the hosted archive at zoom 15.2: 12 tiles, 63 MB
 the previous 32-sheet one, `961254299d13...`, is kept locally as `demo/tiles/dorayaki-sasebo-32.pmtiles`). Same procedure (state checked, scp to `.dorayaki-sasebo.pmtiles.new.15653`, size and SHA-256 on the host, rm, 8 s, `mv -n`; the user said to replace it).
 Checked afterwards: the TileJSON with `?v=20261125b` (minzoom 13) and one tile of each zoom 13 to 17, identical to the local files. The site pins `?v=20261125b` and carries the covering budget of `?mixed=1`.
 
-## What follows (estimates, not measured on a build)
+## What the early estimates said, and what was measured
 
-- **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. z16 looks good and z17 is usable
-  with a larger splat size (see the first build above).
-- **Size**: z16 alone is 2.07 million splats per 0.75 km2 (12 B each in Surfel Block v6: 25 MB), about 33 B/m2, 44 B/m2 with z15 and z14 above it. For
-  about 110 km2 of land, **roughly 5 GB**; with z17 (78 B/m2, the Kawazu figure) about 9 GB. The sea sheets are small.
-- **Input**: about 150 land sheets at 130 to 400 MB: **25 to 60 GB of LAS**.
-- **Compute**: about 10 CPU hours at the cost per voxel of the Kawazu builds (the cost follows the voxel count, 5 to 7 times a Kawazu mesh per sheet).
-- **Disk**: the tile-aligned build scatters every point to shard files (16 B per point): 9.8 points/m2 x 110 km2 x 16 B is about **17 GB**, with 22 GB free
-  on the build machine (95 % full). One sheet at a time with the shards of its tile row, or an external disk, is needed; the first archive would be
-  written by `merge:tilesets` sheet by sheet if the shards cannot be kept.
-- **Hosting**: stars has held one archive of at most 84 MB; a multi-GB archive needs the stars session's answer first.
+Written on 2026-11-23 from one sheet; kept with what the builds then showed.
+
+- **Resolution**: at 9.8 points/m2 a 0.5 m voxel holds 1.5 points, too few for a well-fitted splat; 1 m voxels hold 3.5. Seen in the builds: z17 is usable with the merge recipe,
+  smooth but flat on roofs and bare ground (E023).
+- **Size**: estimated about 44 B/m2 for z16 and below and about 78 B/m2 with z17. Measured on 32 sheets (about 17 km2, about half sea): 73 MB/km2 before the size caps, 42 MB/km2 after (E024).
+- **Input**: estimated 25 to 60 GB of LAS for about 110 km2 of land. The download page's sheet list (saved 2026-11-27) says: the whole of Open Nagasaki is 7,824 sheets,
+  about 1.6 TB of zips (the list's size is the zip's; the LAS is about 1.45 times larger, so about 2.3 TB); the sheet block `01JE` around Sasebo is 994 sheets, about 215 GB of zips.
+- **Compute**: estimated about 10 CPU hours for 110 km2. Measured: 32 sheets in about 8 to 10 minutes of wall time with 3 workers on an 8 GB laptop.
+- **Disk**: the build's work directory reached 6.4 GB for 32 sheets (after the pieces became gzipped float64; JSON had filled the disk). Large inputs and work now go to an external disk.
+- **Hosting**: stars serves the 714 MB archive; the host has 1.3 TB free and 7.6 GB of RAM (checked 2026-11-25). A multi-GB archive has not been tried.
 
 ## Not checked
 
-- Vertical datum against the DEM the demo uses (E010 style comparison); sea level reads about 0 m in this file.
-- Whether the coast and the water edge need special handling (no returns on water; this sheet has no sea).
-- Adaptive merging and the sparse rule on this data; terrain in the demo (the Kawazu DEM shift of 2 m is not known to apply).
-- The other sheets' point density and classification (the Nagasaki station sheet has 24 points/m2; this one 9.8).
-- Whether sheets overlap or leave gaps at their edges.
-- The file paths of the other sheets (`<date>/<municipality>` differs by area).
+- Vertical datum against the DEM the demo uses (E010 style comparison); sea level reads about 0 m in these files.
+- Whether the coast and the water edge need special handling (no returns on water).
+- The sparse rule on this data; terrain in the demo (the Kawazu DEM shift of 2 m is not known to apply).
+- The point density and classification of sheets outside the 32 (the Nagasaki station sheet has 24 points/m2 by a published article; `01JE3513` has 9.8).
+- Seams between sheets were looked at in a few views only (none seen).
+- The 339 sheets of Iki (`iki-si`) whose path in the sheet list has no `.las`: their file names on the server are not known.
 
-## Proposed next steps
+## The whole of Open Nagasaki: sheet list and download (started 2026-11-27)
 
-1. **Done** (above). Next: the same with the adaptive recipe, and a second sheet beside it (a coastal one) to see the seam and the water edge.
-2. Decide the build route for the whole area against the disk (above); ask the stars session about a multi-GB archive.
-3. Learn the paths of the sheets of the target area (the site's page keeps them in a closure; the selection list shows only ids and sizes).
+- **Sheet list**: the download page's own list (the `data_info.php` response that the page loads), saved by hand from the browser by hfu (an automated way to read it was
+  refused by the session's permission classifier, and probing paths had been refused before). Each sheet gives `path` (`data/<date>/<municipality>/<file>.las`) and the LAS size;
+  the zip is `https://opennagasaki.nerc.or.jp/storage/<date>/<municipality>/<file>.las.zip`.
+- **Download**: a small script outside the repository fetches one zip at a time with 60 s between files, waits 5 to 60 minutes after a failure, resumes partial files, checks every zip
+  with `unzip -tq`, and stops below 30 GB free. The `01JE` sheets come first, ordered by distance from central Sasebo (E 21,000 m, N 18,000 m in JGD2011 zone I); the
+  position of a sheet from its code (block AB 4,000 x 3,000 m, then quadrants C and D: 1 NW, 2 NE, 3 SW, 4 SE) agreed with the LAS extent of all 32 sheets held.
+  The site's terms state no rate limit; the pacing is a courtesy.
+- **Disk**: the whole prefecture is about 1.6 TB of zips (about 2.3 TB unzipped); the external disk holds 447 GB. The `01JE` block (215 GB of zips) fits; the rest needs converted
+  zips removed as they are built, or more disk (not decided).

@@ -25,8 +25,8 @@ wide) for `bridge` and `overhang`, and that tile plus its east, south and
 south-east neighbours for `boundary`. Each tile holds a synthetic unknown
 frame followed by the fixture as an experimental surfel frame. The red
 dashed lines are tile boundaries. The "depth test" checkbox turns depth
-testing off. The basemap is the `bvmap-starlight` style from
-[hfu/stars](https://github.com/hfu/stars), so the page needs network access
+testing off. The basemap is the dark `bvmap-nightsky` style from
+[hfu/stars](https://github.com/hfu/stars) (`?basemap=starlight` for the light one; documents/dark-basemap.md), so the page needs network access
 for the background map (not for the surfels).
 
 Each splat is drawn as its 2-sigma ellipse in the plane of its two longer
