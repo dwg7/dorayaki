@@ -34,10 +34,8 @@ export {
   type BoundaryOptions,
   type BoundaryParts,
 } from "./fixtures/boundary.js";
-export { BASE_CELLS, omitWeakRefinements, orderByRefinement, prefixCount, type RefinementOrder } from "./progressive.js";
 export { PmtilesCompression, PmtilesTileType, writePmtiles, zxyToTileId, type PmtilesOptions, type PmtilesTile } from "./pmtiles.js";
 export { DISC_THICKNESS, quaternionFromAxes, rotationAxes, splatAxes, splatAxisOrder, splatRoundness, splatToSurfel, surfelToSplat, type Quat, type Vec3 } from "./splat.js";
-export { buildPyramid, fitVoxels, type Pyramid, type PyramidConfig, type PyramidTile } from "./pointcloud/pyramid.js";
 export { CLASS_PLANE_HEADER_BYTES, CLASS_PLANE_MAGIC, CLASS_PLANE_VERSION, CLASS_DERIVED_CANOPY, CLASS_GROUND, VEGETATION_CLASSES, ClassPlaneError, decodeClassPlane, encodeClassPlane, readClassPlane, type ClassPlane } from "./class-plane.js";
 export { EXPERIMENTAL_CLASS_PLANE_FRAME_TAG, extractClassPlanes, wrapClassPlane } from "./mlt-frame.js";
 export { TileFramer, applyAffine, exactTileUnits, fitAffine, planePointOfTileUnits, tileUnits, type AffineFrame, type TileFrame, type TileLocation } from "./geodesy/tile-frame.js";
