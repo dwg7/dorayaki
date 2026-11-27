@@ -112,3 +112,16 @@ test("targetSplats can be given by zoom", () => {
   assert.equal(p[1]!.mergeScale, 1);
   assert.ok(p[2]!.mergeScale! >= 1);
 });
+
+test("E025: finestCellScale coarsens z17 only; a z17 target comes only from the per-zoom form", () => {
+  const base = buildTilePieces(scene(9), TILE, CONFIG);
+  const coarse = buildTilePieces(scene(9), TILE, { ...CONFIG, finestCellScale: 2 });
+  assert.ok(coarse[0]!.voxels < base[0]!.voxels);
+  assert.equal(coarse[1]!.voxels, base[1]!.voxels);
+  assert.throws(() => buildTilePieces(scene(9), TILE, { ...CONFIG, finestCellScale: 3 }), RangeError);
+  const capped = buildTilePieces(scene(9), TILE, { ...CONFIG, targetSplats: { 17: 50 } });
+  assert.ok(capped[0]!.mergeScale! >= 1);
+  assert.ok(capped[0]!.splats.length <= base[0]!.splats.length);
+  assert.ok(capped[0]!.splats.length <= 50 || capped[0]!.mergeScale === 64);
+  assert.equal(buildTilePieces(scene(9), TILE, { ...CONFIG, targetSplats: 50 })[0]!.mergeScale, undefined);
+});

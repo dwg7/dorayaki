@@ -27,6 +27,7 @@ is still open. Facts and numbers live in the documents linked from each item; th
 | D18 | While a tour plays, the player sets the **look-at height itself** (map clamping off); a **status control** with Stop and Replay; on Pages a **Play tour** button and `?shots=` (2026-11-26). | The camera rode the terrain; the end of a tour was not visible; Pages had no way to start one. | NOTES.md (2026-11-26), [demo.md](demo.md) |
 | D19 | Inputs and build work go to an **external disk**; the **whole of Open Nagasaki** is downloaded, one file at a time with pauses, `01JE` around central Sasebo first (2026-11-27). | 32 sheets filled the internal disk once; the next step is the prefecture. | [datasets.md](datasets.md) (last section) |
 | D20 | **Compaction** (2026-11-27): Surfel Block **version 6 only**; `build:tiled` the one builder; finished experiment scripts, experiment tilesets and the in-memory pyramid and progressive order removed; documents merged into five (format, build, demo, datasets, decisions) beside EXPERIMENTS.md and NOTES.md; Numazu re-encoded as version 6 and replaced on stars (`?v=20261127a`). Tag `pre-compaction-2026-11-27` marks the state before. | The code and the documents carried every past layout and builder; Git keeps them, so the working tree need not (Fujimura: "Git に履歴が残されていることを信頼し、コンパクションは積極的に行う"). Lines removed: stage 1 −57, stage 2 −873 (+330), stage 3 −2,086 (+17), stage 4 (documents) about −2,200 (+1,700). | this page, AGENTS.md |
+| D21 | Production z17: **cells of about 1 m and at most 100,000 splats per z17 tile** (`DORAYAKI_Z17_CELL_SCALE=2`, `DORAYAKI_ZOOM_TARGET_SPLATS=17:100000,...`), in `produce:opennagasaki` (2026-11-28). | z17 was 90 % of the archive; on four sheets this is a third of the z17 bytes and builds faster than the hosted recipe (51 s against 68 s), where a cap alone needs twice the time. The prefecture at roughly 120 GB instead of 330 GB (arithmetic). Forest merges into larger patches; accepted (Fujimura chose it after the look). | E025, [datasets.md](datasets.md) |
 
 ## A bug found on the way (fixed)
 
@@ -45,8 +46,7 @@ Found by comparing the tile list the layer held (`packed: 0` on the empty ones) 
 
 ## Open (as of 2026-11-27)
 
-- **z17 at about 10 points/m2**: the hosted recipe is smooth but flat on roofs and bare ground; a stricter one keeps detail at 1.45 times the bytes (E023). z17 is now 86 % of the
-  archive, so it is also the size question.
+- **z17 at about 10 points/m2**: decided for size (D21, E025); the hosted Sasebo archive still has the older z17. Whether a stricter recipe (E023) is wanted somewhere is open.
 - **The budget**: 40 MB / 4 million splats per view (D15) may be tightened; not measured on weaker GPUs or slow networks.
 - **The prefecture**: the download has started (D19). Not decided: removing converted zips as the build goes, or more disk (the prefecture is about 1.6 TB of zips, the disk 447 GB);
   how a prefecture-sized archive is listed in the viewer (the TileJSON tile list is capped at 4,096); whether stars serves a multi-GB archive well.

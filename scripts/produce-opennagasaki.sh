@@ -4,7 +4,7 @@
 #   npm run produce:opennagasaki -- <name> <count | codes file>
 #
 # <count>: the first N sheets of $ON_DIR/order.txt (nearest to central Sasebo first) that have a zip; or a file with one sheet code per line.
-# Unzips the LAS that are missing into $LAS_DIR (checked against the size in the zip), then runs build:tiled with the E024 recipe and records
+# Unzips the LAS that are missing into $LAS_DIR (checked against the size in the zip), then runs build:tiled with the E024/E025 recipe and records
 # time, memory, disk, tiles and archive size in $ON_DIR/runs/<name>.txt. The work directory is data/tiled-work/<name> (a link to the external
 # disk on the build machine). Nothing is uploaded.
 #
@@ -47,11 +47,12 @@ done
 say "LAS ready: ${#files[@]} files ($(du -ch "${files[@]}" | tail -1 | cut -f1)), unzipped now: ${#fresh[@]}"
 list=$(IFS=,; echo "${files[*]}")
 
-# 3. Build (E024 recipe).
+# 3. Build (E024 recipe for the lower zooms; E025 for z17: cells of about 1 m and at most 100,000 splats per tile).
 free0=$(df -k "$ON_DIR" | tail -1 | awk '{print $4}')
 export DORAYAKI_ATTRIBUTION='点群: 長崎県 オープンナガサキ (CC BY 4.0) を加工して作成'
 export DORAYAKI_ADAPTIVE_LEVELS=3 DORAYAKI_ADAPTIVE_THICKNESS=0.2 DORAYAKI_ADAPTIVE_COLOR=0.2 DORAYAKI_ADAPTIVE_SPARSE=0
-export DORAYAKI_LOWER_ZOOMS=16,15,14,13 DORAYAKI_ZOOM_CELL_SCALE=2 DORAYAKI_ZOOM_TARGET_SPLATS=16:100000,15:160000,14:160000,13:160000
+export DORAYAKI_LOWER_ZOOMS=16,15,14,13 DORAYAKI_ZOOM_CELL_SCALE=2 DORAYAKI_Z17_CELL_SCALE=2
+export DORAYAKI_ZOOM_TARGET_SPLATS=17:100000,16:100000,15:160000,14:160000,13:160000
 # A watcher records the lowest free space on the external disk while the build runs (the work directory's peak).
 ( low=$free0; while sleep 15; do f=$(df -k "$ON_DIR" | tail -1 | awk '{print $4}'); [ "$f" -lt "$low" ] && low=$f && echo "$low" > "$ON_DIR/runs/$name.lowfree"; done ) & watcher=$!
 t0=$(date +%s)

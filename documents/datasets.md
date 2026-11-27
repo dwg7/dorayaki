@@ -516,6 +516,12 @@ Written on 2026-11-23 from one sheet; kept with what the builds then showed.
 - Seams between sheets were looked at in a few views only (none seen).
 - The 339 sheets of Iki (`iki-si`) whose path in the sheet list has no `.las`: their file names on the server are not known.
 
+### Production recipe for z17 (E025, decided 2026-11-28)
+
+`npm run produce:opennagasaki` builds z17 with cells of about 1 m (`DORAYAKI_Z17_CELL_SCALE=2`) and at most 100,000 splats per z17 tile (`17:100000` in
+`DORAYAKI_ZOOM_TARGET_SPLATS`), besides the E024 lower zooms. On four sheets: a third of the z17 bytes of the hosted recipe (35.7 MB against 107.0 MB; max tile 1.19 MB
+against 6.49 MB), 51 s against 68 s. The hosted 32-sheet archive was built before this and is unchanged. Measurements: E025 in EXPERIMENTS.md.
+
 ### The whole of Open Nagasaki: sheet list and download (started 2026-11-27)
 
 - **Sheet list**: the download page's own list (the `data_info.php` response that the page loads), saved by hand from the browser by hfu (an automated way to read it was

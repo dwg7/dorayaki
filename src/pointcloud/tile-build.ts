@@ -33,6 +33,8 @@ export interface TileBuildConfig {
    * thickness and color tolerance of every zoom below z17 by the same factor (not compounding per zoom: x4 per zoom left z15 with 2 % of its tile bytes, E024).
    */
   cellScale?: number;
+  /** E025: multiplies the voxel edge at z17 itself (a power of two; default 1). Lower zooms keep their own `cellScale` on the z17 cell of scale 1. */
+  finestCellScale?: number;
   thicknessScale?: number;
   colorScale?: number;
   /**
@@ -40,6 +42,7 @@ export interface TileBuildConfig {
    * The z17 tile's piece of a zoom may hold its area's share (the target divided by 4 for each zoom step down from z17, so the pieces of a tile add up to at most the target); a piece that
    * is over its share is merged harder, in steps (merge thickness x s, color tolerance x sqrt(s), s = 1, 2, 4, ... 64: the first that fits), so dense places are merged more than sparse
    * ones. The step taken is reported in `mergeScale`. Without it the fixed `thicknessScale` / `colorScale` apply.
+   * z17 itself takes a target only from the per-zoom form (`{ 17: 150000 }`, E025); a single number applies below z17 only, as before.
    */
   targetSplats?: number | Readonly<Record<number, number>>;
   /** Class slots per voxel (0 = the points carry no class); the class is carried by `adaptive.opacityOf`. */
@@ -80,12 +83,15 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
   // The tile's frame is east-north-up with north counted from the corner (y <= 0): the Gaussians come out east-north-up, as placement expects.
   const cellScale = config.cellScale ?? 1;
   if (!Number.isInteger(Math.log2(cellScale)) || cellScale < 1) throw new RangeError("cellScale must be a power of two (1, 2, 4, ...)");
+  const finestCellScale = config.finestCellScale ?? 1;
+  if (!Number.isInteger(Math.log2(finestCellScale)) || finestCellScale < 1) throw new RangeError("finestCellScale must be a power of two (1, 2, 4, ...)");
+  const zoomCellScale = (z: number): number => (z < TILE_ZOOM ? cellScale : finestCellScale);
   for (const z of zooms) {
     // Voxels along a z17 tile's edge at this zoom: whole groups of 2^maxLevel, or a merge group would cross the tile's edge.
-    const across = CELLS / (2 ** (TILE_ZOOM - z) * (z < TILE_ZOOM ? cellScale : 1));
+    const across = CELLS / (2 ** (TILE_ZOOM - z) * zoomCellScale(z));
     if (!Number.isInteger(across) || across % 2 ** maxLevel !== 0) throw new RangeError(`z${z}: ${across} voxels along a tile edge do not divide into groups of ${2 ** maxLevel}`);
   }
-  const edgeOf = (z: number): number => cell * 2 ** (TILE_ZOOM - z) * (z < TILE_ZOOM ? cellScale : 1);
+  const edgeOf = (z: number): number => cell * 2 ** (TILE_ZOOM - z) * zoomCellScale(z);
   const accs = zooms.map((z) => new VoxelAccumulator(edgeOf(z), 16, slots));
   feed((east, south, up, r, g, b, slot = -1) => { for (const a of accs) a.add(east, -south, up, r, g, b, slot); });
 
@@ -103,7 +109,7 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
     let result: { gaussians: Gaussian[]; perLevel: number[] } = { gaussians: [], perLevel: new Array<number>(maxLevel + 1).fill(0) };
     if (acc.voxels > 0) {
       const tileTarget = typeof config.targetSplats === "number" ? config.targetSplats : config.targetSplats?.[z];
-      if (d > 0 && tileTarget !== undefined) {
+      if (tileTarget !== undefined && (d > 0 || typeof config.targetSplats !== "number")) {
         const share = Math.max(1, Math.floor(tileTarget / 4 ** d));
         const base = options();
         for (const s of MERGE_STEPS) {
