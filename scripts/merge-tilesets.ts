@@ -64,7 +64,7 @@ for (const e of [...byAddress.values()].sort((a, b) => a.z - b.z || a.x - b.x ||
   const joined = joinClassCodes(parts, counts);
   if (!joined && parts.some((p) => p)) console.warn(`${e.z}/${e.x}/${e.y}: class planes dropped (a source tile has none, or one of another length than its splats)`);
   const classPlane = joined ? encodeClassPlane(joined, (b) => new Uint8Array(gzipSync(b, { level: 9 }))) : undefined;
-  const data = encodeDemoTile(splats, [splats.length], process.env.DORAYAKI_BLOCK_VERSION === "6" ? 6 : undefined, classPlane);
+  const data = encodeDemoTile(splats, [splats.length], classPlane);
   const path = `${OUT}/${e.z}/${e.x}/${e.y}.mlt`;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, data);

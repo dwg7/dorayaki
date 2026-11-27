@@ -3,14 +3,13 @@
  */
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type ExpressionSpecification } from "maplibre-gl";
 
-import { decodeSurfelTileWithLevels, packSurfelTile } from "./decode-tile.js";
+import { packSurfelTile } from "./decode-tile.js";
 import type { PackedBlock } from "../../src/surfel-block.js";
 import { tileLatitude, tileLongitude, tileWidthMetres, type TileAddress } from "../../src/tile-geometry.js";
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
 import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
 import { SurfelLayer } from "./surfel-layer.js";
-import { splatInstances, type SplatInstances } from "./splat-instances.js";
 import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
@@ -159,7 +158,7 @@ interface LoadedTile {
   byteLength: number;
   count: number;
   levels: number[];
-  /** Until the layer has taken it: the block's 16-byte records (default), or float instance data (`?gpu=legacy`). */
+  /** Until the layer has taken it: the block's 12-byte records, uploaded as they are. */
   packed: PackedBlock | undefined;
   /** Class codes handed over with the records: the guess of vegetation.ts (64 vegetation, 1 other) for a tile without a class plane. */
   classes: Uint8Array | undefined;
@@ -170,7 +169,6 @@ interface LoadedTile {
   classesRequested?: boolean;
   /** The tile got the guess of vegetation.ts instead of a class plane (made only while a class feature was on). */
   guessed?: boolean;
-  instances: SplatInstances | undefined;
 }
 
 /** Load-time measurements, summed over every tile loaded (E001 in EXPERIMENTS.md). */
@@ -202,7 +200,7 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   if (!bytes) return null;
   tileSizes.set(sizeKey(tile), bytes.byteLength);
   const t1 = performance.now();
-  if (flag("gpu", tileset) !== "legacy") {
+  {
     const packed = packSurfelTile(bytes); // no Splat objects: the records go to the GPU as they are
     timings.decodeMs += performance.now() - t1;
     const [planeBody] = extractClassPlanes(bytes);
@@ -216,12 +214,8 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
     // switching one on later reloads the tiles.
     const guessed = !classPlane && classesNeeded();
     const classes = guessed ? Uint8Array.from(vegetationFlags(packed, tileWidthMetres(tile), vegOptions), (f) => (f ? CLASS_DERIVED_CANOPY : CLASS_UNCLASSIFIED)) : undefined;
-    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, classes, classPlane, guessed, instances: undefined };
+    return { tile, byteLength: bytes.byteLength, count: packed.count, levels: packed.levels, packed, classes, classPlane, guessed };
   }
-  const decoded = decodeSurfelTileWithLevels(bytes);
-  const instances = splatInstances(decoded.splats); // the Splat objects become garbage here
-  timings.decodeMs += performance.now() - t1;
-  return { tile, byteLength: bytes.byteLength, count: decoded.splats.length, levels: decoded.levels, packed: undefined, classes: undefined, classPlane: undefined, instances };
 }
 
 map.on("load", () => {
@@ -456,10 +450,10 @@ map.on("load", () => {
     onReady: (set, zoom) => {
       deliveries.push({ ms: Math.round(performance.now()), zoom, tiles: set.length, bytes: set.reduce((n, x) => n + x.data.byteLength, 0) });
       loaded = set.map((x) => x.data);
-      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.classes ? { classes: t.classes } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
+      layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.classes ? { classes: t.classes } : {}), levels: t.levels })));
       // The layer owns the data now; drop the second copy. Not with `?mixed=1`: there a tile may be handed over again after the
       // layer let it go (progressive sets, the cache), and it must still carry its data.
-      if (!mixed) for (const t of loaded) { t.instances = undefined; t.packed = undefined; t.classes = undefined; }
+      if (!mixed) for (const t of loaded) { t.packed = undefined; t.classes = undefined; }
       const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.count, 0);
       void ensureClasses();

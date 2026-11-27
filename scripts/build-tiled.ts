@@ -41,7 +41,6 @@ const ZOOM = 17;
 const LOWER_ZOOMS = (process.env.DORAYAKI_LOWER_ZOOMS ?? "16,15").split(",").map(Number).sort((a, b) => b - a);
 if (LOWER_ZOOMS.some((z, i) => !Number.isInteger(z) || z >= 17 || z < 0 || LOWER_ZOOMS.indexOf(z) !== i)) throw new Error(`DORAYAKI_LOWER_ZOOMS must list distinct integers below 17, got ${process.env.DORAYAKI_LOWER_ZOOMS}`);
 const MIN_ZOOM = LOWER_ZOOMS.length > 0 ? LOWER_ZOOMS[LOWER_ZOOMS.length - 1]! : ZOOM;
-const blockVersion = process.env.DORAYAKI_BLOCK_VERSION === "6" ? (6 as const) : undefined;
 const classPlane = process.env.DORAYAKI_CLASS_PLANE === "1";
 
 function parseTargets(spec: string): number | Record<number, number> {
@@ -83,9 +82,9 @@ const PIECE_FIELDS = 14;
 const gz = (b: Uint8Array) => new Uint8Array(gzipSync(b, { level: 9 }));
 /** The block of a tile's splats and, with class planes, the plane (the class travels in the opacity byte until here, as in build-tileset.ts). */
 function encodeTile(splats: Splat[]): Uint8Array {
-  if (!classPlane) return encodeDemoTile(splats, [splats.length], blockVersion);
+  if (!classPlane) return encodeDemoTile(splats, [splats.length]);
   const plane = encodeClassPlane(Uint8Array.from(splats, (s) => planeSlotToCode(s.a)), gz);
-  return encodeDemoTile(splats.map((s) => ({ ...s, a: 242 })), [splats.length], blockVersion, plane);
+  return encodeDemoTile(splats.map((s) => ({ ...s, a: 242 })), [splats.length], plane);
 }
 
 const [mode, ...rest] = process.argv.slice(2);

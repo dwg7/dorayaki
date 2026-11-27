@@ -10,7 +10,7 @@
  * disc. A bridge deck, a wall or a roof is flat and stays; a tree crown is a blob and goes. Near tile edges the ground
  * is the lowest splat of the tile's own cells only, so a cell next to the edge can be wrong.
  */
-import { readBits, V6_FIELDS, V6_SCALE_STEPS_PER_OCTAVE } from "../../src/surfel-block.js";
+import { readBits, RECORD_FIELDS, SCALE_STEPS_PER_OCTAVE, SURFEL_RECORD_BYTES } from "../../src/surfel-block.js";
 
 export interface VegetationOptions {
   /** Cell size of the ground estimate, metres (default 4). */
@@ -24,13 +24,12 @@ export interface VegetationOptions {
 export interface PackedForVegetation {
   count: number;
   records: Uint8Array;
-  recordBytes: 16 | 12;
   zOrigin: number;
   zStep: number;
 }
 
 export function vegetationFlags(block: PackedForVegetation, tileWidthMetres: number, options: VegetationOptions = {}): Uint8Array {
-  const { count, records: r, recordBytes } = block;
+  const { count, records: r } = block;
   const cellMetres = options.cellMetres ?? 4;
   const minHeight = options.minHeight ?? 2;
   const roundOnly = options.roundOnly ?? true;
@@ -42,23 +41,14 @@ export function vegetationFlags(block: PackedForVegetation, tileWidthMetres: num
   const cell = new Int32Array(count);
   const z = new Float32Array(count);
   const round = new Uint8Array(count);
-  const F = V6_FIELDS;
+  const F = RECORD_FIELDS;
+  const roundDiff = Math.floor(Math.log2(1.5) * SCALE_STEPS_PER_OCTAVE + 1e-9); // a ratio below 1.5: 3 codes at 6 steps per octave
   for (let i = 0; i < count; i++) {
-    const o = i * recordBytes;
-    let x: number, y: number, zu: number, c0: number, c1: number, c2: number, roundDiff: number;
-    if (recordBytes === 16) {
-      x = (r[o]! | (r[o + 1]! << 8)) / 65536;
-      y = (r[o + 2]! | (r[o + 3]! << 8)) / 65536;
-      zu = r[o + 4]! | (r[o + 5]! << 8);
-      c0 = r[o + 6]!; c1 = r[o + 7]!; c2 = r[o + 8]!;
-      roundDiff = 5; // 10 steps per octave: a ratio below 1.5 is at most 5 codes
-    } else {
-      x = readBits(r, o, F.x.off, F.x.len) / 2 ** F.x.len;
-      y = readBits(r, o, F.y.off, F.y.len) / 2 ** F.y.len;
-      zu = readBits(r, o, F.z.off, F.z.len);
-      c0 = readBits(r, o, F.sx.off, F.sx.len); c1 = readBits(r, o, F.sy.off, F.sy.len); c2 = readBits(r, o, F.sz.off, F.sz.len);
-      roundDiff = Math.floor(Math.log2(1.5) * V6_SCALE_STEPS_PER_OCTAVE + 1e-9); // 6 steps per octave: 3
-    }
+    const o = i * SURFEL_RECORD_BYTES;
+    const x = readBits(r, o, F.x.off, F.x.len) / 2 ** F.x.len;
+    const y = readBits(r, o, F.y.off, F.y.len) / 2 ** F.y.len;
+    const zu = readBits(r, o, F.z.off, F.z.len);
+    const c0 = readBits(r, o, F.sx.off, F.sx.len), c1 = readBits(r, o, F.sy.off, F.sy.len), c2 = readBits(r, o, F.sz.off, F.sz.len);
     cell[i] = Math.min(n - 1, Math.floor(y * n)) * n + Math.min(n - 1, Math.floor(x * n));
     z[i] = block.zOrigin + zu * block.zStep;
     round[i] = Math.max(c0, c1, c2) - Math.min(c0, c1, c2) <= roundDiff ? 1 : 0;

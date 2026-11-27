@@ -24,6 +24,9 @@ export const TOY_GS_COUNTS = { ground: 400, wall: 50, blob: 27 } as const;
 const dc = (linear: number): number => (linear - 0.5) / SH_C0;
 const logit = (p: number): number => Math.log(p / (1 - p));
 
+/** One opacity for every Gaussian: a Surfel Block (version 6) stores one per block (the point-cloud builds use the same 0.95, byte 242). */
+const OPACITY = 0.95;
+
 function row(
   [x, y, z]: [number, number, number],
   [r, g, b]: [number, number, number],
@@ -38,7 +41,7 @@ export function toyGaussianRows(): number[][] {
   const rows: number[][] = [];
   for (let j = 0; j < 20; j++) {
     for (let i = 0; i < 20; i++) {
-      rows.push(row([-19 + 2 * i, -19 + 2 * j, 0], [0.35, 0.55, 0.3], 0.9, [1.2, 0.8, 0.05], [1, 0, 0, 0]));
+      rows.push(row([-19 + 2 * i, -19 + 2 * j, 0], [0.35, 0.55, 0.3], OPACITY, [1.2, 0.8, 0.05], [1, 0, 0, 0]));
     }
   }
   // Wall: axis 1 (north) is the shortest before rotation; rotate 30° about up.
@@ -48,13 +51,13 @@ export function toyGaussianRows(): number[][] {
   for (let k = 0; k < 5; k++) {
     for (let i = 0; i < 10; i++) {
       const t = -9 + 2 * i; // along the wall (rotated east axis)
-      rows.push(row([t * c, 8 + t * s, 1 + 2 * k], [0.8, 0.78, 0.72], 0.95, [1.1, 0.04, 1.1], q));
+      rows.push(row([t * c, 8 + t * s, 1 + 2 * k], [0.8, 0.78, 0.72], OPACITY, [1.1, 0.04, 1.1], q));
     }
   }
   for (let a = -1; a <= 1; a++) {
     for (let b = -1; b <= 1; b++) {
       for (let h = -1; h <= 1; h++) {
-        rows.push(row([10 + 1.5 * a, -8 + 1.5 * b, 6 + 1.5 * h], [0.2, 0.45, 0.2], 0.6, [0.9, 0.9, 0.9], [1, 0, 0, 0]));
+        rows.push(row([10 + 1.5 * a, -8 + 1.5 * b, 6 + 1.5 * h], [0.2, 0.45, 0.2], OPACITY, [0.9, 0.9, 0.9], [1, 0, 0, 0]));
       }
     }
   }

@@ -15,7 +15,7 @@ const splatsOf = (o: Parameters<typeof generatePlane>[0]) => generatePlane(o).ma
  * on a 128 m tile. If this changes, the fixture or the wire format changed; update it
  * deliberately and say so in the commit.
  */
-const PLANE_16_SHA256 = "5abfc7ef6879421508f81ba10ccb82bd232e54d0b09a349164b554e41e9abea2";
+const PLANE_16_SHA256 = "d4248a6fde3213b2e28293193fe7c9b9b3373812cf3c9a16b99205c2809c5156";
 const OPTS = { tileWidthMetres: 128 };
 
 test("plane fixture has the expected shape", () => {

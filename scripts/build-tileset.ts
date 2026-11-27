@@ -47,7 +47,6 @@ const config: PyramidConfig = {
 };
 const OUT = `demo/tiles/${name}`;
 /** DORAYAKI_BLOCK_VERSION=6 writes version 6 blocks (12-byte records, E016); the default is version 5. */
-const blockVersion = process.env.DORAYAKI_BLOCK_VERSION === "6" ? (6 as const) : undefined;
 
 const specs = file.split(",").map(parseLasSpec);
 const files = specs.map((s) => s.path);
@@ -180,7 +179,7 @@ for (const { tile, splats: tileSplats, levels } of pyramid.tiles) {
     plane = encodeClassPlane(Uint8Array.from(splats, (s) => planeSlotToCode(s.a)), (bytes) => new Uint8Array(gzipSync(bytes, { level: 9 })));
     splats = splats.map((s) => ({ ...s, a: 242 }));
   }
-  const data = encodeDemoTile(splats, levels, blockVersion, plane);
+  const data = encodeDemoTile(splats, levels, plane);
   writeFileSync(path, data);
   archiveTiles.push({ ...tile, data });
   manifestTiles.push({ ...tile, levels, bytes: data.byteLength });
