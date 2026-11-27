@@ -1614,4 +1614,4 @@ Sasebo, `01JE2421` median, `01JE5513` smallest), hosted recipe otherwise, z16 on
   exactly (terrain moved the camera between loads), so this is a first look, not a comparison.
 
 ### Decision
-Pending hfu's look (2026-11-27). Candidate: cell 1 m + cap 100,000 (a third of the z17 bytes; the prefecture at roughly 120 GB instead of 330 GB, by arithmetic from the 168-sheet trial).
+hfu chose cell 1 m + cap 100,000 on 2026-11-28; `produce:opennagasaki` uses it (D21). It gives a third of the z17 bytes; the prefecture at roughly 120 GB instead of 330 GB, by arithmetic from the 168-sheet trial.
