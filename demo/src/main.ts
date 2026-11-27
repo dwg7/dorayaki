@@ -87,6 +87,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "lz-thick": "tiles/lz-thick/tilejson.json",
         "lz-sparse": "tiles/lz-sparse/tilejson.json",
         "lz-all": "tiles/lz-all/tilejson.json",
+        "sasebo-168": "tiles/sasebo-168/tilejson.json",
         "sasebo-32q": "tiles/sasebo-32q/tilejson.json",
         "sasebo-32": "tiles/sasebo-32/tilejson.json",
         "sasebo-3513": "tiles/sasebo-3513/tilejson.json",
@@ -114,13 +115,14 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
   ...Object.fromEntries(["sasebo-3513", "sr-cur", "sr-t1c1", "sr-l2", "sr-t05c1", "sr-l1", "lz-cell2", "lz-thick", "lz-sparse", "lz-all"].map((n) => [n, { terrain: "1", extent: "1.3" }])), // E023 recipe candidates (one sheet)
+  "sasebo-168": { terrain: "1", extent: "1.3", mixed: "1" },
   "sasebo-32q": { terrain: "1", extent: "1.3", mixed: "1" },
   "sasebo-32": { terrain: "1", extent: "1.3", mixed: "1" },
   t4q: { terrain: "1", extent: "1.3", mixed: "1" },
   sasebo: { terrain: "1", extent: "1.3", mixed: "1" }, // as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance: the nine-tile limit covered only part of a tilted view (`?mixed=0` switches it off)
 };
 /** Camera tours offered (shot scripts in demo/shots/, copied to the site's shots/): the control shows a Play button for these tilesets. */
-const TOURS: Readonly<Record<string, string>> = { sasebo: "sasebo", "sasebo-32q": "sasebo" };
+const TOURS: Readonly<Record<string, string>> = { sasebo: "sasebo", "sasebo-32q": "sasebo", "sasebo-168": "sasebo" };
 /** A query flag: the URL's value, else the tileset's default. */
 const flag = (name: string, tileset: string): string | null =>
   new URLSearchParams(location.search).get(name) ?? TILESET_DEFAULTS[tileset]?.[name] ?? null;
