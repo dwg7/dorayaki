@@ -1584,3 +1584,34 @@ then the nearest refined first while the budget holds. Eight sheets, then 32.
 
 ### Decision
 Hosted on stars on 2026-11-25 (`?v=20261125b`); `?mixed=1` with the budget is Sasebo's default. z17 (86 % of the archive) is unchanged.
+
+## E025: a smaller z17 for the prefecture (2026-11-27)
+
+### Question
+z17 is 90 % of the 168-sheet trial (4.59 GB; 1,847 z17 tiles, mean 2.23 MB, max 8.48 MB). At that rate the whole of Open Nagasaki (7,485 sheets, 1.6 TB of zips) would be about
+330 GB. Which knob makes z17 smaller, at what build time?
+
+### Method
+Two new knobs in `build:tiled`: `DORAYAKI_Z17_CELL_SCALE` (the voxel edge at z17 itself, 2 = about 1 m instead of 0.5 m) and a z17 entry in `DORAYAKI_ZOOM_TARGET_SPLATS`
+(`17:100000`: a z17 tile over the cap is merged harder in steps, as the lower zooms in E024). Four sheets of different size and character (`01JE2643` largest, `01JE3513` central
+Sasebo, `01JE2421` median, `01JE5513` smallest), hosted recipe otherwise, z16 only below z17, three workers. Same view in the demo.
+
+### Measurements (z17 only, 57 tiles; build time for the four sheets)
+
+| variant | z17 total | mean | max | share of base | build |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| base (hosted recipe) | 107.0 MB | 1.88 MB | 6.49 MB | 100 % | 68 s |
+| cell 1 m | 73.9 MB | 1.30 MB | 4.55 MB | 69 % | 44 s |
+| cap 175,000 | 54.5 MB | 0.96 MB | 1.99 MB | 51 % | 105 s |
+| cap 100,000 | 38.7 MB | 0.68 MB | 1.19 MB | 36 % | 129 s |
+| cap 60,000 | 24.8 MB | 0.44 MB | 0.72 MB | 23 % | 197 s |
+| cell 1 m + cap 100,000 | 35.7 MB | 0.63 MB | 1.19 MB | 33 % | 51 s |
+
+### Observations
+- A coarser cell alone gives 69 %, not a quarter: much of z17 is already merged, and vertical and layered surfaces do not shrink with the horizontal cell.
+- The cap reaches any size but costs build time (every step re-merges the tile). With the 1 m cell first, the same cap gives a little less than the cap alone at 40 % of its time.
+- In the demo, cap 60,000 turns houses into blotches at zoom 17.6; cell 1 m + cap 100,000 keeps the town readable but merges the forest into large patches. Views were not pinned
+  exactly (terrain moved the camera between loads), so this is a first look, not a comparison.
+
+### Decision
+Pending hfu's look (2026-11-27). Candidate: cell 1 m + cap 100,000 (a third of the z17 bytes; the prefecture at roughly 120 GB instead of 330 GB, by arithmetic from the 168-sheet trial).

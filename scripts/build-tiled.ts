@@ -70,6 +70,8 @@ function recipe(): TileBuildConfig {
     ...(classPlane ? { classSlots: PLANE_CLASS_SLOTS } : {}),
     // E023: coarser zooms below z17 (all default to 1, which builds as before).
     cellScale: Number(process.env.DORAYAKI_ZOOM_CELL_SCALE ?? 1),
+    // E025: a coarser cell at z17 itself (default 1).
+    finestCellScale: Number(process.env.DORAYAKI_Z17_CELL_SCALE ?? 1),
     thicknessScale: Number(process.env.DORAYAKI_ZOOM_THICKNESS_SCALE ?? 1),
     colorScale: Number(process.env.DORAYAKI_ZOOM_COLOR_SCALE ?? 1),
     // E024: size as the criterion: splats per whole tile below z17 (`50000`, or `16:45000,15:50000`); a piece over its share is merged harder.
