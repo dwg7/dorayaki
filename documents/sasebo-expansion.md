@@ -260,7 +260,7 @@ Written on 2026-11-23 from one sheet; kept with what the builds then showed.
   smooth but flat on roofs and bare ground (E023).
 - **Size**: estimated about 44 B/m2 for z16 and below and about 78 B/m2 with z17. Measured on 32 sheets (about 17 km2, about half sea): 73 MB/km2 before the size caps, 42 MB/km2 after (E024).
 - **Input**: estimated 25 to 60 GB of LAS for about 110 km2 of land. The download page's sheet list (saved 2026-11-27) says: the whole of Open Nagasaki is 7,824 sheets,
-  about 1.6 TB of LAS; the sheet block `01JE` around Sasebo is 994 sheets, about 215 GB of LAS.
+  about 1.6 TB of zips (the list's size is the zip's; the LAS is about 1.45 times larger, so about 2.3 TB); the sheet block `01JE` around Sasebo is 994 sheets, about 215 GB of zips.
 - **Compute**: estimated about 10 CPU hours for 110 km2. Measured: 32 sheets in about 8 to 10 minutes of wall time with 3 workers on an 8 GB laptop.
 - **Disk**: the build's work directory reached 6.4 GB for 32 sheets (after the pieces became gzipped float64; JSON had filled the disk). Large inputs and work now go to an external disk.
 - **Hosting**: stars serves the 714 MB archive; the host has 1.3 TB free and 7.6 GB of RAM (checked 2026-11-25). A multi-GB archive has not been tried.
@@ -283,5 +283,5 @@ Written on 2026-11-23 from one sheet; kept with what the builds then showed.
   with `unzip -tq`, and stops below 30 GB free. The `01JE` sheets come first, ordered by distance from central Sasebo (E 21,000 m, N 18,000 m in JGD2011 zone I); the
   position of a sheet from its code (block AB 4,000 x 3,000 m, then quadrants C and D: 1 NW, 2 NE, 3 SW, 4 SE) agreed with the LAS extent of all 32 sheets held.
   The site's terms state no rate limit; the pacing is a courtesy.
-- **Disk**: zips are about 70 % of the LAS size, so the whole prefecture is about 1.1 TB of zips; the external disk holds 447 GB. The `01JE` block fits; the rest needs converted
+- **Disk**: the whole prefecture is about 1.6 TB of zips (about 2.3 TB unzipped); the external disk holds 447 GB. The `01JE` block (215 GB of zips) fits; the rest needs converted
   zips removed as they are built, or more disk (not decided).

@@ -47,7 +47,7 @@ Found by comparing the tile list the layer held (`packed: 0` on the empty ones) 
 - **z17 at about 10 points/m2**: the hosted recipe is smooth but flat on roofs and bare ground; a stricter one keeps detail at 1.45 times the bytes (E023). z17 is now 86 % of the
   archive, so it is also the size question.
 - **The budget**: 40 MB / 4 million splats per view (D15) may be tightened; not measured on weaker GPUs or slow networks.
-- **The prefecture**: the download has started (D19). Not decided: removing converted zips as the build goes, or more disk (the prefecture is about 1.1 TB of zips, the disk 447 GB);
+- **The prefecture**: the download has started (D19). Not decided: removing converted zips as the build goes, or more disk (the prefecture is about 1.6 TB of zips, the disk 447 GB);
   how a prefecture-sized archive is listed in the viewer (the TileJSON tile list is capped at 4,096); whether stars serves a multi-GB archive well.
 - **Camera direction**: storyboard stills (step 2) and the agent bridge (step 3); a tour can outrun the tiles; the zoom-dependent splat lift may still heave during zooming shots.
 - Real-drag behavior of the zoom ease and of `?mixed=1`; other browsers and GPUs; seams checked in a few views only.

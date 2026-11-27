@@ -110,7 +110,7 @@ the factor-10 build.
 - Extrapolated from these 32 sheets to Nagasaki Prefecture (about 4,130 km2 of land, all of it in the same airborne data), with the E024 caps:
   about **0.17 TB** at 42 MB per km2 of sheet, and about **0.35 TB** if the sea, about half of the 32 sheets and nearly free, is counted out. The sheets are
   a town, its hills and a bay; mountains and other towns are not known to cost the same.
-- The input it would come from (the download page's sheet list, 2026-11-27): 7,824 sheets, about 1.6 TB of LAS, about 1.1 TB as zips.
+- The input it would come from (the download page's sheet list, 2026-11-27): 7,824 sheets, about 1.6 TB as zips (the list's sizes are the zips'), about 2.3 TB of LAS.
 - Against Kawazu's 77 B/m2 (version 6, mobile mapping and airborne): the airborne-only density gives fewer splats per area at z17, and the caps
   make the lower zooms small; the prefecture figure from Kawazu above (about 0.6 TB) is an upper estimate for airborne data.
 
