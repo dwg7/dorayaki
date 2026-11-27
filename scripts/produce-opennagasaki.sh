@@ -21,7 +21,8 @@ say() { echo "$(date '+%F %T') $*" | tee -a "$report"; }
 
 # 1. The sheets.
 if [[ "$sel" =~ ^[0-9]+$ ]]; then
-  codes=$(while read -r c; do [ -f "$ON_DIR/zips/$c.zip" ] && echo "$c"; done < "$ON_DIR/order.txt" | head -n "$sel")
+  # awk reads to the end (head would close the pipe early, which pipefail turns into an exit).
+  codes=$(while read -r c; do if [ -f "$ON_DIR/zips/$c.zip" ]; then echo "$c"; fi; done < "$ON_DIR/order.txt" | awk -v n="$sel" 'NR <= n')
 else
   codes=$(grep -v '^\s*$' "$sel")
 fi
