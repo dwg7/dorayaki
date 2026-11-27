@@ -1,6 +1,8 @@
 # Dark basemap for the splat demo (proposal)
 
-Status: **proposed** (name chosen: `bvmap-nightsky`), with one prototype measured in the demo. Nothing here is hosted or part of bvmap yet.
+Status: **in use.** The style `bvmap-nightsky` is served by hfu/stars (`https://stars.optgeo.org/style/bvmap-nightsky`, checked 2026-11-27) and is the demo's default basemap
+(`?basemap=nightsky|starlight` or a style URL; `demo/src/main.ts`). Whether it is the mechanical night version below or a palette made in bvmap is for the bvmap repository
+to record; this page keeps the reasons and the first prototype. The sections below were written as a proposal on 2026-11-22.
 
 ## Why
 
@@ -49,7 +51,7 @@ is named **`bvmap-nightsky`** (chosen by the owner on 2026-11-22; the other cand
 `bvmap-moonlight`). The tea names stay with koicha (the tile set), so a koicha style from it would follow koicha's own
 naming rule (D20), which is for that repository to settle.
 
-## Next steps (not started)
+## Next steps (as proposed on 2026-11-22; steps 1 and 2 are for the bvmap and koicha sessions, step 3 is done: hosted and the demo's default)
 
 1. Send this note to the bvmap session (palette, halo, sprite) and the koicha session (generated style); neither session was running on 2026-11-22.
 2. Prototype as a second palette in `starlight-input.yaml`; compare with the mechanical version above.

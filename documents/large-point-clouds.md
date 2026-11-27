@@ -60,8 +60,9 @@ rotation code (a different summation order).
 
 The per-voxel Gaussians and the placement and tile split still use ordinary
 JavaScript objects, so very large voxel counts (tens of millions) would need
-a tile-by-tile fit. That is not implemented; it is the next step if a mesh
-needs it.
+a tile-by-tile fit. That is now the tile-aligned build (`build:tiled`, E022,
+documents/tile-aligned-build.md): it builds one z17 tile at a time from its own points, in parallel, and was used for the
+Kawazu grid and for Sasebo (32 sheets, 201 million points). `build:tileset` remains for one mesh or a few.
 
 ## Virtual Shizuoka data
 

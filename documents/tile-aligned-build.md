@@ -1,6 +1,9 @@
 # Tile-aligned, parallel build (design study, E022)
 
-Status: a **study**; step 1 of the plan, the `TileFramer` module, is implemented (`src/geodesy/tile-frame.ts`, E022 follow-up). The rest is not. The measurements and the two scripts behind it are in E022 (EXPERIMENTS.md):
+Status: **implemented and in use** (2026-11-27). The study below (2026-11-17) led to steps 1 to 4: the `TileFramer` module (`src/geodesy/tile-frame.ts`), the tile-local
+build (`src/pointcloud/tile-build.ts`), the orchestrator (`npm run build:tiled`, `scripts/build-tiled.ts`) and the streaming archive writer (`src/pmtiles-file.ts`). It built the Kawazu grid
+without the mesh seam and the hosted Sasebo archive (32 sheets; lower zooms to z13 with a size cap per tile, E024). Since then the pieces of the lower zooms are gzipped float64, not JSON (a third of the disk).
+The rest of this page is the study as written, with each step's result added where it was done. The measurements and the two scripts behind it are in E022 (EXPERIMENTS.md):
 `npm run measure:frame` and `npm run prototype:tile-scatter`. Nothing here changes the hosted archive or the tile format.
 
 ## Why look at it
@@ -53,7 +56,7 @@ jog is the visible defect.
 | scatter | one input file | project each point into its tile's frame, append compact records (tile-local x, y, z as float32, rgb, class and return byte: about 16 bytes) to shard files of that tile |
 | tile | one z17 tile | read the tile's shards; accumulate at the tile grid; adaptive merge for z17, z16, z15 (as now, with the same thresholds); write the z17 tile (with its class plane) and the z16 and z15 pieces |
 | gather | one z16 or z15 tile | join the pieces by position and write the tile |
-| archive | all tiles | write the PMTiles directory (with leaf directories: done) and the tile data without holding the archive in memory (not done) |
+| archive | all tiles | write the PMTiles directory (with leaf directories) and the tile data without holding the archive in memory (done: `src/pmtiles-file.ts`) |
 
 Scatter is needed because LAS files are not sorted in space: without it each tile job would read every file that overlaps the tile, three
 or four files of 300 to 700 MB, and filter them, more work than the tile itself.
