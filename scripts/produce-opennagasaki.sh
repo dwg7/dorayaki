@@ -9,7 +9,7 @@
 # disk on the build machine). Nothing is uploaded.
 #
 # Environment (defaults for the build machine): ON_DIR=/Volumes/dorayaki/opennagasaki, LAS_DIR=/Volumes/dorayaki/data/nagasaki/las,
-# WORKERS=3, CENTRE=129.7198,33.1790, REMOVE_LAS=0 (1: remove the LAS unzipped by this run once the archive is written).
+# WORKERS=3, CENTRE=129.7198,33.1790, REMOVE_LAS=0 (1: remove the LAS unzipped by this run once the archive is written), INCREMENTAL=0 (1: see 2a), LANES=3.
 set -euo pipefail
 name=${1:?name}; sel=${2:?count or codes file}
 ON_DIR=${ON_DIR:-/Volumes/dorayaki/opennagasaki}
@@ -29,6 +29,40 @@ fi
 n=$(echo "$codes" | wc -l | tr -d ' ')
 say "sheets: $n"
 
+# 2a. INCREMENTAL=1 (an area larger than the disk holds as LAS): scatter each sheet on its own as its zip arrives, then remove its LAS, in LANES parallel
+# lanes; the tile jobs below then run on the shards alone (build:tiled reads no LAS header with --centre). Waits for a zip still being downloaded.
+if [ "${INCREMENTAL:-0}" = 1 ]; then
+  LANES=${LANES:-3}
+  work="data/tiled-work/$name"; mkdir -p "$work"
+  npx esbuild scripts/build-tiled.ts --bundle --platform=node --format=esm --outfile=demo/build/build-tiled.mjs --log-level=warning   # as npm run build:tiled bundles it
+  lane() {
+    local k=$1 i=0 c z entry want out
+    for c in $codes; do
+      if [ $((i % LANES)) = "$k" ] && [ ! -f "$work/scatter-$i.json" ]; then
+        z="$ON_DIR/zips/$c.zip"
+        while [ ! -f "$z" ]; do
+          if ! ps -p "$(cat "$ON_DIR/fetch.pid" 2>/dev/null || echo 0)" >/dev/null 2>&1; then say "lane $k: $c has no zip and the downloader is not running"; return 1; fi
+          sleep 60
+        done
+        entry=$(unzip -Z1 "$z" | grep -i '\.las$' | head -1)
+        want=$(unzip -l "$z" | awk -v e="$entry" '$4==e {print $1}')
+        out="$LAS_DIR/$(basename "$entry")"
+        unzip -o -j -q "$z" "$entry" -d "$LAS_DIR"
+        [ "$(stat -f %z "$out")" = "$want" ] || { say "size mismatch after unzip: $c"; return 1; }
+        node demo/build/build-tiled.mjs scatter "$work" "$i" 1 "$out" >> "$ON_DIR/runs/$name.scatter.log" 2>&1 || { say "scatter failed: $c"; return 1; }
+        rm -f -- "$out"
+        echo "$(date '+%F %T') lane $k scattered $i $c" >> "$ON_DIR/runs/$name.scatter.log"
+      fi
+      i=$((i + 1))
+    done
+  }
+  t0=$(date +%s); pids=()
+  for k in $(seq 0 $((LANES - 1))); do lane "$k" & pids+=($!); done
+  for p in "${pids[@]}"; do wait "$p" || { say "a scatter lane failed"; exit 1; }; done
+  say "scatter: $(( $(date +%s) - t0 )) s for $n sheets"
+  files=(); for c in $codes; do files+=("$LAS_DIR/$c.las"); done
+  fresh=()
+else
 # 2. Unzip what is missing (one file per zip; its size checked against the zip's listing).
 files=(); fresh=()
 for c in $codes; do
@@ -45,6 +79,7 @@ for c in $codes; do
   files+=("$out")
 done
 say "LAS ready: ${#files[@]} files ($(du -ch "${files[@]}" | tail -1 | cut -f1)), unzipped now: ${#fresh[@]}"
+fi
 list=$(IFS=,; echo "${files[*]}")
 
 # 3. Build (E024 recipe for the lower zooms; E025 for z17: cells of about 1 m and at most 100,000 splats per tile).

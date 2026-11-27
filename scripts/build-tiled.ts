@@ -255,10 +255,12 @@ async function orchestrate(argv: string[]): Promise<void> {
   const clock = async <T>(label: string, f: () => Promise<T> | T): Promise<T> => { const t = performance.now(); const r = await f(); stage[label] = (performance.now() - t) / 1000; return r; };
 
   // plan
-  const heads = specs.map((s) => { const fd = openSync(parseLasSpec(s).path, "r"); const h = new Uint8Array(375); readSync(fd, h, 0, 375, 0); closeSync(fd); return parseLasHeader(h); });
+  // Only the first file's header is read, and only without --centre: with --centre and finished scatter markers the LAS files may be gone
+  // (produce:opennagasaki with INCREMENTAL=1 scatters each sheet and removes its LAS before the tile jobs).
+  const firstHead = (): ReturnType<typeof parseLasHeader> => { const fd = openSync(parseLasSpec(specs[0]!).path, "r"); const h = new Uint8Array(375); readSync(fd, h, 0, 375, 0); closeSync(fd); return parseLasHeader(h); };
   const centreArg = flags.get("centre");
   const origin = centreArg ? { lng: Number(centreArg.split(",")[0]), lat: Number(centreArg.split(",")[1]) }
-    : jprcsToLatLng(Number(zoneArg), (heads[0]!.min[1] + heads[0]!.max[1]) / 2, (heads[0]!.min[0] + heads[0]!.max[0]) / 2);
+    : ((h) => jprcsToLatLng(Number(zoneArg), (h.min[1] + h.max[1]) / 2, (h.min[0] + h.max[0]) / 2))(firstHead());
 
   // scatter
   await clock("scatter", () => runJobs(
