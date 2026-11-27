@@ -33,14 +33,34 @@ export interface TileStreamerOptions<T> {
   staged?: boolean;
   /** Most tiles held at once, the nearest to the view's centre (default 9: a 3 x 3 block). */
   limit?: number;
+  /**
+   * Hand over what has arrived while a set is still loading, at most every this many milliseconds (off by default). Tiles of the
+   * new set that are present are shown; a tile shown before stays while any new tile overlapping it is still on its way, so the
+   * view has no hole (coarse and fine may overlap for a moment). Without it a set is shown only when complete, and a camera that
+   * keeps moving while tiles take seconds to arrive shows nothing new at all (2026-11-27: a whole Sasebo tour over stars).
+   */
+  progressive?: number;
+  /** Tiles kept after they leave the set (most recent first), so a camera coming back or a prefetch finds them (default 0). */
+  cache?: number;
 }
 
 const key = (t: TileAddress): string => `${t.z}/${t.x}/${t.y}`;
+/** Whether two tiles cover any common ground (the same tile, or one inside the other). */
+function overlaps(a: TileAddress, b: TileAddress): boolean {
+  const [lo, hi] = a.z <= b.z ? [a, b] : [b, a];
+  const d = hi.z - lo.z;
+  return hi.x >> d === lo.x && hi.y >> d === lo.y;
+}
 
 export class TileStreamer<T> {
   private readonly zooms: number[];
   private readonly limit: number;
   private held = new Map<string, StreamedTile<T> | null>();
+  /** Recently arrived tiles outside the present set (insertion order = age), up to `cache`. */
+  private readonly recent = new Map<string, StreamedTile<T> | null>();
+  /** The tiles handed over last. */
+  private shown: Array<StreamedTile<T>> = [];
+  private partialTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly inflight = new Map<string, Promise<StreamedTile<T> | null>>();
   private generation = 0;
   private lastSignature = "";
@@ -55,22 +75,75 @@ export class TileStreamer<T> {
   /** Forget everything held (the consumer lost its copies, e.g. after a lost WebGL context); the next update reloads. */
   reset(): void {
     this.held = new Map();
+    this.recent.clear();
+    this.shown = [];
     this.lastSignature = "";
     this.delivered = false;
   }
 
-  /** Fetch the tiles (reusing held and in-flight ones); `arrived` is called once per tile as it becomes available. */
+  /** A tile that has arrived (held or recent), or undefined. */
+  private known(k: string): StreamedTile<T> | null | undefined {
+    return this.held.has(k) ? this.held.get(k) : this.recent.get(k);
+  }
+
+  private remember(k: string, r: StreamedTile<T> | null): void {
+    const max = this.opts.cache ?? 0;
+    if (max <= 0) return;
+    this.recent.delete(k);
+    this.recent.set(k, r);
+    while (this.recent.size > max) this.recent.delete(this.recent.keys().next().value!);
+  }
+
+  /** Start one load (or join the one in flight); the result is remembered as soon as it arrives. */
+  private loadOne(t: TileAddress): Promise<StreamedTile<T> | null> {
+    const k = key(t);
+    let p = this.inflight.get(k);
+    if (!p) {
+      p = this.opts.load(t).then((data) => {
+        const r = data === null ? null : { tile: t, data };
+        this.inflight.delete(k);
+        this.remember(k, r);
+        return r;
+      });
+      this.inflight.set(k, p);
+    }
+    return p;
+  }
+
+  /** Fetch the tiles (reusing held, recent and in-flight ones); `arrived` is called once per tile as it becomes available. */
   private fetchSet(wanted: readonly TileAddress[], arrived?: () => void): Promise<Array<StreamedTile<T> | null>> {
     return Promise.all(wanted.map((t) => {
-      const k = key(t);
-      if (this.held.has(k)) { arrived?.(); return Promise.resolve(this.held.get(k)!); }
-      let p = this.inflight.get(k);
-      if (!p) {
-        p = this.opts.load(t).then((data) => (data === null ? null : { tile: t, data }));
-        this.inflight.set(k, p);
-      }
-      return p.then((r) => { arrived?.(); return r; });
+      const have = this.known(key(t));
+      if (have !== undefined) { arrived?.(); return Promise.resolve(have); }
+      return this.loadOne(t).then((r) => { this.held.set(key(t), r); arrived?.(); return r; }); // held at once, for progressive delivery
     }));
+  }
+
+  /** Load tiles ahead of need (e.g. where a camera tour is going), without showing them; at most `max` new loads. */
+  prefetch(tiles: readonly TileAddress[], max = 8): number {
+    let started = 0;
+    for (const t of tiles) {
+      if (started >= max) break;
+      const k = key(t);
+      if (this.known(k) !== undefined || this.inflight.has(k)) continue;
+      void this.loadOne(t);
+      started++;
+    }
+    return started;
+  }
+
+  /** What to show while `wanted` is incomplete: its tiles that have arrived, and earlier tiles still covering ones that have not. */
+  private partialOf(wanted: readonly TileAddress[]): Array<StreamedTile<T>> {
+    const arrived: Array<StreamedTile<T>> = [];
+    const pending: TileAddress[] = [];
+    for (const t of wanted) {
+      const r = this.known(key(t));
+      if (r === undefined) pending.push(t);
+      else if (r !== null) arrived.push(r);
+    }
+    const taken = new Set(arrived.map((r) => key(r.tile)));
+    const keep = this.shown.filter((s) => !taken.has(key(s.tile)) && pending.some((t) => overlaps(s.tile, t)));
+    return [...arrived, ...keep];
   }
 
   /**
@@ -101,19 +174,36 @@ export class TileStreamer<T> {
       });
     }
 
+    if (this.partialTimer !== undefined) { clearTimeout(this.partialTimer); this.partialTimer = undefined; }
     void this.fetchSet(wanted, () => {
-      if (generation === this.generation) this.opts.onProgress?.({ zoom, wanted: wanted.length, done: ++done });
+      if (generation !== this.generation) return;
+      this.opts.onProgress?.({ zoom, wanted: wanted.length, done: ++done });
+      const every = this.opts.progressive;
+      if (every !== undefined && done < wanted.length && this.partialTimer === undefined) {
+        this.partialTimer = setTimeout(() => {
+          this.partialTimer = undefined;
+          if (generation !== this.generation) return;
+          const set = this.partialOf(wanted);
+          if (set.length === 0) return;
+          this.shown = set;
+          this.delivered = true;
+          this.opts.onReady(set, zoom);
+        }, every);
+      }
     }).then((results) => {
       for (const [i, t] of wanted.entries()) {
         this.inflight.delete(key(t));
         this.held.set(key(t), results[i] ?? null);
       }
       if (generation !== this.generation) return; // superseded: a newer request will deliver
+      if (this.partialTimer !== undefined) { clearTimeout(this.partialTimer); this.partialTimer = undefined; }
       const next = new Map<string, StreamedTile<T> | null>();
       for (const [i, t] of wanted.entries()) next.set(key(t), results[i] ?? null);
-      this.held = next; // tiles outside the new set are dropped
+      for (const [k, r] of this.held) if (!next.has(k)) this.remember(k, r); // tiles outside the new set leave the set, into the cache
+      this.held = next;
       this.delivered = true;
-      this.opts.onReady(results.filter((r): r is StreamedTile<T> => r !== null), zoom);
+      this.shown = results.filter((r): r is StreamedTile<T> => r !== null);
+      this.opts.onReady(this.shown, zoom);
     });
   }
 }

@@ -878,6 +878,21 @@ a tileset listed in `TOURS` (`sasebo`) shows the control with a Play tour button
 and on the built site served from a local copy of `docs/` under `/dorayaki/` (`?fixture=sasebo` with the stars archive: "Camera tour: 5 shots, 38 s"). In a pane that is not in front the
 frames are throttled, so the time on the control jumps (4 s to 12 s in 3 s of wall time); playback follows the wall clock and still ends on time.
 
+## 2026-11-27: a camera tour over stars showed no new tiles at all; tiles now arrive while the camera moves
+
+hfu saw the Sasebo tour run past unloaded tiles on aalto (Apple M1, 8 GB). Measured on the Pages site (stars through Cloudflare, cold): during the 38 s tour **no set was handed
+to the layer** (2 deliveries, both before it started; the 6 z17 tiles of the start view stayed on screen to the end), while single tiles took 5.6 to 12.9 s on average and up to 37 s to
+arrive. Locally (no network) the same tour got a new set about every second, and decoding and uploading took 0.37 s and 0.77 s in all over the tour: the machine was not the limit.
+Cause: the streamer hands over a set only when all of its tiles have arrived, and a newer view replaces the set being loaded; a camera that keeps moving while tiles take seconds never
+completes a set. (The frame times of these runs are not usable: the pane was not in front and the browser ran at about 1 frame per second.)
+
+Changed (`demo/src/tile-streamer.ts`, on with `?mixed=1`): tiles are handed over as they arrive (at most every 250 ms), keeping a tile shown before where a new tile overlapping it has not
+arrived (no holes; coarse and fine may overlap for a moment); the last 64 tiles are kept after they leave the set; the shot player reports the views 1.5 and 3 s ahead and the demo
+prefetches what the view would choose there (at most 6 new loads each time). The demo no longer drops its copy of a tile's data with `?mixed=1` (a tile may be handed over again).
+After: the same tour from stars had **34 deliveries during the 38 s**, the drawn zoom following the camera (z17, z16, z15 and back); 153 tile loads, median 214 ms, 90th percentile 9.8 s,
+largest 18.5 s (part of the tiles were in Cloudflare's cache from the first run, so the medians are not comparable; the slow ones are tiles loaded for the first time). Not done:
+measuring with the pane in front (frame rate), smaller z17 tiles (the remaining wait is transfer of tiles of up to 6.7 MB, 8.5 MB in the 168-sheet build).
+
 ## 2026-11-27: the whole of Open Nagasaki, on an external disk
 
 The build machine got a 480 GB USB disk (one APFS volume after hfu erased it; it had a 537 MB HFS+ partition and a Linux partition). `data/nagasaki`, `data/virtual-shizuoka` and
@@ -886,4 +901,3 @@ detached; it came off once during the night). The download page's sheet list, sa
 repository downloads them one at a time with 60 s pauses, `01JE` around central Sasebo first (documents/sasebo-expansion.md, last section). In its first ten minutes 9 files, no failures,
 sizes equal to the copies fetched earlier. The 32 sheets held as LAS are downloaded again as zips; their LAS copies are to be removed once each zip is checked against them.
 Documents reviewed on the same day: README, AGENTS, EXPERIMENTS (E022 step 4, E023, E024), and the stale status lines of the documents.
-
