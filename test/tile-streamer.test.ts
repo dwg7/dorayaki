@@ -168,3 +168,55 @@ test("select with staged: the first delivery comes from the selector capped one 
   await tick();
   assert.deepEqual(ready[1], [17, [key(A), key(B)]]);
 });
+
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+test("progressive: tiles that have arrived are shown before the set is complete; the old tile stays where the new one is still on its way", async () => {
+  const L = manualLoader();
+  const ready: string[][] = [];
+  const D = { z: 17, x: 0, y: 1 }; // C (z16 0/0) covers A and D
+  const s = new TileStreamer<string>({ candidates: [A, D, C], load: L.load, onReady: (set) => ready.push(set.map((x) => x.data).sort()), progressive: 5 });
+  s.update(16.5, around(A));
+  L.finish(C);
+  await tick();
+  assert.deepEqual(ready, [[key(C)]]);
+  s.update(17.2, bothOf(D, A)); // now D and A
+  L.finish(A);
+  await wait(20);
+  assert.deepEqual(ready.at(-1), [key(A), key(C)].sort(), "A shown; C kept because D, which it covers, has not arrived");
+  L.finish(D);
+  await tick();
+  assert.deepEqual(ready.at(-1), [key(A), key(D)].sort(), "complete: C is gone");
+});
+
+test("progressive is off by default: nothing is shown until the set is complete", async () => {
+  const L = manualLoader();
+  const ready: string[][] = [];
+  const s = new TileStreamer<string>({ candidates: [A, B, C], load: L.load, onReady: (set) => ready.push(set.map((x) => x.data)) });
+  s.update(17.2, bothOf(A, B));
+  L.finish(A);
+  await wait(20);
+  assert.deepEqual(ready, []);
+});
+
+test("cache: a tile that left the set is found again without loading it; prefetch loads ahead without showing", async () => {
+  const L = manualLoader();
+  const ready: string[][] = [];
+  const s = new TileStreamer<string>({ candidates: [A, B, C], load: L.load, onReady: (set) => ready.push(set.map((x) => x.data)), cache: 8 });
+  assert.equal(s.prefetch([B, B]), 1, "one load, not two");
+  L.finish(B);
+  await tick();
+  assert.deepEqual(ready, [], "a prefetch shows nothing");
+  s.update(17.2, around(A));
+  L.finish(A);
+  await tick();
+  s.update(17.2, around(B)); // B came from the prefetch: no new load
+  await tick();
+  assert.deepEqual(ready.at(-1), [key(B)]);
+  s.update(17.2, around(A)); // A left the set and is in the cache
+  await tick();
+  assert.deepEqual(ready.at(-1), [key(A)]);
+  assert.equal(L.calls.filter((c) => c === key(A)).length, 1);
+  assert.equal(L.calls.filter((c) => c === key(B)).length, 1);
+  assert.equal(s.prefetch([A, B]), 0, "nothing new to load");
+});

@@ -24,7 +24,7 @@ import { classStyle } from "./class-palette.js";
 import { decodeClassPlane, readClassPlane, VEGETATION_CLASSES, CLASS_DERIVED_CANOPY, CLASS_UNCLASSIFIED, type ClassPlane } from "../../src/class-plane.js";
 import { extractClassPlanes } from "../../src/mlt-frame.js";
 import { selectBudgetedTiles, selectMixedTiles } from "./mixed-selection.js";
-import type { View } from "./camera.js";
+import { visibleBounds, type View } from "./camera.js";
 import type { LngLatBoundsArray } from "./tile-view.js";
 
 function tileToLngLat(t: TileAddress, x: number, y: number): [number, number] {
@@ -87,6 +87,8 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         "lz-thick": "tiles/lz-thick/tilejson.json",
         "lz-sparse": "tiles/lz-sparse/tilejson.json",
         "lz-all": "tiles/lz-all/tilejson.json",
+        "sasebo-168": "tiles/sasebo-168/tilejson.json",
+        "sasebo-stars": "https://stars.optgeo.org/dorayaki-sasebo?v=20261125b",
         "sasebo-32q": "tiles/sasebo-32q/tilejson.json",
         "sasebo-32": "tiles/sasebo-32/tilejson.json",
         "sasebo-3513": "tiles/sasebo-3513/tilejson.json",
@@ -114,13 +116,15 @@ const TILESET_DEFAULTS: Readonly<Record<string, Readonly<Record<string, string>>
   "kawazu-s10": { terrain: "1", extent: "1.3" },
   "kawazu-s16": { terrain: "1", extent: "1.3" },
   ...Object.fromEntries(["sasebo-3513", "sr-cur", "sr-t1c1", "sr-l2", "sr-t05c1", "sr-l1", "lz-cell2", "lz-thick", "lz-sparse", "lz-all"].map((n) => [n, { terrain: "1", extent: "1.3" }])), // E023 recipe candidates (one sheet)
+  "sasebo-168": { terrain: "1", extent: "1.3", mixed: "1" },
+  "sasebo-stars": { terrain: "1", extent: "1.3", mixed: "1" },
   "sasebo-32q": { terrain: "1", extent: "1.3", mixed: "1" },
   "sasebo-32": { terrain: "1", extent: "1.3", mixed: "1" },
   t4q: { terrain: "1", extent: "1.3", mixed: "1" },
   sasebo: { terrain: "1", extent: "1.3", mixed: "1" }, // as Kawazu (merged splats, hills above the sea), plus tiles of several zooms by distance: the nine-tile limit covered only part of a tilted view (`?mixed=0` switches it off)
 };
 /** Camera tours offered (shot scripts in demo/shots/, copied to the site's shots/): the control shows a Play button for these tilesets. */
-const TOURS: Readonly<Record<string, string>> = { sasebo: "sasebo", "sasebo-32q": "sasebo" };
+const TOURS: Readonly<Record<string, string>> = { sasebo: "sasebo", "sasebo-32q": "sasebo", "sasebo-168": "sasebo", "sasebo-stars": "sasebo" };
 /** A query flag: the URL's value, else the tileset's default. */
 const flag = (name: string, tileset: string): string | null =>
   new URLSearchParams(location.search).get(name) ?? TILESET_DEFAULTS[tileset]?.[name] ?? null;
@@ -493,6 +497,9 @@ map.on("load", () => {
       ? selectMixedTiles(tiles, b, currentView(), { limit: 24, ...(maxZoom !== undefined ? { maxZoom } : {}) })
       : selectBudgetedTiles(tiles, b, currentView(), { maxBytes: budgetMB * 1e6, maxSplats: budgetSplats, knownBytes: (t) => tileSizes.get(sizeKey(t)), priorBytes: guessTileBytes, ...(maxZoom !== undefined ? { maxZoom } : {}) }) } : {}),
     staged: flag("staged", tileset) !== "0", // show the next coarser zoom while the first set loads (`?staged=0` switches it off)
+    // With `?mixed=1`: show tiles as they arrive (a moving camera otherwise waits for complete sets that keep being replaced)
+    // and keep the last 64 tiles, for a camera coming back and for the tour's prefetch.
+    ...(mixed ? { progressive: 250, cache: 64 } : {}),
     load: loadTile,
     onProgress: ({ zoom, wanted, done }) => {
       if (done < wanted) setStatus(`${summary} Loading z${zoom}: ${done}/${wanted} tile(s)…`);
@@ -501,7 +508,9 @@ map.on("load", () => {
       deliveries.push({ ms: Math.round(performance.now()), zoom, tiles: set.length, bytes: set.reduce((n, x) => n + x.data.byteLength, 0) });
       loaded = set.map((x) => x.data);
       layer.setTiles(loaded.map((t) => ({ tile: t.tile, ...(t.packed ? { packed: t.packed } : {}), ...(t.classes ? { classes: t.classes } : {}), ...(t.instances ? { instances: t.instances } : {}), levels: t.levels })));
-      for (const t of loaded) { t.instances = undefined; t.packed = undefined; t.classes = undefined; } // the layer owns the data now; do not keep a second copy
+      // The layer owns the data now; drop the second copy. Not with `?mixed=1`: there a tile may be handed over again after the
+      // layer let it go (progressive sets, the cache), and it must still carry its data.
+      if (!mixed) for (const t of loaded) { t.instances = undefined; t.packed = undefined; t.classes = undefined; }
       const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.count, 0);
       void ensureClasses();
@@ -538,6 +547,14 @@ map.on("load", () => {
         const play = (): void => {
           console.info(`shots: playing ${script.shots.length} shot(s) from ${url}`);
           stop = playShots(map, script, {
+            // Load the tiles the camera will need 1.5 and 3 s from now (with `?mixed=1`, as the view would choose them there).
+            ...(mixed ? { onAhead: (views) => {
+              const canvas = map.getCanvas();
+              for (const v of views) {
+                const view: View = { lng: v.center[0], lat: v.center[1], zoom: v.zoom, bearing: v.bearing, pitch: v.pitch, width: canvas.clientWidth, height: canvas.clientHeight, centreZ: v.elevation ?? map.getCenterElevation() };
+                streamer.prefetch(selectBudgetedTiles(tiles, visibleBounds(view), view, { maxBytes: budgetMB * 1e6, maxSplats: budgetSplats, knownBytes: (t) => tileSizes.get(sizeKey(t)), priorBytes: guessTileBytes }), 6);
+              }
+            } } : {}),
             ignoreInput: isShotControlEvent,
             onShot: (i, shot) => { index = i; console.info(`shots: ${i + 1}/${script.shots.length} ${shot.type} (${shot.duration_s} s)`); },
             onFrame: (t, d) => {

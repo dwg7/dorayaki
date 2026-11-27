@@ -34,7 +34,8 @@
     "compare:tile-build": "esbuild scripts/compare-tile-build.ts --bundle --platform=node --format=esm --outfile=demo/build/compare-tile-build.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/compare-tile-build.mjs",
     "build:tiled": "esbuild scripts/build-tiled.ts --bundle --platform=node --format=esm --outfile=demo/build/build-tiled.mjs --log-level=warning && node --max-old-space-size=4096 demo/build/build-tiled.mjs",
     "measure:seam": "esbuild scripts/measure-seam.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-seam.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-seam.mjs",
-    "measure:frame": "esbuild scripts/measure-frame.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-frame.mjs --log-level=warning && node demo/build/measure-frame.mjs"
+    "measure:frame": "esbuild scripts/measure-frame.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-frame.mjs --log-level=warning && node demo/build/measure-frame.mjs",
+    "produce:opennagasaki": "bash scripts/produce-opennagasaki.sh"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
