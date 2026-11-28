@@ -30,6 +30,7 @@ import { PmtilesCompression, PmtilesTileType } from "../src/pmtiles.js";
 import { writePmtilesFile } from "../src/pmtiles-file.js";
 import { PLANE_CLASS_SLOTS, planeClassSlot, planeOpacityOf, planeSlotToCode } from "../src/pointcloud/class-slots.js";
 import { forEachLasRecord, parseLasHeader } from "../src/pointcloud/las.js";
+import { isStale, piecePaths } from "../src/pointcloud/tile-ledger.js";
 import { parseLasSpec } from "../src/pointcloud/las-spec.js";
 import { buildTilePieces, type TileBuildConfig } from "../src/pointcloud/tile-build.js";
 import { SHARD_RECORD_BYTES, forEachShardRecord, writeShardRecord } from "../src/pointcloud/tile-shard.js";
@@ -188,7 +189,8 @@ function tileJob([work, x, y]: string[]): void {
     }
   }, tile, recipe());
   const out = process.env.DORAYAKI_TILED_OUT!;
-  const stats: Record<string, unknown> = { tile: `${x}/${y}`, points: pieces[0]!.points, voxels: pieces[0]!.voxels, perZoom: {} as Record<number, number> };
+  // `sources`: the shard files this build read (D26: a later sheet that adds one makes the tile stale).
+  const stats: Record<string, unknown> = { tile: `${x}/${y}`, points: pieces[0]!.points, voxels: pieces[0]!.voxels, sources: files, perZoom: {} as Record<number, number> };
   for (const p of pieces) {
     (stats.perZoom as Record<number, number>)[p.tile.z] = p.splats.length;
     if (p.mergeScale !== undefined) ((stats.mergeScale ??= {}) as Record<number, number>)[p.tile.z] = p.mergeScale;
@@ -255,10 +257,12 @@ async function orchestrate(argv: string[]): Promise<void> {
   const clock = async <T>(label: string, f: () => Promise<T> | T): Promise<T> => { const t = performance.now(); const r = await f(); stage[label] = (performance.now() - t) / 1000; return r; };
 
   // plan
-  const heads = specs.map((s) => { const fd = openSync(parseLasSpec(s).path, "r"); const h = new Uint8Array(375); readSync(fd, h, 0, 375, 0); closeSync(fd); return parseLasHeader(h); });
+  // Only the first file's header is read, and only without --centre: with --centre and finished scatter markers the LAS files may be gone
+  // (produce:opennagasaki with INCREMENTAL=1 scatters each sheet and removes its LAS before the tile jobs).
+  const firstHead = (): ReturnType<typeof parseLasHeader> => { const fd = openSync(parseLasSpec(specs[0]!).path, "r"); const h = new Uint8Array(375); readSync(fd, h, 0, 375, 0); closeSync(fd); return parseLasHeader(h); };
   const centreArg = flags.get("centre");
   const origin = centreArg ? { lng: Number(centreArg.split(",")[0]), lat: Number(centreArg.split(",")[1]) }
-    : jprcsToLatLng(Number(zoneArg), (heads[0]!.min[1] + heads[0]!.max[1]) / 2, (heads[0]!.min[0] + heads[0]!.max[0]) / 2);
+    : ((h) => jprcsToLatLng(Number(zoneArg), (h.min[1] + h.max[1]) / 2, (h.min[0] + h.max[0]) / 2))(firstHead());
 
   // scatter
   await clock("scatter", () => runJobs(
@@ -272,6 +276,22 @@ async function orchestrate(argv: string[]): Promise<void> {
     const [x, y] = d.split("_").map(Number) as [number, number];
     return { x, y, bytes };
   }).sort((a, b) => b.bytes - a.bytes || a.x - b.x || a.y - b.y);
+  // D26: a tile built before a later sheet added shards to it is built again; its z17 tile and its pieces of the lower zooms go first.
+  let rebuilt = 0;
+  for (const t of tiles) {
+    const markerPath = `${work}/done/${t.x}_${t.y}.json`;
+    if (!existsSync(markerPath)) continue;
+    const dir = `${work}/shards/${t.x}_${t.y}`;
+    const files = readdirSync(dir).filter((f) => f.endsWith(".bin"));
+    const newest = Math.max(...files.map((f) => statSync(`${dir}/${f}`).mtimeMs));
+    const marker = JSON.parse(readFileSync(markerPath, "utf8")) as { sources?: string[] };
+    if (!isStale(files, marker, newest, statSync(markerPath).mtimeMs)) continue;
+    rmSync(markerPath);
+    rmSync(`${out}/${ZOOM}/${t.x}/${t.y}.mlt`, { force: true });
+    for (const p of piecePaths(t.x, t.y, LOWER_ZOOMS, ZOOM)) rmSync(`${work}/${p}`, { force: true });
+    rebuilt++;
+  }
+  if (rebuilt > 0) console.log(`D26: ${rebuilt} tile(s) gained shards since they were built; building them again`);
   await clock("tiles", () => runJobs(
     tiles.flatMap((t) => (existsSync(`${work}/done/${t.x}_${t.y}.json`) ? [] : [["tile", work, String(t.x), String(t.y)]])), workers, { DORAYAKI_TILED_OUT: out }));
   const jobStats = tiles.map((t) => JSON.parse(readFileSync(`${work}/done/${t.x}_${t.y}.json`, "utf8")) as { points: number; seconds: number; maxRssMB: number; perZoom: Record<number, number> });

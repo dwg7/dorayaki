@@ -2,7 +2,17 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { buildTilePieces, type TilePointFeed } from "../src/pointcloud/tile-build.js";
+import { isStale, piecePaths } from "../src/pointcloud/tile-ledger.js";
 import { tileWidthMetres } from "../src/tile-geometry.js";
+
+test("D26: a built tile is stale when a later sheet added a shard file to it; old markers fall back to times; pieces sit under each ancestor", () => {
+  assert.equal(isStale(["0.bin", "1.bin"], undefined, 0, 0), true, "never built");
+  assert.equal(isStale(["0.bin", "1.bin"], { sources: ["0.bin", "1.bin"] }, 99, 1), false, "the same shards, whatever the times");
+  assert.equal(isStale(["0.bin", "1.bin", "7.bin"], { sources: ["0.bin", "1.bin"] }, 0, 99), true, "sheet 7 arrived since");
+  assert.equal(isStale(["0.bin"], {}, 200, 100), true, "an old marker without sources: shards newer than it");
+  assert.equal(isStale(["0.bin"], {}, 100, 200), false);
+  assert.deepEqual(piecePaths(112769, 52729, [16, 13]), ["pieces/16/56384/26364/112769_52729.f64.gz", "pieces/13/7048/3295/112769_52729.f64.gz"]);
+});
 
 const TILE = { z: 17, x: 116122, y: 52009 };
 const W = tileWidthMetres(TILE);
