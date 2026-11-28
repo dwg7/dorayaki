@@ -18,6 +18,14 @@
  *   2026-11-26: "it wobbles in height as if it followed the terrain"). While playing, the player sets the look-at
  *   point's height itself: the ground at the start and at the end of each shot, interpolated with the shot's easing
  *   in between, and gives it to `jumpTo` as `elevation`; the map's own clamping is switched off and restored at the end.
+ * - `track` follows a polyline `path` of `[lng, lat, alt?]` points (GeoJSON coordinates): the look-at point runs along it at an even
+ *   arc-length rate, `lead_m` ahead of the point the camera stands beside; the camera stands `offset_m` to the side (positive: right
+ *   of the direction of travel) and `alt_m` above the path there. The side is taken from the path's direction smoothed over
+ *   `TRACK_TANGENT_HALF_WIDTH_M` either way, so sparse vertices do not swing the camera. Heights: the path's `alt` when every point
+ *   has one (metres above sea level), else the ground at its vertices, else 0; the look-at point gets that height as `elevation`
+ *   when the player owns the height.
+ * - Without terrain, a caller can still own the height: `PlayOptions.groundAt` (for example from the data's own heights) makes
+ *   the player set `elevation` as with terrain.
  * - A shot that does not give a quantity keeps the one the camera already has (the end of the previous shot, or the
  *   map's view when playing starts). A shot whose look-at point differs from where the camera is pointed starts with a
  *   cut, except `traverse`, which travels.
@@ -61,7 +69,10 @@ export interface CraneShot extends ShotBase { type: "crane"; look_at: LngLat; fr
 export interface TraverseShot extends ShotBase { type: "traverse"; from_look_at?: LngLat; to_look_at: LngLat; camera: CameraSpec }
 export interface OrbitShot extends ShotBase { type: "orbit"; look_at: LngLat; camera: CameraSpec; sweep_deg: number }
 export interface DollyShot extends ShotBase { type: "dolly"; look_at: LngLat; to: { range_m: number } }
-export type Shot = HoldShot | CraneShot | TraverseShot | OrbitShot | DollyShot;
+/** A path point: longitude, latitude, and optionally the height in metres above sea level. */
+export type PathPoint = [number, number] | [number, number, number];
+export interface TrackShot extends ShotBase { type: "track"; path: PathPoint[]; offset_m: number; alt_m: number; lead_m: number }
+export type Shot = HoldShot | CraneShot | TraverseShot | OrbitShot | DollyShot | TrackShot;
 
 export interface ShotScript { shots: Shot[]; warnings: string[] }
 
@@ -69,8 +80,8 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /**
- * Reads a shot script (parsed JSON). Throws on anything it cannot play (an unknown or unsupported type such as `track`,
- * a missing look-at point, a duration that is not a positive number, a value that is not a number); keys it does not
+ * Reads a shot script (parsed JSON). Throws on anything it cannot play (an unknown type, a missing look-at point, a `track`
+ * path of fewer than two points or of no length, heights on some path points only, a duration that is not a positive number, a value that is not a number); keys it does not
  * use (`intent`, `subject`, `_note`, ...) are ignored. `warnings` lists what it plays differently from what the script says.
  */
 export function parseShotScript(json: unknown): ShotScript {
@@ -133,8 +144,24 @@ export function parseShotScript(json: unknown): ShotScript {
         if (to.range_m === undefined || !(to.range_m > 0)) throw new Error(`${where}: dolly needs a positive to.range_m`);
         return { ...base, type: "dolly", look_at: point("look_at", true)!, to: { range_m: to.range_m } };
       }
+      case "track": {
+        const path = raw.path;
+        if (!Array.isArray(path) || path.length < 2) throw new Error(`${where}: track needs a path of at least two [lng, lat, alt?] points`);
+        const points = path.map((q: unknown, k): PathPoint => {
+          if (!Array.isArray(q) || (q.length !== 2 && q.length !== 3) || !q.every(finite)) throw new Error(`${where}: path point ${k + 1} must be [lng, lat] or [lng, lat, alt]`);
+          return q.length === 3 ? [q[0] as number, q[1] as number, q[2] as number] : [q[0] as number, q[1] as number];
+        });
+        const withAlt = points.filter((q) => q.length === 3).length;
+        if (withAlt !== 0 && withAlt !== points.length) throw new Error(`${where}: either every path point has a height or none has`);
+        if (!(localPath(points).length > 0)) throw new Error(`${where}: the path has no length`);
+        const alt_m = num(raw, "alt_m", true)!;
+        if (!(alt_m > 0)) throw new Error(`${where}: alt_m must be positive`);
+        const lead_m = num(raw, "lead_m") ?? 0;
+        if (lead_m < 0) throw new Error(`${where}: lead_m must not be negative`);
+        return { ...base, type: "track", path: points, offset_m: num(raw, "offset_m") ?? 0, alt_m, lead_m };
+      }
       default:
-        throw new Error(`${where}: type ${JSON.stringify(raw.type)} is not played (hold, crane, traverse, orbit and dolly are)`);
+        throw new Error(`${where}: type ${JSON.stringify(raw.type)} is not played (hold, crane, traverse, orbit, dolly and track are)`);
     }
   });
   return { shots, warnings };
@@ -161,6 +188,32 @@ export function resolveCamera(spec: CameraSpec, base: CameraState, look: LngLat,
   } else if (spec.alt_m !== undefined) distance = spec.alt_m / Math.max(Math.cos(pitch * DEG), 1e-6);
   else if (spec.radius_m !== undefined) distance = spec.radius_m / Math.max(Math.sin(pitch * DEG), 1e-6);
   return { lng: look.lng, lat: look.lat, distance, pitch, bearing: spec.bearing ?? base.bearing };
+}
+
+/** Half the length over which a track's direction is smoothed (metres either way), for the side the camera stands on. */
+export const TRACK_TANGENT_HALF_WIDTH_M = 25;
+/** The smallest height of a track's camera above its look-at point (metres), so it never looks up or sideways along a slope. */
+export const TRACK_MIN_HEIGHT_M = 1;
+const EARTH_RADIUS_M = 6378137;
+
+/** A track path in local metres (east, north) around its first point, with the arc length at each vertex. */
+interface LocalPath { lng0: number; lat0: number; kx: number; ky: number; xy: Array<[number, number]>; arc: number[]; length: number }
+function localPath(path: readonly PathPoint[]): LocalPath {
+  const [lng0, lat0] = path[0]!;
+  const ky = EARTH_RADIUS_M * DEG, kx = ky * Math.cos(lat0 * DEG);
+  const xy = path.map(([lng, lat]): [number, number] => [(lng - lng0) * kx, (lat - lat0) * ky]);
+  const arc = [0];
+  for (let i = 1; i < xy.length; i++) arc.push(arc[i - 1]! + Math.hypot(xy[i]![0] - xy[i - 1]![0], xy[i]![1] - xy[i - 1]![1]));
+  return { lng0, lat0, kx, ky, xy, arc, length: arc[arc.length - 1]! };
+}
+/** The position (local metres) and the per-vertex value interpolated at arc length `s` (clamped to the path). */
+function alongPath(p: LocalPath, values: readonly number[], s: number): { x: number; y: number; v: number } {
+  const t = Math.min(p.length, Math.max(0, s));
+  let i = 1;
+  while (i < p.arc.length - 1 && p.arc[i]! < t) i++;
+  const a = p.arc[i - 1]!, b = p.arc[i]!;
+  const f = b > a ? (t - a) / (b - a) : 0;
+  return { x: lerp(p.xy[i - 1]![0], p.xy[i]![0], f), y: lerp(p.xy[i - 1]![1], p.xy[i]![1], f), v: lerp(values[i - 1]!, values[i]!, f) };
 }
 
 /** How much farther than the straight interpolation a traverse pulls back at its middle (0.5: half as far again). */
@@ -230,6 +283,10 @@ export function buildTimeline(shots: readonly Shot[], start: CameraState, height
         at = (u) => ({ ...c, bearing: b0 + shot.sweep_deg * e(u) });
         break;
       }
+      case "track": {
+        at = trackCamera(shot, groundAt, e);
+        break;
+      }
       case "dolly": {
         // Along the view axis: pitch and bearing stay, the distance goes to range_m.
         const { distance: d0, pitch, bearing } = prev; // copied now: `prev` moves on to the next shot
@@ -237,7 +294,7 @@ export function buildTimeline(shots: readonly Shot[], start: CameraState, height
         break;
       }
     }
-    if (groundAt) {
+    if (groundAt && shot.type !== "track") { // a track sets its own heights
       const flat = at;
       const a = flat(0), b = flat(1);
       const sameAsBefore = a.lng === prev.lng && a.lat === prev.lat;
@@ -250,6 +307,37 @@ export function buildTimeline(shots: readonly Shot[], start: CameraState, height
     prev = at(1);
   }
   return { segments, duration: t, start, end: prev };
+}
+
+/**
+ * A track shot's camera at progress u (see the file comment): the point beside the camera runs from the start of the path to
+ * `lead_m` before its end (a lead longer than the path is shortened to it), the look-at point `lead_m` ahead of it.
+ */
+function trackCamera(shot: TrackShot, groundAt: GroundAt | undefined, e: (u: number) => number): (u: number) => CameraState {
+  const p = localPath(shot.path);
+  const given = shot.path[0]!.length === 3;
+  const heights = shot.path.map((q) => (given ? q[2]! : groundAt?.(q[0], q[1]) ?? Number.NaN));
+  // Vertices with no known ground take the height before them (or the first known one; 0 if none is known).
+  const known = heights.findIndex((h) => Number.isFinite(h));
+  for (let i = 0; i < heights.length; i++) {
+    if (!Number.isFinite(heights[i]!)) heights[i] = i > 0 && i > known ? heights[i - 1]! : known >= 0 ? heights[known]! : 0;
+  }
+  const lead = Math.min(shot.lead_m, p.length), w = TRACK_TANGENT_HALF_WIDTH_M;
+  return (u) => {
+    const s = e(u) * (p.length - lead);
+    const base = alongPath(p, heights, s), look = alongPath(p, heights, s + lead);
+    const ahead = alongPath(p, heights, s + w), behind = alongPath(p, heights, s - w);
+    const tx = ahead.x - behind.x, ty = ahead.y - behind.y, tn = Math.hypot(tx, ty) || 1;
+    // Right of the direction of travel (x east, y north) is (ty, -tx).
+    const cx = base.x + (shot.offset_m * ty) / tn, cy = base.y - (shot.offset_m * tx) / tn;
+    const dx = look.x - cx, dy = look.y - cy, h = Math.hypot(dx, dy);
+    const v = Math.max(TRACK_MIN_HEIGHT_M, base.v + shot.alt_m - look.v);
+    const bearing = (h > 0.01 ? Math.atan2(dx, dy) : Math.atan2(tx, ty)) / DEG;
+    return {
+      lng: p.lng0 + look.x / p.kx, lat: p.lat0 + look.y / p.ky, distance: Math.hypot(h, v), pitch: Math.atan2(h, v) / DEG, bearing,
+      ...(groundAt ? { elevation: look.v } : {}),
+    };
+  };
 }
 
 /** The camera at `time` seconds into the timeline (before the start: the first shot's start; after the end: the last frame). */
@@ -322,6 +410,11 @@ export interface PlayOptions {
   aheadEvery?: number;
   /** Input that does not take the camera back (the player's own control sits inside the map's container). */
   ignoreInput?: (event: { target: unknown }) => boolean;
+  /**
+   * The ground height at a point, when the caller knows it (for example from the data's own heights): the player then sets the
+   * look-at point's height with or without terrain, as it does with terrain. With terrain it replaces the terrain's own query.
+   */
+  groundAt?: GroundAt;
   /** The frame clock (default: the browser's requestAnimationFrame); tests pass their own. */
   frames?: FrameClock;
 }
@@ -343,11 +436,14 @@ const INTERRUPTS = ["pointerdown", "wheel", "touchstart", "keydown"] as const;
 export function playShots(map: PlayerMap, script: ShotScript, options: PlayOptions = {}): () => void {
   const c = map.getCenter();
   const heightPx = map.getCanvas().clientHeight;
-  // With terrain the player sets the look-at point's height itself (see the file comment) and switches the map's clamping off meanwhile.
-  const ownsHeight = !!map.getTerrain?.() && !!map.queryTerrainElevation && !!map.setCenterClampedToGround && !!map.getCenterElevation;
+  // With terrain, or with the caller's `groundAt`, the player sets the look-at point's height itself (see the file comment) and
+  // switches the map's clamping off meanwhile.
+  const terrain = !!map.getTerrain?.() && !!map.queryTerrainElevation && !!map.getCenterElevation;
+  const ownsHeight = (terrain || !!options.groundAt) && !!map.setCenterClampedToGround;
   const wasClamped = map.getCenterClampedToGround?.() ?? true;
-  const groundAt: GroundAt | undefined = ownsHeight ? (lng, lat) => map.queryTerrainElevation!({ lng, lat }) : undefined;
-  const view = { lng: c.lng, lat: c.lat, zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing(), ...(ownsHeight ? { elevation: map.getCenterElevation!() } : {}) };
+  const groundAt: GroundAt | undefined = !ownsHeight ? undefined : options.groundAt ?? ((lng, lat) => map.queryTerrainElevation!({ lng, lat }));
+  const startElevation = !ownsHeight ? undefined : options.groundAt ? options.groundAt(c.lng, c.lat) ?? map.getCenterElevation?.() ?? 0 : map.getCenterElevation!();
+  const view = { lng: c.lng, lat: c.lat, zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing(), ...(startElevation !== undefined ? { elevation: startElevation } : {}) };
   const timeline = buildTimeline(script.shots, cameraOfMapView(view, heightPx), heightPx, groundAt);
   if (ownsHeight) map.setCenterClampedToGround!(false);
   const container = map.getContainer();

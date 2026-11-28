@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { distanceForZoom, zoomForDistance } from "../demo/src/camera.js";
 import {
   buildTimeline, cameraOfMapView, describePlayback, ease, mapViewOf, parseShotScript, playShots, sampleTimeline,
-  type CameraState, type MapView, type PlayerMap, type Shot,
+  TRACK_TANGENT_HALF_WIDTH_M, type CameraState, type MapView, type PlayerMap, type Shot,
 } from "../demo/src/shot-player.js";
 
 const H = 600;
@@ -34,9 +34,14 @@ test("easings run from 0 to 1, clamp outside, and easeInOut passes the middle at
   assert.ok(ease("easeIn", 0.3) < 0.3 && ease("easeOut", 0.3) > 0.3);
 });
 
-test("the script is pure data: unknown types (track), missing look-at, bad durations and easings are refused; extra keys are ignored", () => {
+test("the script is pure data: unknown types, missing look-at, bad durations, easings and track paths are refused; extra keys are ignored", () => {
   assert.throws(() => parseShotScript({}), /shots/);
-  assert.throws(() => shots([{ type: "track", duration_s: 4, look_at: { lng: 0, lat: 0 } }]), /track/);
+  assert.throws(() => shots([{ type: "pan", duration_s: 4, look_at: { lng: 0, lat: 0 } }]), /not played/);
+  assert.throws(() => shots([{ type: "track", duration_s: 4, alt_m: 30, path: [[0, 0]] }]), /two/);
+  assert.throws(() => shots([{ type: "track", duration_s: 4, alt_m: 30, path: [[0, 0], [0, 0]] }]), /no length/);
+  assert.throws(() => shots([{ type: "track", duration_s: 4, alt_m: 30, path: [[0, 0, 5], [0.001, 0]] }]), /every path point/);
+  assert.throws(() => shots([{ type: "track", duration_s: 4, alt_m: 30, path: [[0, 0], ["x", 0]] }]), /path point 2/);
+  assert.throws(() => shots([{ type: "track", duration_s: 4, path: [[0, 0], [0.001, 0]] }]), /alt_m/);
   assert.throws(() => shots([{ type: "hold", duration_s: 4 }]), /look_at/);
   assert.throws(() => shots([{ type: "hold", duration_s: 0, look_at: { lng: 0, lat: 0 } }]), /positive/);
   assert.throws(() => shots([{ type: "hold", duration_s: 2, easing: "bounce", look_at: { lng: 0, lat: 0 } }]), /easing/);
@@ -225,6 +230,81 @@ test("playShots with terrain: the map's clamping is switched off while playing, 
   f.step(1500);
   assert.deepEqual(ends, ["done"]);
   assert.equal(clamped, true);
+});
+
+/** Metres east and north of `o` to lng/lat (the same local approximation the player uses). */
+const offset = (o: { lng: number; lat: number }, east: number, north: number): [number, number] =>
+  [o.lng + east / (6378137 * DEG * Math.cos(o.lat * DEG)), o.lat + north / (6378137 * DEG)];
+/** The camera's place in metres east and north of `o`, and its height above the look-at point. */
+const cameraPlace = (c: CameraState, o: { lng: number; lat: number }): { east: number; north: number; up: number } => {
+  const kx = 6378137 * DEG * Math.cos(o.lat * DEG), ky = 6378137 * DEG, h = horiz(c);
+  return { east: (c.lng - o.lng) * kx - h * Math.sin(c.bearing * DEG), north: (c.lat - o.lat) * ky - h * Math.cos(c.bearing * DEG), up: alt(c) };
+};
+
+test("track: the look-at point runs along the path lead_m ahead, the camera stands offset_m to the right and alt_m above", () => {
+  const o = { lng: 139.83, lat: 38.73 };
+  // 1 km due east, then 1 km due north.
+  const path = [offset(o, 0, 0), offset(o, 1000, 0), offset(o, 1000, 1000)];
+  const tl = buildTimeline(shots([{ type: "track", duration_s: 20, easing: "linear", path, offset_m: 40, alt_m: 30, lead_m: 80 }]), start, H);
+  // u = 0: the camera beside the start, looking 80 m ahead along the first leg; right of eastward travel is south.
+  const c0 = sampleTimeline(tl, 0).camera, p0 = cameraPlace(c0, o);
+  assert.ok(near((c0.lng - o.lng) * 6378137 * DEG * Math.cos(o.lat * DEG), 80, 1e-6), "look-at 80 m east");
+  assert.ok(Math.abs(p0.east) < 1e-6 && Math.abs(p0.north + 40) < 1e-6 && near(p0.up, 30), JSON.stringify(p0));
+  // Arc length runs evenly: half way, the camera is beside 960 m (on the first leg), the look-at point 40 m up the second.
+  const c1 = sampleTimeline(tl, 10).camera, p1 = cameraPlace(c1, o);
+  assert.ok(Math.abs(p1.east - 960) < 1e-6 && Math.abs(p1.north + 40) < 1e-6, JSON.stringify(p1));
+  assert.ok(Math.abs((c1.lat - o.lat) * 6378137 * DEG - 40) < 1e-6, "look-at 40 m north on the second leg");
+  // At the end: beside 1920 m (920 m north on the second leg), right of northward travel is east; the look-at point at the end.
+  const c2 = sampleTimeline(tl, 20).camera, p2 = cameraPlace(c2, o);
+  assert.ok(Math.abs(p2.east - 1040) < 1e-6 && Math.abs(p2.north - 920) < 1e-6, JSON.stringify(p2));
+  assert.ok(near(c2.lng, path[2]![0]) && near(c2.lat, path[2]![1]));
+  // Without groundAt the player does not set the height.
+  assert.equal(c2.elevation, undefined);
+});
+
+test("track: the side is smoothed over the corner, a negative offset is the left, a lead longer than the path is shortened", () => {
+  const o = { lng: 139.83, lat: 38.73 };
+  const path = [offset(o, 0, 0), offset(o, 1000, 0), offset(o, 1000, 1000)];
+  // At the corner, the direction is the mean of east and north over ±25 m: the camera stands south-east of it, not on a 90° jump.
+  const tl = buildTimeline(shots([{ type: "track", duration_s: 2, easing: "linear", path, offset_m: -40, alt_m: 30 }]), start, H);
+  const p = cameraPlace(sampleTimeline(tl, 1).camera, o), k = 40 / Math.SQRT2;
+  assert.ok(Math.abs(p.east - (1000 - k)) < 1e-6 && Math.abs(p.north - k) < 1e-6, `left of north-east travel at the corner: ${JSON.stringify(p)}`);
+  assert.equal(TRACK_TANGENT_HALF_WIDTH_M, 25);
+  const long = buildTimeline(shots([{ type: "track", duration_s: 2, path, alt_m: 30, lead_m: 5000 }]), start, H);
+  const a = sampleTimeline(long, 0).camera, b = sampleTimeline(long, 2).camera;
+  assert.ok(near(a.lng, b.lng) && near(a.lat, b.lat) && near(a.lng, path[2]![0]), "the camera at the start, looking at the end, throughout");
+});
+
+test("track heights: the path's alt sets the look-at height; the camera stands alt_m above the path beside it; else the ground at the vertices", () => {
+  const o = { lng: 139.83, lat: 38.73 };
+  // A viaduct: 10 m, rising to 18 m over 100 m, then flat.
+  const path = [[...offset(o, 0, 0), 10], [...offset(o, 100, 0), 18], [...offset(o, 400, 0), 18]];
+  const tl = buildTimeline(shots([{ type: "track", duration_s: 4, easing: "linear", path, alt_m: 30, lead_m: 50 }]), { ...start, elevation: 0 }, H, () => 999);
+  const c0 = sampleTimeline(tl, 0).camera;
+  assert.ok(near(c0.elevation!, 14), "50 m along the ramp");
+  assert.ok(near(alt(c0), 10 + 30 - 14), "the camera 30 m above the path beside it (10 m), above a look-at point at 14 m");
+  assert.ok(near(sampleTimeline(tl, 4).camera.elevation!, 18));
+  // No alt in the path: the ground at the vertices, interpolated along it (not sampled every frame).
+  const flat = [offset(o, 0, 0), offset(o, 400, 0)];
+  const g = buildTimeline(shots([{ type: "track", duration_s: 4, easing: "linear", path: flat, alt_m: 30 }]), start, H, (lng) => (lng === flat[0]![0] ? 0 : lng === flat[1]![0] ? 40 : 500));
+  assert.ok(near(sampleTimeline(g, 2).camera.elevation!, 20));
+});
+
+test("playShots with the caller's groundAt and no terrain: the player owns the height, from groundAt", () => {
+  const f = fakeMap();
+  let clamped = true;
+  const map = { ...f.map, getCenterClampedToGround: () => clamped, setCenterClampedToGround: (v: boolean) => { clamped = v; } };
+  playShots(map, parseShotScript({ shots: [{ type: "dolly", duration_s: 1, look_at: { lng: 129.72, lat: 33.18 }, to: { range_m: 300 } }] }), { frames: f.frames, groundAt: () => 12 });
+  assert.equal(clamped, false);
+  f.step(0);
+  assert.equal(f.jumps[0]!.elevation, 12);
+  f.step(1500);
+  assert.equal(clamped, true);
+  // Without groundAt and without terrain, nothing changes: no elevation.
+  const g = fakeMap();
+  playShots(g.map, parseShotScript({ shots: [{ type: "hold", duration_s: 1, look_at: { lng: 129.72, lat: 33.18 }, camera: {} }] }), { frames: g.frames });
+  g.step(0);
+  assert.equal(g.jumps[0]!.elevation, undefined);
 });
 
 test("playShots: onFrame reports the time played; input the control ignores does not stop it", () => {
