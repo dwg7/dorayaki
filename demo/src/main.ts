@@ -9,6 +9,7 @@ import { tileLatitude, tileLongitude, tileWidthMetres, type TileAddress } from "
 import { DEMO_TILESETS, isDemoTileset, tilesetTiles, tileUrlPath, type DemoTileset } from "./demo-tile.js";
 import { fetchTilesBytes } from "./load-tile.js";
 import { loadTileJson, tileUrl, type TileSource } from "./tilejson.js";
+import { listIndex, type TileIndex } from "./tile-index.js";
 import { SurfelLayer } from "./surfel-layer.js";
 import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
@@ -134,10 +135,15 @@ const statusTitle = statusEl.title;
 
 const external: TileSource | undefined = isExternal(tileset) ? await loadTileJson(EXTERNAL_TILESETS[tileset]!, document.baseURI) : undefined;
 
-const tiles = external ? external.tiles : tilesetTiles(tileset as DemoTileset);
-/** Outlines of the deepest zoom's tiles only, to keep the overlay readable. */
-const deepest = Math.max(...tiles.map((t) => t.z));
-const outlines = tiles.filter((t) => t.z === deepest).map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(t, x as number, y as number)));
+/** The synthetic fixtures' tiles (an exact list); an external tileset has no list (D25). */
+const fixtureTiles = external ? [] : tilesetTiles(tileset as DemoTileset);
+/** Which tiles may exist, asked one view at a time: the TileJSON's bounds for a real tileset (D25), the exact list for a fixture. */
+const tiles: TileIndex = external ? external.index : listIndex(fixtureTiles);
+/** Outlines: the deepest zoom's tiles of a fixture; for a real tileset, its bounds (its tiles are not listed). */
+const deepest = tiles.zooms[tiles.zooms.length - 1]!;
+const outlines = external
+  ? [(([w, s, e, n]) => [[w, n], [e, n], [e, s], [w, s], [w, n]])(external.bounds)]
+  : fixtureTiles.filter((t) => t.z === deepest).map((t) => [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]].map(([x, y]) => tileToLngLat(t, x as number, y as number)));
 
 /**
  * Basemap: hfu/stars' bvmap-starlight style (GSI optimized vector tiles,
@@ -152,8 +158,8 @@ const DARK_BASEMAP = BASEMAP_STYLE === BASEMAPS.nightsky || /night|dark/i.test(B
 
 const map = new MapLibreMap({
   container: "map",
-  center: external ? external.center : tileToLngLat(tiles[0] as TileAddress, 0.5, 0.5),
-  zoom: external ? Math.max(...tiles.map((t) => t.z)) + 1.5 : 18.3, // numazu: 19 + 1.5 = 20.5
+  center: external ? external.center : tileToLngLat(fixtureTiles[0] as TileAddress, 0.5, 0.5),
+  zoom: external ? external.maxzoom + 1.5 : 18.3, // numazu: 19 + 1.5 = 20.5
   pitch: 60,
   bearing: -30,
   maxPitch: 85,
@@ -234,7 +240,7 @@ async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   const [bytes] = await fetchTilesBytes([urlOf(tile)], undefined, { allowMissing: external !== undefined });
   timings.fetchMs += performance.now() - t0;
   e028.fetches.push({ key: sizeKey(tile), startMs: Math.round(t0), endMs: Math.round(performance.now()), bytes: bytes?.byteLength ?? 0 });
-  if (!bytes) return null;
+  if (!bytes) { external?.index.markMissing(tile); return null; } // D25: the server has no such tile; the selection stops asking for it
   tileSizes.set(sizeKey(tile), bytes.byteLength);
   const t1 = performance.now();
   {

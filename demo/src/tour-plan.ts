@@ -9,6 +9,7 @@ import { visibleBounds, type View } from "./camera.js";
 import { selectBudgetedTiles } from "./mixed-selection.js";
 import { buildTimeline, mapViewOf, sampleTimeline, type CameraState, type GroundAt, type Shot } from "./shot-player.js";
 import type { TileAddress } from "../../src/tile-geometry.js";
+import type { TileIndex } from "./tile-index.js";
 
 export interface TourNeed {
   tile: TileAddress;
@@ -20,7 +21,7 @@ export interface TourNeed {
 }
 
 export interface TourPlanOptions {
-  candidates: readonly TileAddress[];
+  candidates: TileIndex | readonly TileAddress[];
   width: number;
   height: number;
   maxBytes: number;

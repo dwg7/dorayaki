@@ -11,6 +11,7 @@
 import { tileLatitude, tileLongitude, type TileAddress } from "../../src/tile-geometry.js";
 import { cameraModel, effectiveZoom, mercator, type CameraModel, type V3, type View } from "./camera.js";
 import type { LngLatBoundsArray } from "./tile-view.js";
+import { asIndex, type TileIndex } from "./tile-index.js";
 
 const key = (t: TileAddress): string => `${t.z}/${t.x}/${t.y}`;
 
@@ -37,10 +38,10 @@ export interface MixedOptions {
   maxZoom?: number;
 }
 
-export function selectMixedTiles(candidates: readonly TileAddress[], bounds: LngLatBoundsArray, view: View, options: MixedOptions): TileAddress[] {
+export function selectMixedTiles(candidates: TileIndex | readonly TileAddress[], bounds: LngLatBoundsArray, view: View, options: MixedOptions): TileAddress[] {
   const camera = cameraModel(view);
-  const exists = new Set(candidates.map(key));
-  const zooms = [...new Set(candidates.map((t) => t.z))].sort((a, b) => a - b);
+  const index = asIndex(candidates);
+  const zooms = index.zooms;
   if (zooms.length === 0) return [];
   const finest = Math.min(zooms[zooms.length - 1]!, options.maxZoom ?? Infinity);
   const leaves: TileAddress[] = [];
@@ -51,10 +52,10 @@ export function selectMixedTiles(candidates: readonly TileAddress[], bounds: Lng
     const k = 2 ** (next - t.z);
     const children: TileAddress[] = [];
     for (let dx = 0; dx < k; dx++) for (let dy = 0; dy < k; dy++) children.push({ z: next, x: t.x * k + dx, y: t.y * k + dy });
-    if (!children.every((c) => exists.has(key(c)))) { leaves.push(t); return; }
+    if (!children.every((c) => index.has(c))) { leaves.push(t); return; }
     for (const c of children) if (intersects(c, bounds)) visit(c);
   };
-  for (const t of candidates) if (t.z === zooms[0] && intersects(t, bounds)) visit(t);
+  for (const t of index.within(bounds, zooms[0]!)) visit(t);
 
   const [mx, my] = [camera.mx, camera.my];
   const centre = (t: TileAddress): number => {
@@ -87,10 +88,10 @@ export interface BudgetOptions {
  * result is a partition (no tile covers another), nearest to the view centre first. If even the coarsest cover is over budget it is
  * returned as it is: coverage comes before the budget.
  */
-export function selectBudgetedTiles(candidates: readonly TileAddress[], bounds: LngLatBoundsArray, view: View, options: BudgetOptions): TileAddress[] {
+export function selectBudgetedTiles(candidates: TileIndex | readonly TileAddress[], bounds: LngLatBoundsArray, view: View, options: BudgetOptions): TileAddress[] {
   const camera = cameraModel(view);
-  const exists = new Set(candidates.map(key));
-  const zooms = [...new Set(candidates.map((t) => t.z))].sort((a, b) => a - b);
+  const index = asIndex(candidates);
+  const zooms = index.zooms;
   if (zooms.length === 0) return [];
   const finest = Math.min(zooms[zooms.length - 1]!, options.maxZoom ?? Infinity);
   const bytesPerSplat = options.bytesPerSplat ?? 12;
@@ -110,7 +111,7 @@ export function selectBudgetedTiles(candidates: readonly TileAddress[], bounds: 
     const present: TileAddress[] = [];
     for (let dx = 0; dx < k; dx++) for (let dy = 0; dy < k; dy++) {
       const c = { z: next, x: t.x * k + dx, y: t.y * k + dy };
-      if (exists.has(key(c)) && intersects(c, bounds)) present.push(c);
+      if (index.has(c) && intersects(c, bounds)) present.push(c);
     }
     return present.length > 0 ? present : undefined;
   };
@@ -126,7 +127,7 @@ export function selectBudgetedTiles(candidates: readonly TileAddress[], bounds: 
     const eff = tileEffectiveZoom(t, camera, view.centreZ);
     if (eff >= next) open.push({ tile: t, eff });
   };
-  for (const t of candidates) if (t.z === zooms[0] && intersects(t, bounds)) add(t);
+  for (const t of index.within(bounds, zooms[0]!)) add(t);
 
   while (open.length > 0) {
     let best = 0;

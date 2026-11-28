@@ -10,6 +10,7 @@
  * tile that does not exist).
  */
 import type { TileAddress } from "../../src/tile-geometry.js";
+import { asIndex, type TileIndex } from "./tile-index.js";
 import { selectZoom } from "./tile-selection.js";
 import { viewTiles, type LngLatArray, type LngLatBoundsArray } from "./tile-view.js";
 
@@ -17,7 +18,7 @@ export interface StreamedTile<T> { tile: TileAddress; data: T }
 
 export interface TileStreamerOptions<T> {
   /** Every tile that may exist (from the TileJSON or the fixture). */
-  candidates: readonly TileAddress[];
+  candidates: TileIndex | readonly TileAddress[];
   /** Load one tile; null when it does not exist. */
   load: (tile: TileAddress) => Promise<T | null>;
   /** Called with the complete set for the latest request. */
@@ -68,7 +69,7 @@ export class TileStreamer<T> {
   private delivered = false;
 
   constructor(private readonly opts: TileStreamerOptions<T>) {
-    this.zooms = [...new Set(opts.candidates.map((t) => t.z))];
+    this.zooms = [...asIndex(opts.candidates).zooms];
     this.limit = opts.limit ?? 9;
   }
 
