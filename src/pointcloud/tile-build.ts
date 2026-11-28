@@ -45,6 +45,11 @@ export interface TileBuildConfig {
    * z17 itself takes a target only from the per-zoom form (`{ 17: 150000 }`, E025); a single number applies below z17 only, as before.
    */
   targetSplats?: number | Readonly<Record<number, number>>;
+  /**
+   * E026: the largest merge step a target may take (one of 1, 2, 4, ... 64; default 64, as before). A piece that does not fit its share at this
+   * step keeps the splats of this step and goes over its share (`overTarget`): the merge error stays within thickness x maxMergeScale.
+   */
+  maxMergeScale?: number;
   /** Class slots per voxel (0 = the points carry no class); the class is carried by `adaptive.opacityOf`. */
   classSlots?: number;
 }
@@ -65,6 +70,8 @@ export interface TilePiece {
   voxels: number;
   /** With `targetSplats`: the merge step (s) that was needed; 1 when none was, absent without a target. */
   mergeScale?: number;
+  /** With `targetSplats` and `maxMergeScale`: true when the piece is over its share at the largest step allowed. */
+  overTarget?: boolean;
 }
 
 /** The splats of one z17 tile and its contributions to lower zooms, one piece per zoom, in the order of `config.zooms`. */
@@ -91,6 +98,9 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
     const across = CELLS / (2 ** (TILE_ZOOM - z) * zoomCellScale(z));
     if (!Number.isInteger(across) || across % 2 ** maxLevel !== 0) throw new RangeError(`z${z}: ${across} voxels along a tile edge do not divide into groups of ${2 ** maxLevel}`);
   }
+  const maxMergeScale = config.maxMergeScale ?? MERGE_STEPS[MERGE_STEPS.length - 1]!;
+  if (!(MERGE_STEPS as readonly number[]).includes(maxMergeScale)) throw new RangeError(`maxMergeScale must be one of ${MERGE_STEPS.join(", ")}`);
+  const steps = MERGE_STEPS.filter((s) => s <= maxMergeScale);
   const edgeOf = (z: number): number => cell * 2 ** (TILE_ZOOM - z) * zoomCellScale(z);
   const accs = zooms.map((z) => new VoxelAccumulator(edgeOf(z), 16, slots));
   feed((east, south, up, r, g, b, slot = -1) => { for (const a of accs) a.add(east, -south, up, r, g, b, slot); });
@@ -106,17 +116,19 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
       ...extra,
     });
     let mergeScale: number | undefined;
+    let overTarget = false;
     let result: { gaussians: Gaussian[]; perLevel: number[] } = { gaussians: [], perLevel: new Array<number>(maxLevel + 1).fill(0) };
     if (acc.voxels > 0) {
       const tileTarget = typeof config.targetSplats === "number" ? config.targetSplats : config.targetSplats?.[z];
       if (tileTarget !== undefined && (d > 0 || typeof config.targetSplats !== "number")) {
         const share = Math.max(1, Math.floor(tileTarget / 4 ** d));
         const base = options();
-        for (const s of MERGE_STEPS) {
+        for (const s of steps) {
           mergeScale = s;
           result = adaptiveGaussians(acc, { ...base, thickness: base.thickness * s, colorTolerance: Math.min(1, base.colorTolerance * Math.sqrt(s)) });
           if (result.gaussians.length <= share) break;
         }
+        overTarget = result.gaussians.length > share;
       } else {
         result = adaptiveGaussians(acc, options());
       }
@@ -125,6 +137,6 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
     const ox = tile.x - (target.x << d), oy = tile.y - (target.y << d);
     const scale = 2 ** d;
     const splats = result.gaussians.map((g) => splatOfGaussian(g, (ox + g.position[0] / width) / scale, (oy - g.position[1] / width) / scale));
-    return { tile: target, splats, perLevel: result.perLevel, points: acc.points, voxels: acc.voxels, ...(mergeScale !== undefined ? { mergeScale } : {}) };
+    return { tile: target, splats, perLevel: result.perLevel, points: acc.points, voxels: acc.voxels, ...(mergeScale !== undefined ? { mergeScale } : {}), ...(overTarget ? { overTarget } : {}) };
   });
 }

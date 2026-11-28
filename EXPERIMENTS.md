@@ -1615,3 +1615,42 @@ Sasebo, `01JE2421` median, `01JE5513` smallest), hosted recipe otherwise, z16 on
 
 ### Decision
 hfu chose cell 1 m + cap 100,000 on 2026-11-28; `produce:opennagasaki` uses it (D21). It gives a third of the z17 bytes; the prefecture at roughly 120 GB instead of 330 GB, by arithmetic from the 168-sheet trial.
+
+## E026: an error ceiling under the z17 size cap (2026-11-28)
+
+### Question
+D21 caps a z17 tile at 100,000 splats; a tile over the cap is re-merged with the merge thickness and color tolerance multiplied by s = 2, 4, ... 64 until it fits. With the
+production thickness of 0.2 m and color tolerance of 0.2, s = 64 allows patches 12.8 m thick and any color, which may be why forest merged into large patches (E025).
+The merge rule is already an error bound, as in a TIN; the cap undoes it where the data is dense. How far may the cap loosen it, and what does a ceiling cost in tile size?
+
+### Method
+`DORAYAKI_MERGE_MAX_SCALE` (`maxMergeScale` in `buildTilePieces`): the largest step the cap may take; a piece still over its share keeps that step's splats and is marked
+`overTarget` in the tile's stats. The four sheets of E025, the D21 recipe, z16 only below z17, two workers at low priority beside the 01JE production. Variants: no cap,
+ceiling 64 (D21 as it is), 16, 8, 4. Judged first by D22: the heaviest tile and what the viewer's budget (D15) can draw; then total size, the merge steps taken, build time,
+and E012 picture differences against the no-cap build. Separately, the per-tile merge steps of the whole 01JE build are kept (`runs/nagasaki-01je.done/`) to see where in
+the area the cap loosens the rule most.
+
+### Measurements (four sheets; z17 57 tiles, z16 22 tiles)
+
+| variant | z17 total | z17 max | z17 steps taken (tiles) | z16 total | z16 max | z16 steps taken (pieces) | over the cap | build |
+| --- | ---: | ---: | --- | ---: | ---: | --- | ---: | ---: |
+| no z17 cap | 73.9 MB | 4.55 MB | none | 9.5 MB | 0.87 MB | 1: 28, 2: 2, 4: 8, 8: 19 | 0 | 54 s |
+| ceiling 64 (D21 as it is) | 35.7 MB | 1.19 MB | 1: 35, 2: 7, 4: 14, 8: 1 | 9.5 MB | 0.87 MB | 1: 28, 2: 2, 4: 8, 8: 19 | 0 | 63 s |
+| ceiling 16 | 35.7 MB | 1.19 MB | same | 9.5 MB | 0.87 MB | same | 0 | 62 s |
+| ceiling 8 | 35.7 MB | 1.19 MB | same | 9.5 MB | 0.87 MB | same | 0 | 64 s |
+| ceiling 4 | 36.7 MB | 1.20 MB | 1: 35, 2: 7, 4: 15 | 17.6 MB | 2.48 MB | 1: 28, 2: 2, 4: 27 | z17 1, z16 19 | 68 s |
+
+Pictures at z16 (E012, software renderer, the four z16 tiles where the cap took step 8, straight down and at pitch 55): ceiling 64 against ceiling 4, mean absolute
+color difference 1.8 to 3.9 of 255 per pixel, PSNR 27 to 30 dB, holes 0.6 to 1.2 % (block 1); at 4 x 4 blocks 1.2 to 3.0 and 31 to 35 dB.
+
+### Observations
+- No tile took a step above 8 (thickness 1.6 m, color tolerance 0.57): the feared 12.8 m and any color never happened on these sheets, so ceilings of 8 and above change nothing.
+- At z17 the cap is mild: 35 of 57 tiles keep the base rule, 14 take step 4, one step 8. A ceiling of 4 costs 1 MB (one tile goes 138 splats over).
+- The loosening is at z16: 19 of 22 tiles' pieces needed step 8. A ceiling of 4 nearly doubles z16 (9.5 to 17.6 MB) and makes its heaviest tile 2.9 times heavier, which
+  works against D22 (the lower zooms are what a wide view draws), for a picture difference of a few levels of 255.
+- Four sheets only; the steps of the whole 01JE build are being kept to check this on about 9,000 tiles.
+
+### Decision
+No ceiling for now: D21 stays as it is. `DORAYAKI_MERGE_MAX_SCALE` stays as a measuring knob (default unchanged) and the tile stats now say when a piece is over its share.
+To be revisited with the 01JE steps; the next lever on size is hfu's pruning by screen size, not a tighter error.
+
