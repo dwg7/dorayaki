@@ -95,6 +95,8 @@ export class SurfelLayer implements CustomLayerInterface {
   private hideMask: Uint32Array<ArrayBuffer> = new Uint32Array(4);
   /** Color by class (`?color=class`): the palette of class-palette.ts instead of the stored colors. */
   classColor = false;
+  /** Color by the tilt of the normal (`?color=slope` or `?color=aspect`), or undefined for the stored (or class) color. */
+  tiltColor: "slope" | "aspect" | undefined = undefined;
   private pendingClasses = new Map<string, { tile: TileAddress; codes: Uint8Array }>();
   /** Factor on every splat's semi-axes (`?extent=` in the demo); 1 draws the 2-sigma ellipse. */
   extent = 1;
@@ -208,6 +210,7 @@ export class SurfelLayer implements CustomLayerInterface {
           jitter: this.jitter,
           hideMask: this.hideMask,
           classColor: this.classColor,
+          ...(this.tiltColor ? { tiltColor: this.tiltColor } : {}),
         });
         if (pi === 0) { drawn++; count += plan.count; }
       }
@@ -244,6 +247,11 @@ export class SurfelLayer implements CustomLayerInterface {
 
   setHideClasses(codes: readonly number[]): void {
     this.hideMask = hideMaskOf(codes);
+    this.map?.triggerRepaint();
+  }
+
+  setTiltColor(mode: "slope" | "aspect" | undefined): void {
+    this.tiltColor = mode;
     this.map?.triggerRepaint();
   }
 

@@ -86,6 +86,24 @@ ${JITTER_GLSL}
 uniform uvec4 u_hide_mask;  // bit c of the 128 bits: skip the splats of class code c (E021)
 uniform float u_has_class;  // 1: the tile has class codes (a_class)
 uniform float u_class_color; // 1: color by class instead of the stored color
+uniform float u_tilt_color;  // 0: off; 1: hue by slope of the normal; 2: hue by aspect (axial), saturation by slope
+// HSV to RGB, h in turns.
+vec3 hsv(float h, float s, float v) {
+  vec3 k = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  return v * mix(vec3(1.0), k, s);
+}
+// Color by the tilt of a splat's normal n (east, south, up), keeping the stored brightness l as the value so texture survives.
+// A round splat has no normal: grey. The normal's sign means nothing (format.md), so the slope uses |n.z| and the aspect is axial
+// (a direction and its opposite get the same hue: the azimuth is doubled).
+vec3 tiltColor(vec3 n, bool round, float l) {
+  float v = 0.35 + 0.65 * l;
+  if (round) return vec3(v * 0.8);
+  n = normalize(n);
+  float slope = acos(clamp(abs(n.z), 0.0, 1.0)) / 1.5707963; // 0 flat, 1 vertical
+  if (u_tilt_color < 1.5) return hsv(0.62 * (1.0 - slope), 0.85, v); // blue flat, green and yellow slopes, red walls
+  float az = atan(n.x, -n.y); // from north, clockwise
+  return hsv(fract(az / 3.1415927), smoothstep(0.05, 0.5, slope), v); // full color from 45 degrees, white when flat
+}
 uniform vec3 u_palette[128]; // color of class code c (class-palette.ts)
 bool hidden(float cls) {
   uint code = uint(cls + 0.5);
@@ -179,7 +197,11 @@ void main() {
   v_corner = a_corner;
   vec3 base = (u_class_color > 0.5 && u_has_class > 0.5) ? u_palette[min(uint(a_class + 0.5), 127u)] : rgb;
   bool byClass = u_class_color > 0.5 && u_has_class > 0.5;
-  v_color = (byClass ? base : grade(base)) * shade;
+  if (u_tilt_color > 0.5) {
+    v_color = tiltColor(an, cmax - cmin <= 3u, dot(rgb, vec3(0.213, 0.715, 0.072))) * shade;
+  } else {
+    v_color = (byClass ? base : grade(base)) * shade;
+  }
 }`;
 
 /** Light direction in the local metric frame (east, south, up): from the north-west, above. */
@@ -210,6 +232,7 @@ export interface SurfelProgram {
   uHideMask: WebGLUniformLocation;
   uHasClass: WebGLUniformLocation;
   uClassColor: WebGLUniformLocation;
+  uTiltColor: WebGLUniformLocation;
   uPalette: WebGLUniformLocation;
   uFalloff: WebGLUniformLocation;
   uZOrigin: WebGLUniformLocation;
@@ -288,6 +311,7 @@ export function createSurfelProgram(gl: WebGL2RenderingContext): SurfelProgram {
     uHideMask: uniform("u_hide_mask"),
     uHasClass: uniform("u_has_class"),
     uClassColor: uniform("u_class_color"),
+    uTiltColor: uniform("u_tilt_color"),
     uPalette: uniform("u_palette"),
     uFalloff: uniform("u_falloff"),
     uZOrigin: uniform("u_z_origin"),
@@ -347,6 +371,8 @@ export interface DrawOptions {
   hideMask?: Uint32Array;
   /** Color by class (palette in class-palette.ts) instead of the stored color, for tiles that have class codes. */
   classColor?: boolean;
+  /** Color by the tilt of the splat's normal (`?color=slope` or `aspect`) instead of the stored color; the stored brightness is kept. */
+  tiltColor?: "slope" | "aspect";
   /** Strength of the shading, 0..1 (default 1: the fixed Lambert light; 0: colors as stored). */
   shade?: number;
   /** Strength of the color grade, 0..: 0 leaves the stored colors, 1 brightens and saturates (see GRADE_GLSL). Default 0. */
@@ -380,6 +406,7 @@ export function drawSurfels(
   gl.uniform4uiv(p.uHideMask, opts.hideMask ?? NO_HIDDEN_CLASSES);
   gl.uniform1f(p.uHasClass, b.hasClasses ? 1 : 0);
   gl.uniform1f(p.uClassColor, opts.classColor ? 1 : 0);
+  gl.uniform1f(p.uTiltColor, opts.tiltColor === "slope" ? 1 : opts.tiltColor === "aspect" ? 2 : 0);
   gl.uniform3fv(p.uPalette, PALETTE);
   gl.uniform1f(p.uFalloff, opts.falloff ?? 3.5);
   if (opts.depthTest) {
