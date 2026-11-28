@@ -52,8 +52,8 @@ Found by comparing the tile list the layer held (`packed: 0` on the empty ones) 
 - **The budget**: 40 MB / 4 million splats per view (D15) may be tightened; not measured on weaker GPUs or slow networks.
 - **The prefecture**: the download has started (D19); disk is settled (D23). Not decided: how a prefecture-sized archive is listed in the viewer (the TileJSON tile list is capped at 4,096); whether stars serves a multi-GB archive well.
 - **Camera direction**: storyboard stills (step 2) and the agent bridge (step 3); a tour can outrun the tiles; the zoom-dependent splat lift may still heave during zooming shots.
-- **Merge error under the size cap** (E026, running): the cap of D21 loosens the merge thickness and color tolerance up to 64 times in dense tiles (12.8 m, any color);
-  whether a ceiling on that step is worth the heavier tiles is being measured.
+- **Merge error under the size cap** (E026): on four sheets the cap of D21 loosened the rule at most 8 times (1.6 m, color 0.57), mostly at z16; a ceiling of 4 nearly doubled
+  z16 for a small picture difference, so there is no ceiling for now. To be checked on the per-tile steps of the whole 01JE build.
 - **Proposed by hfu, not tried**: prune splats whose long axis is too short for the zoom (screen-space error, parameters by zoom and landscape); color by splat tilt
   (slope and/or aspect of the normal; aspect is axial because the normal's sign carries no meaning).
 - Real-drag behavior of the zoom ease and of `?mixed=1`; other browsers and GPUs; seams checked in a few views only.
