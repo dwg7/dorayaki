@@ -1785,3 +1785,22 @@ E028's cold run with the old fetching, earlier the same afternoon: tour mean abo
 Kept as the default for tours with `?mixed=1`. Next: the director's linter flags shots whose demand the link cannot meet (the orbit
 here), and the same tour on the 01JE build (new recipe) to see the wait shrink.
 
+### Addendum (same day): the tour on the production recipe
+
+The 32 hosted Sasebo sheets rebuilt with `produce:opennagasaki` as it is in main (D21 + D24; 437 s, two workers, a rehearsal of the
+production procedure): 359,202,276 B against 713,970,031 B (z17 263 against 599 MB; z16 to z13 9 to 18 % smaller). Hosted on stars as
+`dorayaki-sasebo` (`?v=20261128a`, hfu allowed the replacement). The linter: the tour wants 89.5 MB instead of 131.4 MB (orbit 49 MB
+instead of 73 MB); wait before playing at 2.4 MB/s 8.1 s instead of 24.9 s.
+
+The first cold run waited 27.4 s: the plan's sizes were guesses made before any tile of the archive had arrived (1.5 MB a z17 tile,
+from the older recipe). The wait now uses each tile's real size once it has arrived and the mean of its zoom so far otherwise.
+
+| archive | wait before playing | `C_target` tour mean | seconds under 0.95 | MB fetched | rate |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| older recipe (E029 above) | 13.6 s | 0.998 | 0.5 | 137.0 | 2.87 MB/s |
+| production recipe, guessed sizes | 27.4 s | 1.000 | 0.25 | 92.1 | 1.55 MB/s |
+| production recipe, sizes as they arrive | **7.6 s** | **1.000** | **0** | 90.6 | 2.10 MB/s |
+
+With the production recipe and route-aware fetching the tour shows all the wanted detail on a first visit after 7.6 s (the linter said
+8.1 s at 2.4 MB/s), on a line shared with the Open Nagasaki download.
+

@@ -55,7 +55,7 @@ const EXTERNAL_TILESETS: Readonly<Record<string, string>> =
         numazu: "tiles/numazu/tilejson.json",
         kawazu: "https://stars.optgeo.org/dorayaki-kawazu?v=20261122a",
         sasebo: "tiles/sasebo-32q/tilejson.json",
-        "sasebo-stars": "https://stars.optgeo.org/dorayaki-sasebo?v=20261125b",
+        "sasebo-stars": "https://stars.optgeo.org/dorayaki-sasebo?v=20261128a",
         "sasebo-168": "tiles/sasebo-168/tilejson.json",
       };
 type ExternalTileset = string;
@@ -588,7 +588,10 @@ map.on("load", () => {
             // Waiting: the rate so far (bytes arrived since planning over the time since), and whether it delivers the rest in time.
             arrived = e028.fetches.reduce((n, f) => n + f.bytes, 0) - bytesBefore;
             const elapsed = (now - t0) / 1000;
-            const wait = waitBeforePlaying(needs, (k) => streamer.state(k) === "have", elapsed > 1 ? arrived / elapsed : 0);
+            // Sizes as known now: a tile that arrived has its size, the others the mean of their zoom so far (the plan's guesses came
+            // before any tile of this archive had arrived, and a new recipe's tiles are smaller than the default guess).
+            const sized = needs.map((n) => ({ ...n, bytes: tileSizes.get(n.key) ?? guessTileBytes(n.tile.z) }));
+            const wait = waitBeforePlaying(sized, (k) => streamer.state(k) === "have", elapsed > 1 ? arrived / elapsed : 0);
             control.show({ kind: "loading" });
             if (wait <= 0 || elapsed >= 30) {
               tourStart = now;
