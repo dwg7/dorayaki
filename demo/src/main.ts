@@ -592,7 +592,7 @@ map.on("load", () => {
             // before any tile of this archive had arrived, and a new recipe's tiles are smaller than the default guess).
             const sized = needs.map((n) => ({ ...n, bytes: tileSizes.get(n.key) ?? guessTileBytes(n.tile.z) }));
             const wait = waitBeforePlaying(sized, (k) => streamer.state(k) === "have", elapsed > 1 ? arrived / elapsed : 0);
-            control.show({ kind: "loading" });
+            control.show({ kind: "buffering", elapsed, wait });
             if (wait <= 0 || elapsed >= 30) {
               tourStart = now;
               e028.plan!.waitS = +elapsed.toFixed(1);
@@ -626,7 +626,11 @@ map.on("load", () => {
             },
           });
         };
-        control.onButton = () => (stop ? stop() : scheduler ? endRoute() : play());
+        control.onButton = () => {
+          if (stop) stop();
+          else if (scheduler) { endRoute(); control.show({ kind: "ready", count: script.shots.length, duration: scriptDuration(script) }); } // Stop while waiting
+          else play();
+        };
         if (autoplay) play();
         else control.show({ kind: "ready", count: script.shots.length, duration: scriptDuration(script) });
       }).catch((e: unknown) => {

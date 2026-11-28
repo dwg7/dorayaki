@@ -13,6 +13,9 @@ export const isShotControlEvent = (event: { target: unknown }): boolean =>
 export class ShotControl implements IControl {
   private readonly root = document.createElement("div");
   private readonly text = document.createElement("div");
+  /** A lamp before the text: red while the tour waits for its tiles, green while it plays (describePlayback). */
+  private readonly lamp = document.createElement("span");
+  private readonly label = document.createElement("span");
   private readonly bar = document.createElement("div");
   private readonly button = document.createElement("button");
   /** Called when the button is pressed (Stop or Replay, as shown). */
@@ -29,6 +32,9 @@ export class ShotControl implements IControl {
     Object.assign(this.button.style, { width: "auto", height: "auto", padding: "2px 10px", font: "inherit", cursor: "pointer" });
     this.button.type = "button";
     this.button.addEventListener("click", () => this.onButton());
+    Object.assign(this.lamp.style, { display: "inline-block", width: "9px", height: "9px", borderRadius: "50%", marginRight: "6px", verticalAlign: "baseline" });
+    this.lamp.setAttribute("aria-hidden", "true");
+    this.text.append(this.lamp, this.label);
     this.root.append(this.text, track, this.button);
     this.show({ kind: "loading" });
   }
@@ -36,7 +42,11 @@ export class ShotControl implements IControl {
   /** Shows a playback state. */
   show(state: PlaybackState): void {
     const d = describePlayback(state);
-    this.text.textContent = d.text;
+    this.label.textContent = d.text;
+    this.lamp.hidden = d.lamp === undefined;
+    this.lamp.style.background = d.lamp === "red" ? "#e0322b" : "#2fa84f";
+    this.lamp.style.boxShadow = d.lamp === "red" ? "0 0 5px #e0322b" : "none";
+    this.root.title = d.lamp === "red" ? "Waiting for the tour's tiles before playing (E029)" : "";
     this.bar.style.width = `${Math.round(Math.min(1, Math.max(0, d.progress)) * 100)}%`;
     this.button.hidden = d.button === undefined;
     if (d.button) this.button.textContent = d.button;

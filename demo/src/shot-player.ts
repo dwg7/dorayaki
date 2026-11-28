@@ -485,6 +485,8 @@ export function playShots(map: PlayerMap, script: ShotScript, options: PlayOptio
 /** What the playback is doing, for the demo's status control (shot-control.ts). */
 export type PlaybackState =
   | { kind: "loading" }
+  /** E029: fetching the tour's tiles before playing; `elapsed` seconds so far, `wait` the estimated seconds still to wait (Infinity: no rate yet). */
+  | { kind: "buffering"; elapsed: number; wait: number }
   | { kind: "ready"; count: number; duration: number }
   | { kind: "error"; message: string }
   | { kind: "playing"; index: number; count: number; type: Shot["type"]; time: number; duration: number }
@@ -496,13 +498,23 @@ const seconds = (s: number): string => `${Math.floor(s)}`;
 /** The length of a script in seconds (the sum of its shots). */
 export const scriptDuration = (script: ShotScript): number => script.shots.reduce((n, s) => n + s.duration_s, 0);
 
-/** The status line, the button's label (none while loading or after an error) and the progress in [0, 1]. */
-export function describePlayback(state: PlaybackState): { text: string; button?: "Play tour" | "Stop" | "Replay"; progress: number } {
+/**
+ * The status line, the button's label (none while loading or after an error), the progress in [0, 1], and a lamp: red while the tour
+ * waits for its tiles before playing (the camera does not move yet), green while it plays.
+ */
+export function describePlayback(state: PlaybackState): { text: string; button?: "Play tour" | "Stop" | "Replay"; progress: number; lamp?: "red" | "green" } {
   switch (state.kind) {
     case "loading": return { text: "Shots: loading…", progress: 0 };
+    case "buffering": {
+      // The rate is unsteady in the first seconds (the first bytes wait for the first responses): no estimate before 4 s.
+      const known = Number.isFinite(state.wait) && state.elapsed >= 4;
+      const left = !known ? "measuring the line" : state.wait > 60 ? "more than a minute" : `about ${Math.max(1, Math.ceil(state.wait))} s more`;
+      return { text: `Loading tiles before the tour · ${seconds(state.elapsed)} s, ${left}`, button: "Stop", lamp: "red",
+        progress: known ? state.elapsed / (state.elapsed + Math.max(0, state.wait)) : 0 };
+    }
     case "ready": return { text: `Camera tour: ${state.count} shots, ${seconds(state.duration)} s`, button: "Play tour", progress: 0 };
     case "error": return { text: `Shots: ${state.message}`, progress: 0 };
-    case "playing": return { text: `▶ Playing ${state.index + 1}/${state.count} · ${state.type} · ${seconds(state.time)} / ${seconds(state.duration)} s`, button: "Stop", progress: state.time / state.duration };
+    case "playing": return { text: `▶ Playing ${state.index + 1}/${state.count} · ${state.type} · ${seconds(state.time)} / ${seconds(state.duration)} s`, button: "Stop", progress: state.time / state.duration, lamp: "green" };
     case "done": return { text: `■ Finished (${seconds(state.duration)} s)`, button: "Replay", progress: 1 };
     case "user": return { text: `⏸ Stopped by your input at ${seconds(state.time)} / ${seconds(state.duration)} s`, button: "Replay", progress: state.time / state.duration };
     case "stopped": return { text: `■ Stopped at ${seconds(state.time)} / ${seconds(state.duration)} s`, button: "Replay", progress: state.time / state.duration };
