@@ -107,7 +107,12 @@ const depthEl = document.getElementById("depth") as HTMLInputElement;
 const hideVegEl = document.getElementById("hideveg") as HTMLInputElement;
 hideVegEl.checked = new URLSearchParams(location.search).get("hideveg") === "1";
 const colorEl = document.getElementById("colormode") as HTMLSelectElement;
-colorEl.value = new URLSearchParams(location.search).get("color") === "class" ? "class" : "stored";
+{
+  const c = new URLSearchParams(location.search).get("color");
+  colorEl.value = c === "class" || c === "slope" || c === "aspect" ? c : "stored";
+}
+/** The tilt color mode of the select (`?color=slope`, `?color=aspect`), or undefined. */
+const tiltMode = (): "slope" | "aspect" | undefined => (colorEl.value === "slope" || colorEl.value === "aspect" ? colorEl.value : undefined);
 const legendEl = document.getElementById("legend") as HTMLDivElement;
 const cell = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
 const statusBarFill = cell("status-bar-fill");
@@ -330,6 +335,7 @@ map.on("load", () => {
     l.setDepthTest(depthEl.checked);
     l.setHideClasses(hideCodes());
     l.classColor = colorEl.value === "class";
+    l.tiltColor = tiltMode();
     map.addLayer(l, "tile-outline"); // keep the 2D tile outlines visible on top
     return l;
   };
@@ -391,6 +397,7 @@ map.on("load", () => {
   const onClassFeature = (): void => {
     layer.setHideClasses(hideCodes());
     layer.setClassColor(colorEl.value === "class");
+    layer.setTiltColor(tiltMode());
     if (classesNeeded() && loaded.some((t) => !t.classPlane && !t.guessed && t.count > 0)) { streamer.reset(); refresh(); } else void ensureClasses();
   };
   hideVegEl.addEventListener("change", onClassFeature);
@@ -422,6 +429,14 @@ map.on("load", () => {
     return out.subarray(0, n);
   };
   const updateLegend = (): void => {
+    const tilt = tiltMode();
+    if (tilt) {
+      const sw = (c: string): string => `<span style="display:inline-block;width:10px;height:10px;background:${c};border:1px solid #888"></span>`;
+      legendEl.innerHTML = tilt === "slope"
+        ? `slope of the splat's normal: ${sw("hsl(223,85%,55%)")} flat ${sw("hsl(112,85%,50%)")} 45° ${sw("hsl(0,85%,50%)")} vertical; ${sw("#aaa")} round`
+        : `facing (axial; flat is white): ${sw("hsl(0,85%,50%)")} N–S ${sw("hsl(90,85%,50%)")} NE–SW ${sw("hsl(180,85%,45%)")} E–W ${sw("hsl(270,85%,60%)")} SE–NW`;
+      return;
+    }
     if (colorEl.value !== "class" && !hideVegEl.checked) { legendEl.textContent = ""; return; }
     const counts = new Map<number, number>();
     let total = 0;
