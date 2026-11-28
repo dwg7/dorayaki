@@ -1804,3 +1804,40 @@ from the older recipe). The wait now uses each tile's real size once it has arri
 With the production recipe and route-aware fetching the tour shows all the wanted detail on a first visit after 7.6 s (the linter said
 8.1 s at 2.4 MB/s), on a line shared with the Open Nagasaki download.
 
+## E030: a work area that grows, sheet by sheet (2026-11-28)
+
+### Question
+D26: the prefecture is built in one work area to which sheets are added as they arrive. When later sheets arrive, can the build redo only
+the tiles they touch and still give exactly the tileset a single build of all the sheets would give?
+
+### Method
+A tile's marker now records the shard files it was built from (`sources`); before the tile jobs, a tile whose shard directory holds a
+file not among them is stale (`isStale` in `src/pointcloud/tile-ledger.ts`; markers without `sources` fall back to modification times):
+its marker, its z17 tile and its pieces of the lower zooms are removed and it is built again. The lower zooms are gathered from all pieces
+on every run, as before. `produce:opennagasaki` with `INCREMENTAL=1` keeps the work area (`--keep`), and its codes file may only be
+appended to (a sheet's index names its shard files). Check: four adjacent sheets (01JE3511, 3512, 3513, 3514, a 2 x 2 block), the
+production recipe (D21 + D24), two workers; once all four at once, once the first two then all four into the same kept work area.
+
+### Measurements
+
+| build | time | tiles built again |
+| --- | ---: | ---: |
+| four at once | 63 s | |
+| first two (kept) | 33 s | |
+| then all four | 35 s | 9 (the ones on the seam between the two pairs) |
+
+Same 93 tiles (z13 to z17), **all byte-identical** to the single build.
+
+### Observations
+- The seam rebuilds only the tiles both pairs reach; the lower zooms come out identical because the gather orders pieces by source tile.
+- The second run gathers and writes the archive again for the whole area: that part grows with the prefecture (the 01JE build will tell how
+  long it takes at that size).
+- The 01JE production running today started before this change and removes its work area at the end. Its shards, scatter markers,
+  pieces and tile markers are being kept as hard links outside it (`/Volumes/dorayaki/data/tiled-work/nagasaki-keep`, no extra space),
+  so the prefecture's work area can start from 01JE without scattering 994 sheets again. Its old markers have no `sources`; the
+  time fallback covers them.
+
+### Decision
+Kept: the growing build of D26. Next: start the prefecture's work area (`nagasaki`) from the kept 01JE area and add the sheets around
+Nagasaki city (D27).
+

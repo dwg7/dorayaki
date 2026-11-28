@@ -29,7 +29,7 @@ fi
 n=$(echo "$codes" | wc -l | tr -d ' ')
 say "sheets: $n"
 
-# 2a. INCREMENTAL=1 (an area larger than the disk holds as LAS): scatter each sheet on its own as its zip arrives, then remove its LAS, in LANES parallel
+# 2a. INCREMENTAL=1 (an area larger than the disk holds as LAS; D26 the growing prefecture): scatter each sheet on its own as its zip arrives, then remove its LAS, in LANES parallel; the work area is kept (--keep), so a later run with more sheets (the codes file only appended to: indices must not move) builds again only the tiles they touch
 # lanes; the tile jobs below then run on the shards alone (build:tiled reads no LAS header with --centre). Waits for a zip still being downloaded.
 if [ "${INCREMENTAL:-0}" = 1 ]; then
   LANES=${LANES:-3}
@@ -92,7 +92,7 @@ export DORAYAKI_MIN_LONG_AXIS_PX=16:2,15:2,14:2,13:2   # E027 (D24): drop splats
 # A watcher records the lowest free space on the external disk while the build runs (the work directory's peak).
 ( low=$free0; while sleep 15; do f=$(df -k "$ON_DIR" | tail -1 | awk '{print $4}'); [ "$f" -lt "$low" ] && low=$f && echo "$low" > "$ON_DIR/runs/$name.lowfree"; done ) & watcher=$!
 t0=$(date +%s)
-/usr/bin/time -l npm run -s build:tiled -- "$name" 1 "$list" --workers "$WORKERS" --centre "$CENTRE" > "$ON_DIR/runs/$name.build.log" 2>&1 || { kill $watcher; say "build failed: $ON_DIR/runs/$name.build.log"; exit 1; }
+/usr/bin/time -l npm run -s build:tiled -- "$name" 1 "$list" --workers "$WORKERS" --centre "$CENTRE" $([ "${INCREMENTAL:-0}" = 1 ] && echo --keep) > "$ON_DIR/runs/$name.build.log" 2>&1 || { kill $watcher; say "build failed: $ON_DIR/runs/$name.build.log"; exit 1; }
 kill $watcher 2>/dev/null || true
 t1=$(date +%s)
 low=$(cat "$ON_DIR/runs/$name.lowfree" 2>/dev/null || echo "$free0")
