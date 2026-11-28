@@ -22,9 +22,14 @@ export interface TrackMotion {
   headingRate: number;
   /** Corner rounding: the curve starts this many metres before a corner (0: none). */
   radius: number;
+  /**
+   * Playback rate (hfu, 2026-11-28: drone footage is often shown fast-forward): the planned flight keeps its shape and is shown
+   * `timeScale` times faster (2: half the seconds). Speeds and turn rates seen on screen are the planned ones times this.
+   */
+  timeScale: number;
 }
 
-export const DEFAULT_TRACK_MOTION: TrackMotion = { cruise: 40, lateralAccel: 4, accel: 2, headingRate: 15, radius: 40 };
+export const DEFAULT_TRACK_MOTION: TrackMotion = { cruise: 40, lateralAccel: 4, accel: 2, headingRate: 15, radius: 40, timeScale: 1 };
 
 type P = [number, number];
 
