@@ -334,6 +334,15 @@ test("describePlayback: the status line, the button and the progress for each st
   assert.equal(describePlayback({ kind: "loading" }).button, undefined);
   assert.deepEqual(describePlayback({ kind: "ready", count: 5, duration: 38 }), { text: "Camera tour: 5 shots, 38 s", button: "Play tour", progress: 0 });
   assert.equal(describePlayback({ kind: "error", message: "x" }).button, undefined);
+  assert.equal(playing.lamp, "green");
+  const waiting = describePlayback({ kind: "buffering", elapsed: 5.2, wait: 4.1 });
+  assert.equal(waiting.lamp, "red");
+  assert.equal(waiting.text, "Loading tiles before the tour · 5 s, about 5 s more");
+  assert.equal(waiting.button, "Stop");
+  assert.ok(near(waiting.progress, 5.2 / 9.3));
+  assert.equal(describePlayback({ kind: "buffering", elapsed: 0.5, wait: Infinity }).text, "Loading tiles before the tour · 0 s, measuring the line");
+  assert.equal(describePlayback({ kind: "buffering", elapsed: 2, wait: 370 }).text, "Loading tiles before the tour · 2 s, measuring the line", "no estimate in the first 4 s");
+  assert.equal(describePlayback({ kind: "buffering", elapsed: 6, wait: 90 }).text, "Loading tiles before the tour · 6 s, more than a minute");
 });
 
 test("playShots: onAhead reports the views 1.5 and 3 s ahead, about every 500 ms, and none past the end", () => {
