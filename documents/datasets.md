@@ -1,6 +1,6 @@
 # Datasets: Numazu, Kawazu, Sasebo and Open Nagasaki, with size and scale
 
-The tilesets built from real data, where they are hosted, and what they cost. Hosted on stars (Martin): `dorayaki-numazu` (version 6, `?v=20261127a`), `dorayaki-kawazu` (`?v=20261122a`), `dorayaki-sasebo` (32 sheets, `?v=20261125b`). The sections below were separate documents until 2026-11-27 and keep their dates.
+The tilesets built from real data, where they are hosted, and what they cost. Hosted on stars (Martin): `dorayaki-numazu` (version 6, `?v=20261127a`), `dorayaki-kawazu` (`?v=20261122a`), `dorayaki-sasebo` (32 sheets, production recipe D21 + D24, `?v=20261128a`). The sections below were separate documents until 2026-11-27 and keep their dates.
 
 Commands named in the older sections below that are no longer in package.json (`build:tileset`, `merge:tilesets`, `demo:numazu`, `measure:*` other than `measure:codec` and `measure:quality`, `prototype:tile-scatter`, `compare:tile-build`) and `DORAYAKI_BLOCK_VERSION` were removed on 2026-11-27 (compaction, [decisions.md](decisions.md)); they are in Git at the tag `pre-compaction-2026-11-27`. Their results are in EXPERIMENTS.md.
 
@@ -774,3 +774,25 @@ still hold 3.5 points at Sasebo). Merging coplanar cells is what keeps Sasebo be
 `npm run measure:pnts -- data/nagasaki/2023-lp-01JE3513/01JE3513.las` and `... data/virtual-shizuoka/2019-lp-ground-08OF4060/08OF4060.las 100`
 (the files are not in the repository: [datasets.md](datasets.md), [build.md](build.md)). The `.pnts` headers:
 `https://data.source.coop/smartmaps/ngs/<key>` with `Range: bytes=0-4095`.
+
+## Sasebo on the production recipe (2026-11-28)
+
+The 32 sheets of the hosted Sasebo rebuilt with `npm run produce:opennagasaki -- sasebo-d24 <the 32 codes>` from main (D21 + D24),
+as a rehearsal of the production procedure: 437 s with two workers beside the 01JE production, LAS 5.1 GB unzipped from the HDD and
+removed afterwards, orchestrator peak 1.39 GB, work directory peak about 4 GB.
+
+| zoom | tiles | older recipe (E024) | production recipe |
+| ---: | ---: | ---: | ---: |
+| 17 | 381 | 599 MB | 263 MB (mean 0.71, max 1.20 MB) |
+| 16 | 105 | 62 MB | 57 MB |
+| 15 | 32 | 28 MB | 24 MB |
+| 14 | 14 | 7.4 MB | 6.3 MB |
+| 13 | 6 | 1.7 MB | 1.4 MB |
+| archive | | 713,970,031 B | 359,202,276 B (SHA-256 `a273b8e6de49...`) |
+
+Hosted on stars on 2026-11-28 at 15:45 (hfu allowed it in chat): checked that stars held only `dorayaki-sasebo.pmtiles` and no temporary
+file; uploaded as `.dorayaki-sasebo.pmtiles.new.d24x7`, SHA-256 equal on the host, `rm` of the old, 8 s, `mv -n`. Checked afterwards: the
+TileJSON with `?v=20261128a` (zoom 13 to 17, the same bounds) and one tile of each zoom 13 to 17, byte-identical to the local files.
+The older archive is kept as `/Volumes/dorayaki/archive/pmtiles/dorayaki-sasebo-32q.pmtiles`, the new one beside it as
+`dorayaki-sasebo-d24.pmtiles`. The demo and the site pin `?v=20261128a`. The tour on it: EXPERIMENTS.md, E029 addendum.
+
