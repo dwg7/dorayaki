@@ -88,10 +88,42 @@ export class TileStreamer<T> {
 
   private remember(k: string, r: StreamedTile<T> | null): void {
     const max = this.opts.cache ?? 0;
-    if (max <= 0) return;
+    if (max <= 0 && !this.protectedKeys.has(k)) return;
     this.recent.delete(k);
     this.recent.set(k, r);
-    while (this.recent.size > max) this.recent.delete(this.recent.keys().next().value!);
+    this.trim();
+  }
+
+  /** The oldest recent tiles go first beyond the cache size, except tiles protected for a tour (E029). */
+  private trim(): void {
+    const max = this.opts.cache ?? 0;
+    if (this.recent.size <= max) return;
+    for (const old of [...this.recent.keys()]) {
+      if (this.recent.size <= max) break;
+      if (!this.protectedKeys.has(old)) this.recent.delete(old);
+    }
+  }
+
+  /** Tiles kept beyond the cache size until `protect` is called again (E029: the tiles of a tour that is playing). */
+  private protectedKeys = new Set<string>();
+  protect(keys: Iterable<string>): void {
+    this.protectedKeys = new Set(keys);
+    this.trim();
+  }
+
+  /** Whether a tile has arrived, is on its way, or neither (E029's scheduler). */
+  state(k: string): "have" | "inflight" | "none" {
+    return this.known(k) !== undefined ? "have" : this.inflight.has(k) ? "inflight" : "none";
+  }
+
+  /** Loads on their way. */
+  get inflightCount(): number {
+    return this.inflight.size;
+  }
+
+  /** Start loading these tiles now (E029), whatever their number; held, recent and in-flight ones are skipped. */
+  request(tiles: readonly TileAddress[]): void {
+    for (const t of tiles) if (this.state(key(t)) === "none") void this.loadOne(t);
   }
 
   /** Start one load (or join the one in flight); the result is remembered as soon as it arrives. */
