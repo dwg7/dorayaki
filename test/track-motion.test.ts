@@ -5,7 +5,7 @@ import { flightStats, sampleFlight } from "../demo/src/flight-log.js";
 import { buildTimeline, cameraOfMapView, parseShotScript } from "../demo/src/shot-player.js";
 import { arcAt, arcLengths, roundCorners, speedProfile, type TrackMotion } from "../demo/src/track-motion.js";
 
-const M: TrackMotion = { cruise: 40, lateralAccel: 4, accel: 2, headingRate: 15, radius: 40 };
+const M: TrackMotion = { cruise: 40, lateralAccel: 4, accel: 2, headingRate: 15, radius: 40, timeScale: 1 };
 
 test("E031 roundCorners: a right angle becomes a curve that starts and ends `radius` before and after it; straight ends stay", () => {
   const { xy } = roundCorners([[0, 0], [200, 0], [200, 200]], [0, 0, 0], 40);
@@ -47,5 +47,11 @@ test("E031 a track with motion gets its duration from the plan and turns gently;
     assert.ok(Math.abs(c.lng - 129.725) < 1e-9 && Math.abs(c.lat - 33.175) < 1e-9, "looking at the point");
   }
   assert.ok(planned.warnings.length === 0);
+  // Playback rate: the same flight in half the seconds, passing the same places at the same fraction of the shot.
+  const fast = parseShotScript({ shots: [{ type: "track", path, offset_m: 60, alt_m: 80, lead_m: 120, motion: { time_scale: 2 } }] });
+  assert.ok(Math.abs(fast.shots[0]!.duration_s * 2 - planned.shots[0]!.duration_s) < 1e-9);
+  const at = (s: typeof plain, u: number) => buildTimeline(s.shots, start, 800).segments[0]!.at(u);
+  for (const u of [0.25, 0.5, 0.75]) assert.ok(Math.abs(at(fast, u).lng - at(planned, u).lng) < 1e-12 && Math.abs(at(fast, u).lat - at(planned, u).lat) < 1e-12);
+  assert.ok(rate(fast) > 1.8 * rate(planned), "turn rates seen on screen scale with the rate");
   assert.match(parseShotScript({ shots: [{ type: "track", duration_s: 5, path, alt_m: 80, motion: {} }] }).warnings[0]!, /from its plan/);
 });

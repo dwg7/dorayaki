@@ -180,9 +180,9 @@ export function parseShotScript(json: unknown): ShotScript {
           const motion: TrackMotion = {
             cruise: num(m, "cruise_mps") ?? DEFAULT_TRACK_MOTION.cruise, lateralAccel: num(m, "lateral_accel_mps2") ?? DEFAULT_TRACK_MOTION.lateralAccel,
             accel: num(m, "accel_mps2") ?? DEFAULT_TRACK_MOTION.accel, headingRate: num(m, "heading_dps") ?? DEFAULT_TRACK_MOTION.headingRate,
-            radius: num(m, "round_m") ?? DEFAULT_TRACK_MOTION.radius,
+            radius: num(m, "round_m") ?? DEFAULT_TRACK_MOTION.radius, timeScale: num(m, "time_scale") ?? DEFAULT_TRACK_MOTION.timeScale,
           };
-          if (!(motion.cruise > 0 && motion.lateralAccel > 0 && motion.accel > 0 && motion.headingRate > 0 && motion.radius >= 0)) throw new Error(`${where}: motion limits must be positive`);
+          if (!(motion.cruise > 0 && motion.lateralAccel > 0 && motion.accel > 0 && motion.headingRate > 0 && motion.radius >= 0 && motion.timeScale > 0)) throw new Error(`${where}: motion limits must be positive`);
           // Round the corners in local metres (heights carried along), then plan the speed of the base point over [0, length - lead].
           const lp = localPath(points);
           const r = roundCorners(lp.xy, points.map((q) => q[2] ?? 0), motion.radius);
@@ -191,7 +191,8 @@ export function parseShotScript(json: unknown): ShotScript {
           const timing = speedProfile(rounded.xy, 0, Math.max(0, rounded.length - Math.min(lead_m, rounded.length)), motion);
           shot.motion = motion;
           shot.timing = timing;
-          shot.duration_s = Math.max(0.1, timing.t[timing.t.length - 1]!);
+          // The planned flight's seconds, shown `timeScale` times faster (the shape of the motion is kept).
+          shot.duration_s = Math.max(0.1, timing.t[timing.t.length - 1]! / motion.timeScale);
           if (raw.duration_s !== undefined) warnings.push(`${where}: track with motion takes ${shot.duration_s.toFixed(1)} s from its plan; duration_s is not used`);
         }
         return shot;
@@ -363,7 +364,7 @@ function trackCamera(shot: TrackShot, groundAt: GroundAt | undefined, e: (u: num
   const poi = shot.look_at ? { x: (shot.look_at.lng - p.lng0) * p.kx, y: (shot.look_at.lat - p.lat0) * p.ky, v: groundAt?.(shot.look_at.lng, shot.look_at.lat) ?? 0 } : undefined;
   return (u) => {
     // With a planned motion, seconds map to arc length through the speed profile (the shot's easing is not used).
-    const s = shot.timing ? arcAt(shot.timing, u * shot.duration_s) : e(u) * (p.length - lead);
+    const s = shot.timing ? arcAt(shot.timing, u * shot.duration_s * (shot.motion?.timeScale ?? 1)) : e(u) * (p.length - lead);
     const base = alongPath(p, heights, s), look = poi ?? alongPath(p, heights, s + lead);
     const ahead = alongPath(p, heights, s + w), behind = alongPath(p, heights, s - w);
     const tx = ahead.x - behind.x, ty = ahead.y - behind.y, tn = Math.hypot(tx, ty) || 1;

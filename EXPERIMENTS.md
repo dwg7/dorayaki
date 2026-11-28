@@ -1880,9 +1880,26 @@ planned instead of 138), track 0.996 but the closing dolly 0.41 (and the view af
 - C keeps the bay in view (bearing nearly still), but at 80 m over a point 1.5 km away the camera looks almost level (pitch near 85°).
   The next shot, a dolly that keeps the pitch, then brings the camera down to 12 m: the flight log flagged it before playing, and in the
   browser that low, level view wanted far more tiles than the line could bring. A point of interest needs framing limits (pitch, distance).
-- Human judgement of comfort and clarity: not yet (hfu to watch B and C).
+- Human judgement: hfu watched A, B and C in the browser: the track is clearly better with the planned motion (B).
+
+### Playback rate (same day)
+hfu: drone footage is often shown fast-forward, so the planned flight and the speed it is shown at should be two things. `motion.time_scale`
+shows the planned flight that many times faster; the path and where the camera is at each fraction of the shot do not change.
+
+| track | duration | speed max / mean | accel max | jerk max | bearing rate max | pitch rate max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | 20 s | 255 / 80 m/s | 768 m/s² | 7,648 m/s³ | 49.7 °/s | 17.3 °/s |
+| B 1x | 68 s | 42 / 24 m/s | 25 m/s² | 270 m/s³ | 6.9 °/s | 2.1 °/s |
+| B 2x | 34 s | 83 / 47 m/s | 91 m/s² | 1,010 m/s³ | 13.8 °/s | 4.3 °/s |
+| B 3x | 23 s | 125 / 71 m/s | 139 m/s² | 2,255 m/s³ | 20.5 °/s | 6.4 °/s |
+
+Rates seen on screen scale with the playback rate (speed and turn rate by k, acceleration by k², jerk by k³), but the shape stays smooth:
+B at 3x lasts about as long as A and still turns at less than half A's rate, with a hundredth of its jerk. 2x stays under the 15 °/s
+guess. The linter predicts the same 8.1 s wait at 2.4 MB/s for every rate: the track wants only 7 MB of new tiles; the opening and the
+orbit set the wait. Variants: `?shots=sasebo-e031b2x`, `?shots=sasebo-e031b3x`.
 
 ### Decision
-Proposed, not the tour's default: `motion` and `look_at` stay optional fields of `track`; the flight log stays as a pre-play check.
-Next: hfu's view of B and C; ramps and cruise tuned by eye; a framing rule for `look_at`.
+Proposed, not yet the tour's default: `motion` (with `time_scale`) and `look_at` stay optional fields of `track`; the flight log stays as
+a pre-play check. hfu judged the planned track clearly better. Next: choose the rate by eye (2x or 3x) and make it the tour's track;
+a framing rule for `look_at`.
 
