@@ -104,7 +104,7 @@ Kept separate as AGENTS.md requires.
 
 ### Tile streaming
 
-The demo does not fetch every tile of a tileset. On load and after every map move
+Since D25 (2026-11-28) the demo lists no tiles up front: the tiles a view may need come from the TileJSON's bounds and zoom range (`tile-index.ts`), and a tile the server answers 204 or 404 for is remembered as missing; the synthetic fixtures keep their exact lists. The demo does not fetch every tile of a tileset. On load and after every map move
 (`moveend`) it picks the zoom (`selectZoom`), takes the tiles of that zoom that
 intersect the view, nearest to the centre first and at most nine, and fetches,
 decodes and uploads only those. The previous set keeps being drawn until every

@@ -252,7 +252,7 @@ scripts/build-site.ts        builds docs/: single-file index.html (JS+CSS inline
 scripts/measure-codec.ts     codec timing in Node
 scripts/measure-quality.ts   E012/E015 quality comparison between tile zooms, tilesets, or the mixed-zoom choice
 demo/index.html              demo page (MapLibre GL JS via import map)
-demo/src/                    demo modules (tour-plan.ts: E029, a tour's tiles planned and fetched in deadline order): load, TileJSON, decode, tile streaming and selection (mixed-selection.ts: E024 budget), placement, GPU (gpu-surfels.ts decodes v6 records in the vertex shader), layer, camera helpers, look controls, shot player and tour control; cpu-render.ts and image-metrics.ts serve measure:quality (documents/demo.md lists them)
+demo/src/                    demo modules (tile-index.ts: D25, the tiles a view may need from the TileJSON's bounds, no list; tour-plan.ts: E029, a tour's tiles planned and fetched in deadline order): load, TileJSON, decode, tile streaming and selection (mixed-selection.ts: E024 budget), placement, GPU (gpu-surfels.ts decodes v6 records in the vertex shader), layer, camera helpers, look controls, shot player and tour control; cpu-render.ts and image-metrics.ts serve measure:quality (documents/demo.md lists them)
 demo/shots/                  shot scripts (pure JSON data; copied to docs/shots/ by npm run site); sasebo.json is the worked example
 docs/                        built GitHub Pages site only (npm run site; do not edit by hand)
 documents/format.md          Surfel Block version 6, the MLT frame and the class plane

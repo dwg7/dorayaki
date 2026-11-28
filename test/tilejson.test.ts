@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { MAX_TILES, loadTileJson, tileUrl, tilesCovering } from "../demo/src/tilejson.js";
+import { loadTileJson, tileUrl, tilesCovering, type TileSource } from "../demo/src/tilejson.js";
+import { boundsIndex, listIndex, MAX_WITHIN } from "../demo/src/tile-index.js";
 import { tileLatitude, tileLongitude } from "../src/tile-geometry.js";
 
 test("tilesCovering lists the tiles intersecting a bounding box", () => {
@@ -27,21 +28,43 @@ test("tileUrl fills the z/x/y placeholders", () => {
 });
 
 /** `loadTileJson` with `fetch` answering one TileJSON. */
-async function listed(tj: object): Promise<number> {
+async function load(tj: object): Promise<TileSource> {
   const original = globalThis.fetch;
   globalThis.fetch = (async () => new Response(JSON.stringify(tj), { status: 200 })) as typeof fetch;
   try {
-    return (await loadTileJson("https://example.test/tj.json", "https://example.test/")).tiles.length;
+    return await loadTileJson("https://example.test/tj.json", "https://example.test/");
   } finally {
     globalThis.fetch = original;
   }
 }
 
-test("an area of several square kilometres (Sasebo, 164 tiles over z15 to z17) is listed", async () => {
-  const n = await listed({ tiles: ["https://example.test/{z}/{x}/{y}"], bounds: [129.7071, 33.1630, 129.7368, 33.1873], minzoom: 15, maxzoom: 17 });
-  assert.ok(n > 64 && n < MAX_TILES, `${n} tiles`);
+test("D25: a TileJSON becomes an index answered by view; Sasebo's bounds give the tiles a view asks for", async () => {
+  const src = await load({ tiles: ["https://example.test/{z}/{x}/{y}"], bounds: [129.7071, 33.1630, 129.7368, 33.1873], minzoom: 15, maxzoom: 17 });
+  assert.deepEqual(src.index.zooms, [15, 16, 17]);
+  const listed = [15, 16, 17].flatMap((z) => tilesCovering(src.bounds, z));
+  assert.equal([15, 16, 17].reduce((n, z) => n + src.index.within(src.bounds, z).length, 0), listed.length, "the whole bounds: the old list");
+  assert.ok(listed.every((t) => src.index.has(t)));
+  assert.equal(src.index.has({ z: 14, x: listed[0]!.x >> 1, y: listed[0]!.y >> 1 }), false, "outside the zoom range");
 });
 
-test("bounds that would list more than MAX_TILES are refused", async () => {
-  await assert.rejects(listed({ tiles: ["https://example.test/{z}/{x}/{y}"], bounds: [128, 32, 131, 35], minzoom: 15, maxzoom: 17 }), /exceed the demo's limit/);
+test("D25: bounds the size of a prefecture are accepted (no list), and a view outside them gets nothing", async () => {
+  const src = await load({ tiles: ["https://example.test/{z}/{x}/{y}"], bounds: [128.5, 32.5, 130.5, 34.7], minzoom: 13, maxzoom: 17 });
+  const view = [129.70, 33.16, 129.73, 33.19] as const;
+  const z17 = src.index.within(view, 17);
+  assert.ok(z17.length > 50 && z17.length < 400, `${z17.length} tiles`);
+  assert.deepEqual(src.index.within([140, 35, 141, 36], 17), []);
+});
+
+test("D25: a tile the server says is missing is dropped from the index; exact lists stay exact; a runaway view is refused", () => {
+  const index = boundsIndex([129.7, 33.16, 129.73, 33.19], 15, 17);
+  const t = index.within([129.7, 33.16, 129.73, 33.19], 17)[0]!;
+  assert.ok(index.has(t));
+  index.markMissing(t);
+  assert.equal(index.has(t), false);
+  assert.equal(index.missing, 1);
+  assert.ok(!index.within([129.7, 33.16, 129.73, 33.19], 17).some((u) => u.x === t.x && u.y === t.y));
+  const list = listIndex([{ z: 17, x: 1, y: 2 }, { z: 16, x: 0, y: 1 }]);
+  assert.deepEqual(list.zooms, [16, 17]);
+  assert.equal(list.has({ z: 17, x: 1, y: 3 }), false);
+  assert.throws(() => boundsIndex([-180, -85, 180, 85], 0, 17).within([-180, -85, 180, 85], 17), new RegExp(String(MAX_WITHIN)));
 });
