@@ -22,6 +22,7 @@ import { vegetationFlags } from "./vegetation.js";
 import { classStyle } from "./class-palette.js";
 import { decodeClassPlane, readClassPlane, VEGETATION_CLASSES, CLASS_DERIVED_CANOPY, CLASS_UNCLASSIFIED, type ClassPlane } from "../../src/class-plane.js";
 import { extractClassPlanes } from "../../src/mlt-frame.js";
+import { formatMegabytes, formatSplats, formatTiles } from "./status-format.js";
 import { selectBudgetedTiles, selectMixedTiles } from "./mixed-selection.js";
 import { visibleBounds, type View } from "./camera.js";
 import type { LngLatBoundsArray } from "./tile-view.js";
@@ -108,9 +109,22 @@ hideVegEl.checked = new URLSearchParams(location.search).get("hideveg") === "1";
 const colorEl = document.getElementById("colormode") as HTMLSelectElement;
 colorEl.value = new URLSearchParams(location.search).get("color") === "class" ? "class" : "stored";
 const legendEl = document.getElementById("legend") as HTMLDivElement;
-const setStatus = (text: string): void => {
-  statusEl.textContent = text;
+const cell = (id: string): HTMLElement => document.getElementById(id) as HTMLElement;
+const statusBarFill = cell("status-bar-fill");
+/** Writes a status cell only when its text changes (the render loop calls this every frame). */
+const setCell = (el: HTMLElement, text: string): void => {
+  if (el.textContent !== text) el.textContent = text;
 };
+/** The tile set the layer holds: zoom, tiles, bytes, splats (status-format.ts keeps every cell to a bounded width). */
+const showLoaded = (zoom: number, tiles: number, bytes: number, splats: number): void => {
+  setCell(cell("st-lz"), `z${zoom}`); setCell(cell("st-lt"), formatTiles(tiles));
+  setCell(cell("st-lb"), formatMegabytes(bytes)); setCell(cell("st-ls"), formatSplats(splats));
+};
+/** Loading progress of the next set as a bar, not as text; `wanted` 0 empties it. */
+const showProgress = (done: number, wanted: number): void => {
+  statusBarFill.style.width = wanted > 0 && done < wanted ? `${Math.round((100 * done) / wanted)}%` : "0";
+};
+const statusTitle = statusEl.title;
 
 const external: TileSource | undefined = isExternal(tileset) ? await loadTileJson(EXTERNAL_TILESETS[tileset]!, document.baseURI) : undefined;
 
@@ -433,7 +447,6 @@ map.on("load", () => {
     timings.classMs += performance.now() - t0;
     updateLegend();
   }
-  let summary = "loading…";
   const streamer = new TileStreamer<LoadedTile>({
     candidates: tiles,
     ...(mixed ? { select: (_z: number, b: LngLatBoundsArray, maxZoom?: number) => mixedMode === "2"
@@ -445,7 +458,8 @@ map.on("load", () => {
     ...(mixed ? { progressive: 250, cache: 64 } : {}),
     load: loadTile,
     onProgress: ({ zoom, wanted, done }) => {
-      if (done < wanted) setStatus(`${summary} Loading z${zoom}: ${done}/${wanted} tile(s)…`);
+      showProgress(done, wanted);
+      statusBarFill.parentElement!.title = `z${zoom}: ${done} of ${wanted} tiles loaded`;
     },
     onReady: (set, zoom) => {
       deliveries.push({ ms: Math.round(performance.now()), zoom, tiles: set.length, bytes: set.reduce((n, x) => n + x.data.byteLength, 0) });
@@ -457,8 +471,8 @@ map.on("load", () => {
       const bytes = loaded.reduce((n, t) => n + t.byteLength, 0);
       const count = loaded.reduce((n, t) => n + t.count, 0);
       void ensureClasses();
-      summary = `${loaded.length} tile(s) of ${tileset} at z${zoom}: ${bytes} bytes, ${count} surfels.`;
-      setStatus(summary);
+      showLoaded(zoom, loaded.length, bytes, count);
+      showProgress(0, 0);
     },
   });
   const refresh = (): void => {
@@ -538,8 +552,10 @@ map.on("load", () => {
     const d = layer.lastDraw;
     if (!d) return;
     const progressive = d.levelsDrawn > 1 || loaded.some((t) => t.tile.z === d.zoom && t.levels.length > 1);
-    setStatus(`${summary} Drawing z${d.zoom}: ${d.tiles} tile(s), ${d.surfels} surfels` +
-      (progressive ? `, levels ${d.levelsDrawn}, min radius ${(d.minRadius * 100).toFixed(1)} cm` : ""));
+    setCell(cell("st-dz"), `z${d.zoom}`); setCell(cell("st-dt"), formatTiles(d.tiles)); setCell(cell("st-ds"), formatSplats(d.surfels));
+    // Several levels drawn (old multi-level blocks only): in the tooltip, so the row keeps its width.
+    const extra = progressive ? `levels ${d.levelsDrawn}, min radius ${(d.minRadius * 100).toFixed(1)} cm` : "";
+    if (statusEl.title !== (extra || statusTitle)) statusEl.title = extra || statusTitle;
   });
   /**
    * Frame timing: force `frames` repaints in a row and report the median

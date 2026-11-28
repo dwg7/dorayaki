@@ -22,6 +22,14 @@
         border: 1px solid #999; border-radius: 3px; background: #fff;
       }
       #panel.min #panel-body { display: none; }
+      /* Fixed columns and tabular figures: the status keeps its width while a tour plays. */
+      #status {
+        display: grid; grid-template-columns: 3.6em 2.4em 4.6em 4.8em 4.4em; column-gap: 0.4em;
+        font-variant-numeric: tabular-nums; white-space: nowrap;
+      }
+      #status span:not(:first-child):not(:nth-child(6)) { text-align: right; }
+      #status-bar { height: 3px; margin: 2px 0 3px; background: rgba(0, 0, 0, 0.08); border-radius: 2px; overflow: hidden; }
+      #status-bar-fill { height: 100%; width: 0; background: #3a7bd5; transition: width 0.15s; }
     </style>
   </head>
   <body>
@@ -33,7 +41,11 @@
       </div>
       <div id="panel-body">
         fixture: <span id="fixture"></span><br />
-        <span id="status">loading…</span><br />
+        <div id="status" title="loaded: the tile set the layer holds; drawn: what the last frame drew">
+          <span>loaded</span><span id="st-lz"></span><span id="st-lt"></span><span id="st-lb"></span><span id="st-ls">…</span>
+          <span>drawn</span><span id="st-dz"></span><span id="st-dt"></span><span></span><span id="st-ds"></span>
+        </div>
+        <div id="status-bar" title="tiles of the next set loaded so far"><div id="status-bar-fill"></div></div>
         <label><input type="checkbox" id="depth" checked /> depth test</label><br />
         <label title="Uses the tile's class plane when it has one; otherwise a guess from the splats (height above the local ground, round shape)"><input type="checkbox" id="hideveg" /> hide vegetation</label><br />
         <label title="Color by class (false color) needs tiles with a class plane (E021)">color: <select id="colormode"><option value="stored">stored</option><option value="class">by class</option></select></label>

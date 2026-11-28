@@ -89,6 +89,7 @@ Kept separate as AGENTS.md requires.
 | `mixed-selection.ts` | tiles of several zooms by distance (`?mixed=1`) |
 | `shot-player.ts` | shot scripts played as a camera (`?shots=`), step 1 of documents/demo.md |
 | `shot-control.ts` | the tour's status control: playing / finished / stopped, progress, Play tour / Stop / Replay |
+| `status-format.ts` | the panel's status figures in bounded widths (MB with one decimal, splats in k or M): the panel shows a loaded and a drawn row in fixed columns and a loading bar, so it keeps its size while a tour plays (2026-11-28) |
 | `splat-instances.ts` | camera axes for the shader, and per-splat instance math kept as the reference for the packed shader's decoding (tests) |
 | `gpu-surfels.ts` | shader decoding the 12-byte version 6 records, buffer upload, instanced draw |
 | `surfel-layer.ts` | MapLibre `CustomLayerInterface` lifecycle; `setTiles` swaps the tile set |
@@ -104,7 +105,7 @@ The demo does not fetch every tile of a tileset. On load and after every map mov
 intersect the view, nearest to the centre first and at most nine, and fetches,
 decodes and uploads only those. The previous set keeps being drawn until every
 tile of the new set has arrived, then the whole set is swapped (no holes; the status
-line shows "Loading z17: 6/12 tile(s)"). A tile's 12-byte records are taken from the block as they are (no Splat objects) and uploaded to the GPU, where the vertex shader decodes them (E013, then version 6; the float-instance path `?gpu=legacy` was removed on 2026-11-27); the layer drops its copy after the upload, so the JS heap stays near 230 to 420 MB at the Kawazu views (E011). If the WebGL context is lost and restored, MapLibre does not bring the custom layer back: the demo adds a new layer and loads the tiles again. A tile already in flight or held is reused;
+bar under the status fills as the set arrives). A tile's 12-byte records are taken from the block as they are (no Splat objects) and uploaded to the GPU, where the vertex shader decodes them (E013, then version 6; the float-instance path `?gpu=legacy` was removed on 2026-11-27); the layer drops its copy after the upload, so the JS heap stays near 230 to 420 MB at the Kawazu views (E011). If the WebGL context is lost and restored, MapLibre does not bring the custom layer back: the demo adds a new layer and loads the tiles again. A tile already in flight or held is reused;
 tiles outside the new set are freed (a tile seen again is fetched again, usually
 from the browser's HTTP cache). Kawazu's nine-mesh set (46 tiles, 83 MB) has 12 tiles at z17; before the cap of nine,
 zoom 17.6 requested 12 (59 MB). At the showcase view (zoom 16.6) the page fetches 10.8 MB (E011).
