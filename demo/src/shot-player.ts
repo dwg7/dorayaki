@@ -31,6 +31,7 @@
  *   cut, except `traverse`, which travels.
  */
 import { distanceForZoom, zoomForDistance } from "./camera.js";
+import { arcAt, DEFAULT_TRACK_MOTION, roundCorners, speedProfile, type TrackMotion } from "./track-motion.js";
 
 export interface LngLat { lng: number; lat: number }
 
@@ -71,7 +72,17 @@ export interface OrbitShot extends ShotBase { type: "orbit"; look_at: LngLat; ca
 export interface DollyShot extends ShotBase { type: "dolly"; look_at: LngLat; to: { range_m: number } }
 /** A path point: longitude, latitude, and optionally the height in metres above sea level. */
 export type PathPoint = [number, number] | [number, number, number];
-export interface TrackShot extends ShotBase { type: "track"; path: PathPoint[]; offset_m: number; alt_m: number; lead_m: number }
+export interface TrackShot extends ShotBase {
+  type: "track"; path: PathPoint[]; offset_m: number; alt_m: number; lead_m: number;
+  /**
+   * E031 (proposed): `motion` rounds the path's corners and plans the speed along it (track-motion.ts); the shot's duration then comes
+   * from the plan and `timing` maps seconds to the arc length the camera's base point has travelled.
+   */
+  motion?: TrackMotion;
+  timing?: { t: number[]; s: number[] };
+  /** E031 (proposed): a point of interest the camera keeps looking at while it flies along the path (else the path `lead_m` ahead). */
+  look_at?: LngLat;
+}
 export type Shot = HoldShot | CraneShot | TraverseShot | OrbitShot | DollyShot | TrackShot;
 
 export interface ShotScript { shots: Shot[]; warnings: string[] }
@@ -112,7 +123,9 @@ export function parseShotScript(json: unknown): ShotScript {
       }
       return out;
     };
-    const duration_s = num(raw, "duration_s", true)!;
+    // A track with `motion` gets its duration from the plan (E031).
+    const planned = raw.type === "track" && raw.motion !== undefined;
+    const duration_s = planned ? (num(raw, "duration_s") ?? 1) : num(raw, "duration_s", true)!;
     if (!(duration_s > 0)) throw new Error(`${where}: duration_s must be positive`);
     const easing = (raw.easing ?? "easeInOut") as Easing;
     if (!(easing in EASINGS)) throw new Error(`${where}: easing must be one of ${Object.keys(EASINGS).join(", ")}`);
@@ -158,7 +171,30 @@ export function parseShotScript(json: unknown): ShotScript {
         if (!(alt_m > 0)) throw new Error(`${where}: alt_m must be positive`);
         const lead_m = num(raw, "lead_m") ?? 0;
         if (lead_m < 0) throw new Error(`${where}: lead_m must not be negative`);
-        return { ...base, type: "track", path: points, offset_m: num(raw, "offset_m") ?? 0, alt_m, lead_m };
+        const shot: TrackShot = { ...base, type: "track", path: points, offset_m: num(raw, "offset_m") ?? 0, alt_m, lead_m };
+        const poi = point("look_at", false);
+        if (poi) shot.look_at = poi;
+        if (raw.motion !== undefined) {
+          const m = raw.motion;
+          if (!isObject(m)) throw new Error(`${where}: motion must be an object`);
+          const motion: TrackMotion = {
+            cruise: num(m, "cruise_mps") ?? DEFAULT_TRACK_MOTION.cruise, lateralAccel: num(m, "lateral_accel_mps2") ?? DEFAULT_TRACK_MOTION.lateralAccel,
+            accel: num(m, "accel_mps2") ?? DEFAULT_TRACK_MOTION.accel, headingRate: num(m, "heading_dps") ?? DEFAULT_TRACK_MOTION.headingRate,
+            radius: num(m, "round_m") ?? DEFAULT_TRACK_MOTION.radius,
+          };
+          if (!(motion.cruise > 0 && motion.lateralAccel > 0 && motion.accel > 0 && motion.headingRate > 0 && motion.radius >= 0)) throw new Error(`${where}: motion limits must be positive`);
+          // Round the corners in local metres (heights carried along), then plan the speed of the base point over [0, length - lead].
+          const lp = localPath(points);
+          const r = roundCorners(lp.xy, points.map((q) => q[2] ?? 0), motion.radius);
+          shot.path = r.xy.map(([x, y], i): PathPoint => (withAlt ? [lp.lng0 + x / lp.kx, lp.lat0 + y / lp.ky, r.extra[i]!] : [lp.lng0 + x / lp.kx, lp.lat0 + y / lp.ky]));
+          const rounded = localPath(shot.path);
+          const timing = speedProfile(rounded.xy, 0, Math.max(0, rounded.length - Math.min(lead_m, rounded.length)), motion);
+          shot.motion = motion;
+          shot.timing = timing;
+          shot.duration_s = Math.max(0.1, timing.t[timing.t.length - 1]!);
+          if (raw.duration_s !== undefined) warnings.push(`${where}: track with motion takes ${shot.duration_s.toFixed(1)} s from its plan; duration_s is not used`);
+        }
+        return shot;
       }
       default:
         throw new Error(`${where}: type ${JSON.stringify(raw.type)} is not played (hold, crane, traverse, orbit, dolly and track are)`);
@@ -323,9 +359,12 @@ function trackCamera(shot: TrackShot, groundAt: GroundAt | undefined, e: (u: num
     if (!Number.isFinite(heights[i]!)) heights[i] = i > 0 && i > known ? heights[i - 1]! : known >= 0 ? heights[known]! : 0;
   }
   const lead = Math.min(shot.lead_m, p.length), w = TRACK_TANGENT_HALF_WIDTH_M;
+  // A point of interest (E031): fixed, at its ground height when known.
+  const poi = shot.look_at ? { x: (shot.look_at.lng - p.lng0) * p.kx, y: (shot.look_at.lat - p.lat0) * p.ky, v: groundAt?.(shot.look_at.lng, shot.look_at.lat) ?? 0 } : undefined;
   return (u) => {
-    const s = e(u) * (p.length - lead);
-    const base = alongPath(p, heights, s), look = alongPath(p, heights, s + lead);
+    // With a planned motion, seconds map to arc length through the speed profile (the shot's easing is not used).
+    const s = shot.timing ? arcAt(shot.timing, u * shot.duration_s) : e(u) * (p.length - lead);
+    const base = alongPath(p, heights, s), look = poi ?? alongPath(p, heights, s + lead);
     const ahead = alongPath(p, heights, s + w), behind = alongPath(p, heights, s - w);
     const tx = ahead.x - behind.x, ty = ahead.y - behind.y, tn = Math.hypot(tx, ty) || 1;
     // Right of the direction of travel (x east, y north) is (ty, -tx).

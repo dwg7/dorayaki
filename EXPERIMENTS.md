@@ -1841,3 +1841,48 @@ Same 93 tiles (z13 to z17), **all byte-identical** to the single build.
 Kept: the growing build of D26. Next: start the prefecture's work area (`nagasaki`) from the kept 01JE area and add the sheets around
 Nagasaki city (D27).
 
+## E031: flight planning for a track (2026-11-28)
+
+### Question
+From drone flight planning (director.md): does a track whose corners are rounded and whose speed is planned from motion limits move more
+gently, and does keeping a point of interest in view work, without hurting tile loading?
+
+### Method
+`npm run measure:flight` (`demo/src/flight-log.ts`): the tour's timeline sampled every 0.1 s; camera speed, acceleration, jerk, bearing
+and pitch rates, lowest height, cuts (jumps over 200 m in 0.1 s). Three versions of the Sasebo tour's track (national route 35, 1.73 km,
+66 points), the other shots unchanged:
+
+- **A** as it is: 20 s, easeInOut, 60 m right, 80 m up, 120 m ahead.
+- **B** `motion`: corners rounded 40 m, cruise 40 m/s, sideways 4 m/s², accel 2 m/s², heading 15 °/s (`demo/shots/sasebo-e031b.json`).
+- **C** B plus `look_at` the tour's bay point (129.705 E, 33.170 N) (`sasebo-e031c.json`).
+
+Tile coverage as E028/E029 (`?measure=1&cold=1`, the production-recipe Sasebo on stars, route-aware fetching), one run each.
+
+### Measurements
+
+Track shot (flight log; heights without terrain):
+
+| | duration | speed max / mean | accel max | jerk max | bearing rate max | pitch rate max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | 20 s | 255 / 80 m/s | 768 m/s² | 7,648 m/s³ | 49.7 °/s | 17.3 °/s |
+| B | 68 s (planned) | 42 / 24 m/s | 25 m/s² | 270 m/s³ | 6.9 °/s | 2.1 °/s |
+| C | 68 s (planned) | 42 / 24 m/s | 25 m/s² | 270 m/s³ | 1.0 °/s | 0 °/s |
+
+Tour (first visit, stars): A (E029 addendum) 7.6 s wait, `C_target` 1.000, 90.6 MB; B 5.3 s wait, 0.999, 106 MB; C 11.8 s wait (259 tiles
+planned instead of 138), track 0.996 but the closing dolly 0.41 (and the view after the tour as low).
+
+### Observations
+- B does what the brief hoped: no kinks at the corners, a turn rate under its 15 °/s limit, speeds a viewer can follow; the slower track
+  needs no longer wait (the plan sees the tiles' deadlines move with it). The planned 68 s is long: the 2 m/s² ramps from rest take 20 s
+  each; the limits are first guesses.
+- The first plan stopped the camera almost dead: a mapped road centre line has metre-scale kinks, and curvature vertex by vertex saw
+  hairpins. Curvature is now taken from the direction of travel smoothed over ±25 m, as the camera's side already was.
+- C keeps the bay in view (bearing nearly still), but at 80 m over a point 1.5 km away the camera looks almost level (pitch near 85°).
+  The next shot, a dolly that keeps the pitch, then brings the camera down to 12 m: the flight log flagged it before playing, and in the
+  browser that low, level view wanted far more tiles than the line could bring. A point of interest needs framing limits (pitch, distance).
+- Human judgement of comfort and clarity: not yet (hfu to watch B and C).
+
+### Decision
+Proposed, not the tour's default: `motion` and `look_at` stay optional fields of `track`; the flight log stays as a pre-play check.
+Next: hfu's view of B and C; ramps and cruise tuned by eye; a framing rule for `look_at`.
+
