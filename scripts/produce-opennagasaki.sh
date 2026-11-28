@@ -53,6 +53,7 @@ export DORAYAKI_ATTRIBUTION='点群: 長崎県 オープンナガサキ (CC BY 4
 export DORAYAKI_ADAPTIVE_LEVELS=3 DORAYAKI_ADAPTIVE_THICKNESS=0.2 DORAYAKI_ADAPTIVE_COLOR=0.2 DORAYAKI_ADAPTIVE_SPARSE=0
 export DORAYAKI_LOWER_ZOOMS=16,15,14,13 DORAYAKI_ZOOM_CELL_SCALE=2 DORAYAKI_Z17_CELL_SCALE=2
 export DORAYAKI_ZOOM_TARGET_SPLATS=17:100000,16:100000,15:160000,14:160000,13:160000
+export DORAYAKI_MIN_LONG_AXIS_PX=16:2,15:2,14:2,13:2   # E027 (D24): drop splats under 2 px at the lower zooms
 # A watcher records the lowest free space on the external disk while the build runs (the work directory's peak).
 ( low=$free0; while sleep 15; do f=$(df -k "$ON_DIR" | tail -1 | awk '{print $4}'); [ "$f" -lt "$low" ] && low=$f && echo "$low" > "$ON_DIR/runs/$name.lowfree"; done ) & watcher=$!
 t0=$(date +%s)
