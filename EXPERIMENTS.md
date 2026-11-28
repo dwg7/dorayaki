@@ -1899,7 +1899,7 @@ guess. The linter predicts the same 8.1 s wait at 2.4 MB/s for every rate: the t
 orbit set the wait. Variants: `?shots=sasebo-e031b2x`, `?shots=sasebo-e031b3x`.
 
 ### Decision
-Proposed, not yet the tour's default: `motion` (with `time_scale`) and `look_at` stay optional fields of `track`; the flight log stays as
-a pre-play check. hfu judged the planned track clearly better. Next: choose the rate by eye (2x or 3x) and make it the tour's track;
-a framing rule for `look_at`.
+The Sasebo tour's track now uses the planned motion at `time_scale` 1 (hfu: keep 1x for now; what matters is that a rate can be put on
+it later). `motion`, `time_scale` and `look_at` stay optional fields of `track`; the flight log stays as a pre-play check. Next: a
+framing rule for `look_at`; rates chosen per tour when wanted.
 
