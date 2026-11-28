@@ -57,8 +57,9 @@ Loading (first, because D22 puts smoothness first):
 
 1. **E028 baseline**: instrument the demo (`?measure=1`, coverage every 250 ms, every fetch logged; `?cold=1` for a first visit) and
    write the tour linter's tile-demand part (`npm run measure:tour-demand`). Done on 2026-11-28; see EXPERIMENTS.md.
-2. **E029 route-aware prefetch**: request every tile of the tour in deadline order, wait before playing until the first seconds are
-   in, and wait before cuts. Judged by `C_target` over the tour and by the bytes fetched but never shown.
+2. **E029 route-aware prefetch**: request every tile of the tour in deadline order, wait before playing until the measured rate can
+   deliver the rest in time, and keep the tour's tiles while it plays. Done on 2026-11-28 (cold `C_target` 0.49 to 0.998 for a 13.6 s
+   wait; EXPERIMENTS.md). Waits before cuts were not needed for this tour.
 3. Then, if needed: adapt the look-ahead to the measured rate, slow down where the linter says the link cannot keep up, and draw
    coarser tiles while moving.
 

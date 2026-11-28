@@ -14,7 +14,8 @@ import { TileStreamer } from "./tile-streamer.js";
 import { keepZoomAcrossPans } from "./pan-zoom-keeper.js";
 import { terrainLift } from "./terrain-lift.js";
 import { keepCameraClearance } from "./camera-clearance.js";
-import { parseShotScript, playShots, scriptDuration } from "./shot-player.js";
+import { cameraOfMapView, parseShotScript, playShots, scriptDuration, type GroundAt } from "./shot-player.js";
+import { nextRequests, planTour, waitBeforePlaying } from "./tour-plan.js";
 import { isShotControlEvent, ShotControl } from "./shot-control.js";
 import { buildSliders } from "./controls.js";
 import { changedParams } from "./tune-params.js";
@@ -224,6 +225,8 @@ const e028 = {
   fetches: [] as Array<{ key: string; startMs: number; endMs: number; bytes: number }>,
   samples: [] as Array<{ ms: number; tourS: number; shot: number; zoom: number; desired: number; cTarget: number; cAny: number; missingBytes: number }>,
   tour: { s: -1, shot: -1 },
+  /** E029: the planned tour (tiles, bytes) and the seconds waited before playing. */
+  plan: undefined as { tiles: number; bytes: number; waitS?: number } | undefined,
 };
 async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   const t0 = performance.now();
@@ -558,7 +561,43 @@ map.on("load", () => {
         for (const w of script.warnings) console.warn(`shots: ${w}`);
         let stop: (() => void) | undefined;
         let index = 0, time = 0, duration = 0;
+        // E029 (default with `?mixed=1`; `?route=0` keeps only the 1.5 and 3 s look-ahead): plan the tour's tiles, fetch them in deadline
+        // order, wait before playing until the measured rate can deliver them in time (at most 30 s), keep them while the tour plays.
+        const routeAware = mixed && flag("route", tileset) !== "0";
+        let scheduler: ReturnType<typeof setInterval> | undefined;
+        const endRoute = (): void => { if (scheduler) clearInterval(scheduler); scheduler = undefined; streamer.protect([]); };
         const play = (): void => {
+          if (!routeAware) { start(); return; }
+          const c = map.getCenter(), canvas = map.getCanvas();
+          const ground: GroundAt | undefined = terrain > 0 ? (lng, lat) => map.queryTerrainElevation({ lng, lat }) : undefined;
+          const needs = planTour(script.shots, cameraOfMapView({ lng: c.lng, lat: c.lat, zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing(), ...(ground ? { elevation: map.getCenterElevation() } : {}) }, canvas.clientHeight), {
+            candidates: tiles, width: canvas.clientWidth, height: canvas.clientHeight, maxBytes: budgetMB * 1e6, maxSplats: budgetSplats,
+            knownBytes: (t) => tileSizes.get(sizeKey(t)), priorBytes: guessTileBytes, ...(ground ? { groundAt: ground } : {}),
+          });
+          e028.plan = { tiles: needs.length, bytes: needs.reduce((n, x) => n + x.bytes, 0) };
+          streamer.protect(needs.map((n) => n.key));
+          const t0 = performance.now();
+          let tourStart: number | undefined;
+          let arrived = 0;
+          const bytesBefore = e028.fetches.reduce((n, f) => n + f.bytes, 0);
+          scheduler = setInterval(() => {
+            const now = performance.now();
+            const tourTime = tourStart === undefined ? 0 : (now - tourStart) / 1000;
+            streamer.request(nextRequests(needs, tourTime, (k) => streamer.state(k), Math.max(0, 6 - streamer.inflightCount), 120e6).map((n) => n.tile));
+            if (tourStart !== undefined) return;
+            // Waiting: the rate so far (bytes arrived since planning over the time since), and whether it delivers the rest in time.
+            arrived = e028.fetches.reduce((n, f) => n + f.bytes, 0) - bytesBefore;
+            const elapsed = (now - t0) / 1000;
+            const wait = waitBeforePlaying(needs, (k) => streamer.state(k) === "have", elapsed > 1 ? arrived / elapsed : 0);
+            control.show({ kind: "loading" });
+            if (wait <= 0 || elapsed >= 30) {
+              tourStart = now;
+              e028.plan!.waitS = +elapsed.toFixed(1);
+              start();
+            }
+          }, 100);
+        };
+        const start = (): void => {
           console.info(`shots: playing ${script.shots.length} shot(s) from ${url}`);
           stop = playShots(map, script, {
             // Load the tiles the camera will need 1.5 and 3 s from now (with `?mixed=1`, as the view would choose them there).
@@ -578,12 +617,13 @@ map.on("load", () => {
             },
             onEnd: (reason) => {
               stop = undefined;
+              endRoute();
               console.info(`shots: ${reason === "done" ? "finished" : reason === "user" ? "stopped by user input" : "stopped"}`);
               control.show(reason === "done" ? { kind: "done", duration } : { kind: reason, time, duration });
             },
           });
         };
-        control.onButton = () => (stop ? stop() : play());
+        control.onButton = () => (stop ? stop() : scheduler ? endRoute() : play());
         if (autoplay) play();
         else control.show({ kind: "ready", count: script.shots.length, duration: scriptDuration(script) });
       }).catch((e: unknown) => {

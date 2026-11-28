@@ -1744,3 +1744,44 @@ Linter at 632 x 817: 115 tiles, 131.4 MB for the tour (the browser fetched 116 t
 Baseline only. Next, E029: route-aware prefetch with a wait before playing and before cuts, judged by `cTarget` in a cold run and by the
 bytes fetched but never shown. The orbit is also a candidate for the director's linter: a shot that wants 7 MB/s should be flagged.
 
+## E029: fetch a tour's tiles along its known route (2026-11-28)
+
+### Question
+E028: on a first visit the Sasebo tour falls behind its tiles (`C_target` far below 1 in the opening, the crane, the orbit and the
+track), and the link, not the moment requests start, is the limit. A tour's route is known before it plays: does fetching its tiles in
+deadline order, and waiting before playing as long as the measured rate needs, keep it up?
+
+### Method
+`demo/src/tour-plan.ts`: before playing, the tour is sampled every 0.25 s with the player's timeline and the view's own budgeted
+selection; each tile's deadline is the first time it is wanted (`planTour`). A scheduler every 100 ms keeps six requests in flight in
+deadline order, at most 120 MB ahead of the camera (`nextRequests`); before playing it measures the rate of what has arrived and starts
+when, counting the missing bytes in deadline order at that rate, every tile arrives in time, or after 30 s (`waitBeforePlaying`). The
+tour's tiles are protected from the 64-tile cache's eviction while it plays (`TileStreamer.protect`). Default with `?mixed=1`;
+`?route=0` keeps only the 1.5 and 3 s look-ahead. Measured as E028 (`?measure=1&cold=1`, `sasebo-stars`, 632 x 817 px, the Open
+Nagasaki download still running on the same line), one run each, back to back.
+
+### Measurements
+
+| fetching | wait before playing | `C_target` tour mean | seconds under 0.95 | worst `C_target` | MB fetched | rate |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1.5 and 3 s ahead (`?route=0`) | 0 s | 0.494 | 40.8 | 0 (opening, crane, track, dolly) | 125.3 | 2.16 MB/s |
+| route-aware (E029) | 13.6 s | **0.998** | **0.5** | 0.72 (orbit, a moment) | 137.0 | 2.87 MB/s |
+
+Per shot with E029: hold, crane, traverse, track and dolly 1.000; orbit 0.990. Planned: 115 tiles, 138.8 MB (sizes partly guessed).
+E028's cold run with the old fetching, earlier the same afternoon: tour mean about 0.73, 24 s under 0.95.
+
+### Observations
+- Knowing the route turns a 58 s tour that showed half its wanted detail into one that shows all of it, for a 13.6 s wait with
+  "loading" before it starts. The linter of E028 predicted 25 s at 2.4 MB/s; the measured rate was higher (2.9 MB/s) and the wait
+  rule counts only what is still missing.
+- No extra bytes: 137 MB against 125 to 136 MB with the old fetching (the old way fetched some tiles it never got to show and missed
+  others).
+- The same run with the old fetching varies (0.49 here, about 0.73 in E028): the shared line's rate moves. One run each; the gap is
+  far larger than that variation.
+- Waits before cuts were not needed for this tour: the deadline order already brings a cut's tiles early.
+- The wait is the cost. It grows with the tour's bytes over the link's rate; the new recipe (D21, D24) and a lighter orbit would cut it.
+
+### Decision
+Kept as the default for tours with `?mixed=1`. Next: the director's linter flags shots whose demand the link cannot meet (the orbit
+here), and the same tour on the 01JE build (new recipe) to see the wait shrink.
+
