@@ -259,6 +259,7 @@ documents/build.md           how tilesets are built (build:tiled, streaming fit,
 documents/demo.md            the demo, URL flags, modules, the Pages site, dark basemap, camera direction
 documents/datasets.md        Numazu, Kawazu, Sasebo, Open Nagasaki: recipes, hosting, size and scale, size against 3D Tiles
 documents/decisions.md       decisions with reasons, open items (2026-11-21 onward, the compaction)
+documents/lineage.md         where surfels and splats come from (1985 to 2024) and what Dorayaki can take from it
 EXPERIMENTS.md               experiments E001, E002, ...: question, measurements, decision
 NOTES.md                     observed experimental findings (chronological)
 ```
