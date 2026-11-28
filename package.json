@@ -17,6 +17,7 @@
     "demo": "npm run demo:tile && esbuild demo/src/main.ts --bundle --format=esm --external:maplibre-gl --sourcemap --outdir=demo/build --servedir=. --serve=127.0.0.1:8000",
     "site": "esbuild scripts/build-site.ts --bundle --platform=node --format=esm --packages=external --outfile=demo/build/build-site.mjs --log-level=warning && node demo/build/build-site.mjs",
     "measure:codec": "esbuild scripts/measure-codec.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-codec.mjs --log-level=warning && node demo/build/measure-codec.mjs",
+    "measure:tour-demand": "esbuild scripts/measure-tour-demand.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-tour-demand.mjs --log-level=warning && node demo/build/measure-tour-demand.mjs",
     "measure:quality": "esbuild scripts/measure-quality.ts --bundle --platform=node --format=esm --outfile=demo/build/measure-quality.mjs --log-level=warning && node --max-old-space-size=6144 demo/build/measure-quality.mjs",
     "build:tiled": "esbuild scripts/build-tiled.ts --bundle --platform=node --format=esm --outfile=demo/build/build-tiled.mjs --log-level=warning && node --max-old-space-size=4096 demo/build/build-tiled.mjs",
     "produce:opennagasaki": "bash scripts/produce-opennagasaki.sh"

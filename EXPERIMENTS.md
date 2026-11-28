@@ -1695,3 +1695,52 @@ Built from the points with `DORAYAKI_MIN_LONG_AXIS_PX=16:2,15:2,14:2,13:2`: z16 
 ### Decision
 D24 (proposed with this change, decided by merging it): `produce:opennagasaki` drops splats under 2 px at z16 to z13. The 01JE build running now does not have it.
 
+## E028: can tile loading keep up with a tour? (2026-11-28, baseline)
+
+### Question
+hfu: tiles still fall behind the camerawork at times. Where, how much, and is it the link's rate or when requests start? First step of
+the plan in documents/director.md: measure before changing anything.
+
+### Method
+- **In the browser** (`?measure=1`): every 250 ms the view's wanted tiles (the demo's own budgeted selection) against the tiles the layer
+  holds, weighted by ground area: `cTarget` (held itself) and `cAny` (also a held ancestor, or held descendants); every fetch's start, end
+  and bytes. The Sasebo tour (six shots, 58 s) on the hosted archive (`sasebo-stars`, `?v=20261125b`, the older z17 recipe), view
+  632 x 817 px, Apple M1, from stars. Once with the browser's cache warm from earlier visits, once with `?cold=1` (every tile URL new to
+  every cache: a first visit). The Open Nagasaki download was running on the same line meanwhile.
+- **Without a browser** (`npm run measure:tour-demand`, the tour linter's first part): the tour sampled every 0.25 s with the player's
+  timeline, the same selection at each sample, each tile's deadline the first time it is wanted, file sizes from the local copy of the
+  same archive; three fetch policies on one simulated link (6 parallel requests, 0.15 s latency): on demand, 3 s ahead, every tile at
+  the start in deadline order (full EDF). No terrain in Node (look-at height 0).
+
+### Measurements
+
+Linter at 632 x 817: 115 tiles, 131.4 MB for the tour (the browser fetched 116 tiles, 136.4 MB, in the cold run).
+
+| shot | type | s | new tiles | MB | MB/s mean | MB wanted in its first second | cold run: `cTarget` mean / min | seconds under 0.95 |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| 1 | hold | 4 | 14 | 15.9 | 3.97 | 15.9 | 0.35 / 0.11 | 4 |
+| 2 | crane | 8 | 18 | 15.0 | 1.88 | 13.0 | 0.78 / 0.20 | 4 |
+| 3 | traverse | 10 | 16 | 17.3 | 1.73 | 0 | 1.00 / 1.00 | 0 |
+| 4 | orbit | 10 | 57 | 72.8 | 7.28 | 17.1 | 0.50 / 0.09 | 9 |
+| 5 | track | 20 | 10 | 10.3 | 0.52 | 2.2 | 0.68 / 0.00 | 7 |
+| 6 | dolly | 6 | 0 | 0 | 0 | 0 | 1.00 / 1.00 | 0 |
+
+- Warm cache: `cTarget` 1.0 in every shot except a dip to 0.5 in the track; fetches 50 ms median.
+- Cold: 2.4 MB/s from stars over the whole tour; a fetch took 7.5 s median (14.5 s at the 90th percentile, 18.2 s at most) because
+  requests queued behind each other, about 0.14 MB/s each.
+- Linter, wait before playing that leaves no tile late with full EDF: 24.9 s at 2.4 MB/s, 2.6 s at 8 MB/s; with 3 s look-ahead no wait
+  helps below 16 MB/s (the requests start too late whatever the wait).
+
+### Observations
+- The lag is a first-visit problem: with the tiles cached the tour keeps up. On a first visit the link (2.4 MB/s here) is the limit,
+  not when requests start: the tour wants 131 MB in 58 s.
+- The orbit is the heaviest shot by far (73 MB in 10 s): circling at 400 m and 800 m radius brings new far tiles from every direction.
+  The opening hold and the crane's first second are the other peaks (whole views of new tiles at once), as the cut hypothesis said.
+- The linter's count agrees with the browser's within 4 % (131 against 136 MB), so it can judge a tour before it plays.
+- The hosted Sasebo archive still has the older z17 (mean 1.9 MB a tile); with D21 and D24 the same tour would want roughly a third of
+  the bytes (to be measured on the 01JE build, which covers this area).
+
+### Decision
+Baseline only. Next, E029: route-aware prefetch with a wait before playing and before cuts, judged by `cTarget` in a cold run and by the
+bytes fetched but never shown. The orbit is also a candidate for the director's linter: a shot that wants 7 MB/s should be flagged.
+

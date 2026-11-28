@@ -166,7 +166,12 @@ const map = new MapLibreMap({
 map.addControl(new NavigationControl({ visualizePitch: true }));
 if (DARK_BASEMAP) map.getContainer().style.background = "#2f3a30";
 
-const urlOf = (t: TileAddress): string => (external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t));
+/** E028 `?cold=1`: a query that no cache has seen, so every tile comes from the server (a first visit). */
+const coldQuery = flag("cold", tileset) === "1" ? `cold=${Date.now().toString(36)}` : "";
+const urlOf = (t: TileAddress): string => {
+  const url = external ? tileUrl(external.template, t) : tileUrlPath(tileset as DemoTileset, t);
+  return coldQuery ? `${url}${url.includes("?") ? "&" : "?"}${coldQuery}` : url;
+};
 
 /**
  * One loaded tile. The decoded Splat objects (about 280 bytes each in the JS heap) are not kept: they are turned into
@@ -211,11 +216,21 @@ function guessTileBytes(zoom: number): number {
   for (const [k, v] of tileSizes) if (k.startsWith(`${zoom}/`)) { n++; sum += v; }
   return n > 0 ? sum / n : zoom >= 17 ? 1.5e6 : 0.8e6;
 }
+/**
+ * E028 (`?measure=1`): every tile fetch (start and end in ms since the page started, bytes; 0 for a missing tile) and, every 250 ms, how much of
+ * the view the held tiles cover (`dorayaki.e028`). Without the flag only the fetch log is kept (a few numbers per tile).
+ */
+const e028 = {
+  fetches: [] as Array<{ key: string; startMs: number; endMs: number; bytes: number }>,
+  samples: [] as Array<{ ms: number; tourS: number; shot: number; zoom: number; desired: number; cTarget: number; cAny: number; missingBytes: number }>,
+  tour: { s: -1, shot: -1 },
+};
 async function loadTile(tile: TileAddress): Promise<LoadedTile | null> {
   const t0 = performance.now();
   // Tiles listed from TileJSON bounds may not exist (204/404); those come back as null.
   const [bytes] = await fetchTilesBytes([urlOf(tile)], undefined, { allowMissing: external !== undefined });
   timings.fetchMs += performance.now() - t0;
+  e028.fetches.push({ key: sizeKey(tile), startMs: Math.round(t0), endMs: Math.round(performance.now()), bytes: bytes?.byteLength ?? 0 });
   if (!bytes) return null;
   tileSizes.set(sizeKey(tile), bytes.byteLength);
   const t1 = performance.now();
@@ -498,6 +513,33 @@ map.on("load", () => {
   map.on("moveend", refresh);
   if (terrain > 0) map.on("zoom", () => layer.setZOffset(dz + zoomLift()));
   refresh();
+  // E028: every 250 ms, the tiles the view wants (the same budgeted selection) against the tiles the layer holds. Each wanted tile
+  // weighs its ground area (4^(17 - z)); cTarget: the share held itself; cAny: also counting a held ancestor (whole) or held descendants
+  // (their share), i.e. something is drawn there. missingBytes: the known or guessed bytes of the wanted tiles not held.
+  if (mixed && flag("measure", tileset) === "1") {
+    const parse = (k: string): TileAddress => { const [z, x, y] = k.split("/").map(Number); return { z: z!, x: x!, y: y! }; };
+    setInterval(() => {
+      const view = currentView();
+      const want = selectBudgetedTiles(tiles, visibleBounds(view), view, { maxBytes: budgetMB * 1e6, maxSplats: budgetSplats, knownBytes: (t) => tileSizes.get(sizeKey(t)), priorBytes: guessTileBytes });
+      const held = new Set(loaded.map((t) => sizeKey(t.tile)));
+      const heldTiles = [...held].map(parse);
+      let all = 0, target = 0, any = 0, missingBytes = 0;
+      for (const t of want) {
+        const area = 4 ** (17 - t.z);
+        all += area;
+        if (held.has(sizeKey(t))) { target += area; any += area; continue; }
+        missingBytes += tileSizes.get(sizeKey(t)) ?? guessTileBytes(t.z);
+        let a = 0;
+        for (const h of heldTiles) {
+          if (h.z < t.z && t.x >> (t.z - h.z) === h.x && t.y >> (t.z - h.z) === h.y) { a = area; break; }
+          if (h.z > t.z && h.x >> (h.z - t.z) === t.x && h.y >> (h.z - t.z) === t.y) a += 4 ** (17 - h.z);
+        }
+        any += Math.min(a, area);
+      }
+      e028.samples.push({ ms: Math.round(performance.now()), tourS: e028.tour.s, shot: e028.tour.shot, zoom: +view.zoom.toFixed(2), desired: want.length,
+        cTarget: all > 0 ? +(target / all).toFixed(3) : 1, cAny: all > 0 ? +(any / all).toFixed(3) : 1, missingBytes: Math.round(missingBytes) });
+    }, 250);
+  }
   // `?shots=<name or path>`: play a shot script (shot-player.ts, documents/demo.md step 1) once the first
   // tiles are drawn. A bare name is `shots/<name>.json` next to this page. Any pointer, wheel, touch or key input stops
   // it and leaves the camera with the user. Progress goes to the console, one line per shot.
@@ -528,9 +570,10 @@ map.on("load", () => {
               }
             } } : {}),
             ignoreInput: isShotControlEvent,
-            onShot: (i, shot) => { index = i; console.info(`shots: ${i + 1}/${script.shots.length} ${shot.type} (${shot.duration_s} s)`); },
+            onShot: (i, shot) => { index = i; e028.tour.shot = i; console.info(`shots: ${i + 1}/${script.shots.length} ${shot.type} (${shot.duration_s} s)`); },
             onFrame: (t, d) => {
               time = t; duration = d;
+              e028.tour.s = t;
               control.show({ kind: "playing", index, count: script.shots.length, type: script.shots[index]!.type, time: t, duration: d });
             },
             onEnd: (reason) => {
@@ -625,7 +668,7 @@ map.on("load", () => {
     fetchMs: timings.fetchMs, decodeMs: timings.decodeMs, uploadMs: layer.uploadMs, gpu: layer.gpu,
   });
   (window as unknown as { dorayaki: unknown }).dorayaki = {
-    deliveries,
+    deliveries, e028,
     map, get layer() { return layer; }, get loaded() { return loaded; }, timings, report, measureFrames, holeFraction, refresh,
   };
 });
