@@ -425,3 +425,8 @@ height as with terrain (the map's clamping is switched off while playing). `sase
 route 35 toward the town, 1.73 km and 66 points from GSI's optimized vector tiles (layer `RdCL`, 国道; chained at junctions by the
 smallest turn), 60 m to the right, 80 m above, looking 120 m ahead; heights from the terrain. Seen playing on `?fixture=sasebo&shots=sasebo`
 (2026-11-28): the look-at point follows the road and the camera faces the town; at 80 m it flies among the taller blocks.
+
+Proposed in E031 (2026-11-28, measured, not yet the tour's default): a track may carry `motion` (`cruise_mps`, `lateral_accel_mps2`,
+`accel_mps2`, `heading_dps`, `round_m`; `demo/src/track-motion.ts`): its corners are rounded, its speed is planned from those limits
+and its duration comes from the plan; and `look_at` (a point the camera keeps looking at while it flies along the path, instead of the
+path `lead_m` ahead). Variants of the Sasebo tour: `?shots=sasebo-e031b` (motion) and `?shots=sasebo-e031c` (motion and a point of interest).

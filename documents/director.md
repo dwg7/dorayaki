@@ -79,3 +79,21 @@ leans on: He, Cohen and Salesin, *The Virtual Cinematographer* (SIGGRAPH 1996); 
 Control with the Toric Space* (SIGGRAPH 2015); Joubert et al., *An Interactive Tool for Designing Quadrotor Camera Shots* (SIGGRAPH Asia
 2015); Huang et al., *A Buffer-based Approach to Rate Adaptation* (SIGCOMM 2014); QSplat and Streaming QSplat ([lineage.md](lineage.md));
 `yuiseki/geo-video-factory` and its camera review rules. Not checked by this session beyond QSplat.
+
+## Flight planning (2026-11-28, proposed; first measurements in E031)
+
+A further brief (another agent's, collected by hfu) asked what planning real flights (DJI Fly waypoints, Dronelink, Litchi's curve size
+and point of interest, UgCS terrain following and corridors) can teach the Director. The principles kept, as proposals:
+
+- **Route, camera trajectory and look-at are three things**: the road followed, the path the camera flies (offset, raised, its corners
+  rounded) and the point it looks at, which need not lie ahead. Terms: the *bearing* is MapLibre's (the direction the camera looks); the
+  direction of travel is the route's; they differ when the camera looks at a point of interest.
+- **Speed is planned, not written**: a cruise speed on straights, slower where the path turns (sideways acceleration and heading rate
+  limited), speed changes limited; durations come out of the plan. Limits are experimental parameters judged by eye, not aircraft data.
+- **Preview before flying**: the flight log (`npm run measure:flight`) joins the tile linter (E028) as pre-play checks.
+- Rejected: aerodynamics, batteries, wind, gimbal hardware limits, regulation; a general drone simulator.
+
+What E031 showed: the planned speed and rounded corners cut the track's turn rate from 50 to 7 degrees per second, and the slower track
+gives the tiles time; a point of interest without a framing rule tilted the camera almost level (a 12 m camera, half the view without
+its tiles), so a point of interest needs framing limits (pitch, distance) before it is useful.
+
