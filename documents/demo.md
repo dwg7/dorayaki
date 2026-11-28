@@ -407,5 +407,14 @@ Each step is independently reviewable, and none of them changes the tile format,
 the surfel layer, or MapLibre.
 
 Step 1 is implemented as `demo/src/shot-player.ts` (2026-11-26), playing the worked example
-`demo/shots/sasebo.json` with `?shots=sasebo` on the demo (five of the six primitives; `track` is not
-played). What it assumes and where it differs from the example: NOTES.md, 2026-11-26.
+`demo/shots/sasebo.json` with `?shots=sasebo` on the demo (five of the six primitives). What it assumes and where it differs
+from the example: NOTES.md, 2026-11-26.
+
+`track` is played since 2026-11-28, asked for by hfu/ax (which bundles shot-player.ts unchanged, to fly along a railway with
+measured heights): `{"type": "track", "path": [[lng, lat, alt?], ...], "offset_m": 40, "alt_m": 30, "lead_m": 80,
+"duration_s": 20, "easing": "linear"}`. The look-at point runs along `path` at an even arc-length rate, `lead_m` ahead of the
+point the camera stands beside; the camera stands `offset_m` to the side (positive: right of the direction of travel, taken
+from the path smoothed over 25 m either way) and `alt_m` above the path there. The look-at height is the path's `alt` when
+every point has one, else the ground at the vertices. `PlayOptions.groundAt` lets a map without terrain own the look-at
+height as with terrain (the map's clamping is switched off while playing). No track is in `sasebo.json` yet; the tests use
+synthetic paths.
