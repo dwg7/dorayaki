@@ -1615,3 +1615,18 @@ Sasebo, `01JE2421` median, `01JE5513` smallest), hosted recipe otherwise, z16 on
 
 ### Decision
 hfu chose cell 1 m + cap 100,000 on 2026-11-28; `produce:opennagasaki` uses it (D21). It gives a third of the z17 bytes; the prefecture at roughly 120 GB instead of 330 GB, by arithmetic from the 168-sheet trial.
+
+## E026: an error ceiling under the z17 size cap (2026-11-28, running)
+
+### Question
+D21 caps a z17 tile at 100,000 splats; a tile over the cap is re-merged with the merge thickness and color tolerance multiplied by s = 2, 4, ... 64 until it fits. With the
+production thickness of 0.2 m and color tolerance of 0.2, s = 64 allows patches 12.8 m thick and any color, which may be why forest merged into large patches (E025).
+The merge rule is already an error bound, as in a TIN; the cap undoes it where the data is dense. How far may the cap loosen it, and what does a ceiling cost in tile size?
+
+### Method
+`DORAYAKI_MERGE_MAX_SCALE` (`maxMergeScale` in `buildTilePieces`): the largest step the cap may take; a piece still over its share keeps that step's splats and is marked
+`overTarget` in the tile's stats. The four sheets of E025, the D21 recipe, z16 only below z17, two workers at low priority beside the 01JE production. Variants: no cap,
+ceiling 64 (D21 as it is), 16, 8, 4. Judged first by D22: the heaviest tile and what the viewer's budget (D15) can draw; then total size, the merge steps taken, build time,
+and E012 picture differences against the no-cap build. Separately, the per-tile merge steps of the whole 01JE build are kept (`runs/nagasaki-01je.done/`) to see where in
+the area the cap loosens the rule most.
+

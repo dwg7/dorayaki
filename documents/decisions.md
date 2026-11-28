@@ -28,6 +28,8 @@ is still open. Facts and numbers live in the documents linked from each item; th
 | D19 | Inputs and build work go to an **external disk**; the **whole of Open Nagasaki** is downloaded, one file at a time with pauses, `01JE` around central Sasebo first (2026-11-27). | 32 sheets filled the internal disk once; the next step is the prefecture. | [datasets.md](datasets.md) (last section) |
 | D20 | **Compaction** (2026-11-27): Surfel Block **version 6 only**; `build:tiled` the one builder; finished experiment scripts, experiment tilesets and the in-memory pyramid and progressive order removed; documents merged into five (format, build, demo, datasets, decisions) beside EXPERIMENTS.md and NOTES.md; Numazu re-encoded as version 6 and replaced on stars (`?v=20261127a`). Tag `pre-compaction-2026-11-27` marks the state before. | The code and the documents carried every past layout and builder; Git keeps them, so the working tree need not (Fujimura: "Git に履歴が残されていることを信頼し、コンパクションは積極的に行う"). Lines removed: stage 1 −57, stage 2 −873 (+330), stage 3 −2,086 (+17), stage 4 (documents) about −2,200 (+1,700). | this page, AGENTS.md |
 | D21 | Production z17: **cells of about 1 m and at most 100,000 splats per z17 tile** (`DORAYAKI_Z17_CELL_SCALE=2`, `DORAYAKI_ZOOM_TARGET_SPLATS=17:100000,...`), in `produce:opennagasaki` (2026-11-28). | z17 was 90 % of the archive; on four sheets this is a third of the z17 bytes and builds faster than the hosted recipe (51 s against 68 s), where a cap alone needs twice the time. The prefecture at roughly 120 GB instead of 330 GB (arithmetic). Forest merges into larger patches; accepted (Fujimura chose it after the look). | E025, [datasets.md](datasets.md) |
+| D22 | **Priorities for the prefecture: first, every zoom level stays smooth in the viewer after the whole area is rolled out; then, data size ("no wasted gigabytes")** (hfu, 2026-11-28). Every size experiment is judged against the first before the second: a change that bounds the merge error but makes tiles too heavy for the viewer's budget (D15) is not taken. Work by many short prototype-and-measure loops, from the end user's side. | The goal of the week is all of Nagasaki with smooth camera work; size matters only once smoothness holds. Sasebo (town, harbour, forest, steep slopes in one field) is the field for tuning general parameters, which differ by zoom and by landscape (not a true fractal). | E026 |
+| D23 | **Storage: the zips on a 2 TB HDD (`/Volumes/dorayaki-hdd`), work directories and output on a 2 TB SSD (`/Volumes/dorayaki`)**; `opennagasaki/zips` is a symbolic link to the HDD. The 447 GB SSD was copied, checked file by file (sizes, an rsync dry run, a zip test sample) and erased (2026-11-28). | The prefecture is 1.6 TB of zips plus about 1.35 TB of shards if built at once (0.84 x the zips, measured on 01JE); zips are read once, so a slow disk is enough, while tile jobs read the shards and want an SSD. The laptop's port was needed for power. | [datasets.md](datasets.md) |
 
 ## A bug found on the way (fixed)
 
@@ -44,13 +46,16 @@ Found by comparing the tile list the layer held (`packed: 0` on the empty ones) 
 - Each change on its own branch and PR; never push to a branch whose PR is merged.
 - The site is rebuilt with all three TileJSON variables (`DORAYAKI_NUMAZU_TILEJSON`, `DORAYAKI_KAWAZU_TILEJSON`, `DORAYAKI_SASEBO_TILEJSON`); without them Numazu, Kawazu or Sasebo drop out.
 
-## Open (as of 2026-11-27)
+## Open (as of 2026-11-28)
 
 - **z17 at about 10 points/m2**: decided for size (D21, E025); the hosted Sasebo archive still has the older z17. Whether a stricter recipe (E023) is wanted somewhere is open.
 - **The budget**: 40 MB / 4 million splats per view (D15) may be tightened; not measured on weaker GPUs or slow networks.
-- **The prefecture**: the download has started (D19). Not decided: removing converted zips as the build goes, or more disk (the prefecture is about 1.6 TB of zips, the disk 447 GB);
-  how a prefecture-sized archive is listed in the viewer (the TileJSON tile list is capped at 4,096); whether stars serves a multi-GB archive well.
+- **The prefecture**: the download has started (D19); disk is settled (D23). Not decided: how a prefecture-sized archive is listed in the viewer (the TileJSON tile list is capped at 4,096); whether stars serves a multi-GB archive well.
 - **Camera direction**: storyboard stills (step 2) and the agent bridge (step 3); a tour can outrun the tiles; the zoom-dependent splat lift may still heave during zooming shots.
+- **Merge error under the size cap** (E026, running): the cap of D21 loosens the merge thickness and color tolerance up to 64 times in dense tiles (12.8 m, any color);
+  whether a ceiling on that step is worth the heavier tiles is being measured.
+- **Proposed by hfu, not tried**: prune splats whose long axis is too short for the zoom (screen-space error, parameters by zoom and landscape); color by splat tilt
+  (slope and/or aspect of the normal; aspect is axial because the normal's sign carries no meaning).
 - Real-drag behavior of the zoom ease and of `?mixed=1`; other browsers and GPUs; seams checked in a few views only.
 - Not measured against 3D Tiles: Draco or meshopt, a real 3D Tiles tool's output, level-of-detail overhead, rendering cost.
 - Next-step candidates to always offer: the three visual ideas (splat look, vivid color, false-color by class).

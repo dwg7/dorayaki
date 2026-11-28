@@ -72,6 +72,7 @@ function recipe(): TileBuildConfig {
     cellScale: Number(process.env.DORAYAKI_ZOOM_CELL_SCALE ?? 1),
     // E025: a coarser cell at z17 itself (default 1).
     finestCellScale: Number(process.env.DORAYAKI_Z17_CELL_SCALE ?? 1),
+    ...(process.env.DORAYAKI_MERGE_MAX_SCALE ? { maxMergeScale: Number(process.env.DORAYAKI_MERGE_MAX_SCALE) } : {}),
     thicknessScale: Number(process.env.DORAYAKI_ZOOM_THICKNESS_SCALE ?? 1),
     colorScale: Number(process.env.DORAYAKI_ZOOM_COLOR_SCALE ?? 1),
     // E024: size as the criterion: splats per whole tile below z17 (`50000`, or `16:45000,15:50000`); a piece over its share is merged harder.
@@ -178,6 +179,7 @@ function tileJob([work, x, y]: string[]): void {
   for (const p of pieces) {
     (stats.perZoom as Record<number, number>)[p.tile.z] = p.splats.length;
     if (p.mergeScale !== undefined) ((stats.mergeScale ??= {}) as Record<number, number>)[p.tile.z] = p.mergeScale;
+    if (p.overTarget) ((stats.overTarget ??= {}) as Record<number, boolean>)[p.tile.z] = true;
     if (p.tile.z === ZOOM) {
       const path = `${out}/${ZOOM}/${x}/${y}.mlt`;
       mkdirSync(dirname(path), { recursive: true });

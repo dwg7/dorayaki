@@ -125,3 +125,15 @@ test("E025: finestCellScale coarsens z17 only; a z17 target comes only from the 
   assert.ok(capped[0]!.splats.length <= 50 || capped[0]!.mergeScale === 64);
   assert.equal(buildTilePieces(scene(9), TILE, { ...CONFIG, targetSplats: 50 })[0]!.mergeScale, undefined);
 });
+
+test("E026: maxMergeScale stops loosening at that step; a piece still over its share keeps that step's splats and says so", () => {
+  const free = buildTilePieces(scene(9), TILE, { ...CONFIG, targetSplats: { 17: 1 } });
+  const capped = buildTilePieces(scene(9), TILE, { ...CONFIG, targetSplats: { 17: 1 }, maxMergeScale: 2 });
+  assert.equal(capped[0]!.mergeScale, 2);
+  assert.equal(capped[0]!.overTarget, true);
+  assert.ok(capped[0]!.splats.length >= free[0]!.splats.length, "a lower ceiling never merges more");
+  const one = buildTilePieces(scene(9), TILE, { ...CONFIG, targetSplats: { 17: 1 }, maxMergeScale: 1 });
+  assert.equal(one[0]!.splats.length, buildTilePieces(scene(9), TILE, CONFIG)[0]!.splats.length, "ceiling 1: the base rule");
+  assert.equal(buildTilePieces(scene(9), TILE, { ...CONFIG, targetSplats: { 17: 1e9 }, maxMergeScale: 2 })[0]!.overTarget, undefined);
+  assert.throws(() => buildTilePieces(scene(9), TILE, { ...CONFIG, maxMergeScale: 3 }), RangeError);
+});
