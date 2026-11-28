@@ -418,5 +418,7 @@ measured heights): `{"type": "track", "path": [[lng, lat, alt?], ...], "offset_m
 point the camera stands beside; the camera stands `offset_m` to the side (positive: right of the direction of travel, taken
 from the path smoothed over 25 m either way) and `alt_m` above the path there. The look-at height is the path's `alt` when
 every point has one, else the ground at the vertices. `PlayOptions.groundAt` lets a map without terrain own the look-at
-height as with terrain (the map's clamping is switched off while playing). No track is in `sasebo.json` yet; the tests use
-synthetic paths.
+height as with terrain (the map's clamping is switched off while playing). `sasebo.json` has one track (shot 5, 20 s): national
+route 35 toward the town, 1.73 km and 66 points from GSI's optimized vector tiles (layer `RdCL`, 国道; chained at junctions by the
+smallest turn), 60 m to the right, 80 m above, looking 120 m ahead; heights from the terrain. Seen playing on `?fixture=sasebo&shots=sasebo`
+(2026-11-28): the look-at point follows the road and the camera faces the town; at 80 m it flies among the taller blocks.

@@ -119,12 +119,12 @@ test("a timeline joins its shots: duration is the sum, the index follows the sho
   assert.ok(near(sampleTimeline(tl, 99).camera.distance, 100));
 });
 
-test("the Sasebo example (demo/shots/sasebo.json) parses and plays: five shots, 38 s, inside the archive's bounds, one warning (the orbit's pitch)", () => {
+test("the Sasebo example (demo/shots/sasebo.json) parses and plays: six shots with a track, 58 s, inside the archive's bounds, one warning (the orbit's pitch)", () => {
   const script = parseShotScript(JSON.parse(readFileSync(new URL("../../demo/shots/sasebo.json", import.meta.url), "utf8")));
-  assert.deepEqual(script.shots.map((s) => s.type), ["hold", "crane", "traverse", "orbit", "dolly"]);
+  assert.deepEqual(script.shots.map((s) => s.type), ["hold", "crane", "traverse", "orbit", "track", "dolly"]);
   assert.equal(script.warnings.length, 1);
   const tl = buildTimeline(script.shots, start, H);
-  assert.equal(tl.duration, 38);
+  assert.equal(tl.duration, 58);
   for (let t = 0; t <= tl.duration; t += 0.5) {
     const c = sampleTimeline(tl, t).camera;
     assert.ok(c.lng >= 129.7018 && c.lng <= 129.7595 && c.lat >= 33.133 && c.lat <= 33.1835, `look-at outside the data at ${t} s`);
