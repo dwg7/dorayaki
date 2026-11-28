@@ -50,6 +50,12 @@ export interface TileBuildConfig {
    * step keeps the splats of this step and goes over its share (`overTarget`): the merge error stays within thickness x maxMergeScale.
    */
   maxMergeScale?: number;
+  /**
+   * E027: by zoom, drop the splats whose long axis (the 2-sigma diameter along the largest scale, 4 x its standard deviation) spans fewer than this
+   * many pixels when the tile is shown at its own zoom (a pixel: the tile width / 512). `{ 16: 2, 15: 2, 14: 2, 13: 2 }` drops what is smaller
+   * than one voxel at the lower zooms; a zoom not listed keeps every splat.
+   */
+  minLongAxisPx?: Readonly<Record<number, number>>;
   /** Class slots per voxel (0 = the points carry no class); the class is carried by `adaptive.opacityOf`. */
   classSlots?: number;
 }
@@ -72,6 +78,8 @@ export interface TilePiece {
   mergeScale?: number;
   /** With `targetSplats` and `maxMergeScale`: true when the piece is over its share at the largest step allowed. */
   overTarget?: boolean;
+  /** With `minLongAxisPx` for this zoom: the splats dropped as too small. */
+  pruned?: number;
 }
 
 /** The splats of one z17 tile and its contributions to lower zooms, one piece per zoom, in the order of `config.zooms`. */
@@ -136,7 +144,11 @@ export function buildTilePieces(feed: TilePointFeed, tile: TileAddress, config: 
     const target: TileAddress = { z, x: tile.x >> d, y: tile.y >> d };
     const ox = tile.x - (target.x << d), oy = tile.y - (target.y << d);
     const scale = 2 ** d;
-    const splats = result.gaussians.map((g) => splatOfGaussian(g, (ox + g.position[0] / width) / scale, (oy - g.position[1] / width) / scale));
-    return { tile: target, splats, perLevel: result.perLevel, points: acc.points, voxels: acc.voxels, ...(mergeScale !== undefined ? { mergeScale } : {}), ...(overTarget ? { overTarget } : {}) };
+    const minPx = config.minLongAxisPx?.[z];
+    // A pixel at this zoom: the zoom's tile width (the z17 width x 2^d) over 512.
+    const minLong = minPx !== undefined ? (minPx * width * scale) / 512 : 0;
+    const kept = minLong > 0 ? result.gaussians.filter((g) => 4 * Math.max(...g.scales) >= minLong) : result.gaussians;
+    const splats = kept.map((g) => splatOfGaussian(g, (ox + g.position[0] / width) / scale, (oy - g.position[1] / width) / scale));
+    return { tile: target, splats, perLevel: result.perLevel, points: acc.points, voxels: acc.voxels, ...(mergeScale !== undefined ? { mergeScale } : {}), ...(overTarget ? { overTarget } : {}), ...(minPx !== undefined ? { pruned: result.gaussians.length - kept.length } : {}) };
   });
 }

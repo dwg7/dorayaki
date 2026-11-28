@@ -137,3 +137,15 @@ test("E026: maxMergeScale stops loosening at that step; a piece still over its s
   assert.equal(buildTilePieces(scene(9), TILE, { ...CONFIG, targetSplats: { 17: 1e9 }, maxMergeScale: 2 })[0]!.overTarget, undefined);
   assert.throws(() => buildTilePieces(scene(9), TILE, { ...CONFIG, maxMergeScale: 3 }), RangeError);
 });
+
+test("E027: minLongAxisPx drops the splats under k pixels at the listed zooms only, and counts them", () => {
+  const base = buildTilePieces(scene(9), TILE, CONFIG);
+  const pruned = buildTilePieces(scene(9), TILE, { ...CONFIG, minLongAxisPx: { 16: 1e6 } });
+  assert.equal(pruned[0]!.splats.length, base[0]!.splats.length, "z17 not listed: kept");
+  assert.equal(pruned[0]!.pruned, undefined);
+  assert.equal(pruned[1]!.splats.length, 0, "a huge threshold drops every z16 splat");
+  assert.equal(pruned[1]!.pruned, base[1]!.splats.length);
+  const none = buildTilePieces(scene(9), TILE, { ...CONFIG, minLongAxisPx: { 16: 0 } });
+  assert.equal(none[1]!.splats.length, base[1]!.splats.length);
+  assert.equal(none[1]!.pruned, 0);
+});

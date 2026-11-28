@@ -1654,3 +1654,44 @@ color difference 1.8 to 3.9 of 255 per pixel, PSNR 27 to 30 dB, holes 0.6 to 1.2
 No ceiling for now: D21 stays as it is. `DORAYAKI_MERGE_MAX_SCALE` stays as a measuring knob (default unchanged) and the tile stats now say when a piece is over its share.
 To be revisited with the 01JE steps; the next lever on size is hfu's pruning by screen size, not a tighter error.
 
+## E027: dropping splats that are too small for their zoom (2026-11-28)
+
+### Question
+hfu: splats whose long axis is too short could be dropped to save size, at least below the maximum zoom (zooming in makes it hard at z17). How small are the splats
+on screen, by zoom, and what does dropping the small ones cost?
+
+### Method
+The four sheets of E025, the D21 recipe with all lower zooms (z17 35.7 MB, z16 9.5, z15 3.8, z14 1.0, z13 0.2). A splat's long axis is its 2-sigma diameter along
+the largest scale (4 x that standard deviation); a pixel is the tile width / 512 at the tile's own zoom (the viewer shows a tile from its zoom to one zoom deeper).
+First a copy of the tiles with the small splats removed (decoded, filtered, encoded again), compared with E012 against the full tiles at four views per zoom
+(z16.5, z15.5, z14.5; straight down and at pitch 60); then `DORAYAKI_MIN_LONG_AXIS_PX` in `buildTilePieces`, built from the points.
+
+### Measurements
+
+| zoom | splats | long axis in px, p10 / p50 / p90 | under 1 px | under 2 px | under 4 px |
+| --- | ---: | --- | ---: | ---: | ---: |
+| 17 | 2,976,554 | 2.05 / 2.58 / 5.80 | 0.4 % | 4.2 % | 68.3 % |
+| 16 | 788,508 | 2.05 / 2.58 / 5.79 | 0.8 % | 8.6 % | 73.7 % |
+| 15 | 313,823 | 1.83 / 2.58 / 3.65 | 2.5 % | 11.8 % | 90.8 % |
+| 14 | 79,361 | 1.63 / 2.30 / 2.90 | 3.8 % | 13.4 % | 95.3 % |
+| 13 | 18,685 | 1.45 / 2.30 / 2.90 | 6.1 % | 17.2 % | 98.3 % |
+
+The drawn area of the splats under 2 px is 0.4 to 3.7 % of the zoom's.
+
+| dropped (z16 to z13 only) | fewer splats by zoom | z16 + z15 + z14 + z13 | holes | mean color difference | PSNR |
+| --- | --- | ---: | ---: | ---: | ---: |
+| under 2 px | 8.6 / 11.8 / 13.4 / 17.2 % | 14.4 -> 13.0 MB (-9.7 %) | 0.16 to 0.98 % | 0.10 to 0.92 of 255 | 31 to 42 dB |
+| under 3 px | 66 / 83 / 91 / 96 % | | 12 to 54 % | 1.0 to 11 | 20 to 32 dB |
+
+Built from the points with `DORAYAKI_MIN_LONG_AXIS_PX=16:2,15:2,14:2,13:2`: z16 712,488 splats (8.6 MB), z15 272,925 (3.3 MB), z14 67,788 (0.8 MB), z13 15,236
+(0.2 MB), as the copy predicted; build time 67 s against about 60 s.
+
+### Observations
+- Almost nothing is under one pixel: the smallest splat is a single voxel, which the cell sizes make about 2 pixels at every zoom. Dropping what is under the
+  pixel would gain nothing; dropping what is under the voxel gains 9 to 17 % of the lower zooms.
+- Between 2 and 3 pixels is a cliff: at 3 the single voxels go, and the surfaces open.
+- z17 is 71 % of the bytes, but the viewer shows it up to zoom 19, where its splats are 4 to 8 times larger; it is not pruned.
+
+### Decision
+D24 (proposed with this change, decided by merging it): `produce:opennagasaki` drops splats under 2 px at z16 to z13. The 01JE build running now does not have it.
+

@@ -43,6 +43,17 @@ if (LOWER_ZOOMS.some((z, i) => !Number.isInteger(z) || z >= 17 || z < 0 || LOWER
 const MIN_ZOOM = LOWER_ZOOMS.length > 0 ? LOWER_ZOOMS[LOWER_ZOOMS.length - 1]! : ZOOM;
 const classPlane = process.env.DORAYAKI_CLASS_PLANE === "1";
 
+/** `16:2,15:1.5`: a number by zoom. */
+function parseZoomNumbers(name: string, spec: string): Record<number, number> {
+  const out: Record<number, number> = {};
+  for (const part of spec.split(",")) {
+    const m = /^(\d+):(\d+(?:\.\d+)?)$/.exec(part.trim());
+    if (!m) throw new Error(`${name}: "${spec}" is not a list like 16:2,15:2`);
+    out[Number(m[1])] = Number(m[2]);
+  }
+  return out;
+}
+
 function parseTargets(spec: string): number | Record<number, number> {
   if (/^\d+$/.test(spec)) return Number(spec);
   const out: Record<number, number> = {};
@@ -73,6 +84,8 @@ function recipe(): TileBuildConfig {
     // E025: a coarser cell at z17 itself (default 1).
     finestCellScale: Number(process.env.DORAYAKI_Z17_CELL_SCALE ?? 1),
     ...(process.env.DORAYAKI_MERGE_MAX_SCALE ? { maxMergeScale: Number(process.env.DORAYAKI_MERGE_MAX_SCALE) } : {}),
+    // E027: drop splats whose long axis is under k pixels at their zoom (`16:2,15:2,14:2,13:2`).
+    ...(process.env.DORAYAKI_MIN_LONG_AXIS_PX ? { minLongAxisPx: parseZoomNumbers("DORAYAKI_MIN_LONG_AXIS_PX", process.env.DORAYAKI_MIN_LONG_AXIS_PX) } : {}),
     thicknessScale: Number(process.env.DORAYAKI_ZOOM_THICKNESS_SCALE ?? 1),
     colorScale: Number(process.env.DORAYAKI_ZOOM_COLOR_SCALE ?? 1),
     // E024: size as the criterion: splats per whole tile below z17 (`50000`, or `16:45000,15:50000`); a piece over its share is merged harder.
@@ -180,6 +193,7 @@ function tileJob([work, x, y]: string[]): void {
     (stats.perZoom as Record<number, number>)[p.tile.z] = p.splats.length;
     if (p.mergeScale !== undefined) ((stats.mergeScale ??= {}) as Record<number, number>)[p.tile.z] = p.mergeScale;
     if (p.overTarget) ((stats.overTarget ??= {}) as Record<number, boolean>)[p.tile.z] = true;
+    if (p.pruned !== undefined) ((stats.pruned ??= {}) as Record<number, number>)[p.tile.z] = p.pruned;
     if (p.tile.z === ZOOM) {
       const path = `${out}/${ZOOM}/${x}/${y}.mlt`;
       mkdirSync(dirname(path), { recursive: true });
